@@ -126,3 +126,4 @@ def downgrade() -> None:
     op.drop_table('task_results')
     op.drop_table('task_attempts')
     op.drop_table('tasks')
+

@@ -80,3 +80,4 @@ def seed_tasks():
 
 if __name__ == "__main__":
     seed_tasks()
+
