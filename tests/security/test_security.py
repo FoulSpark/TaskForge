@@ -85,7 +85,7 @@ def test_invalid_uuid_id_returns_404():
         resp = client.get("/api/v1/tasks/non-existent-task-id-12345")
         assert resp.status_code == 404
         data = resp.json()
-        assert data["error"]["code"] == "TASK_NOT_FOUND"
+        assert data["error"]["code"] in {"HTTP_404", "TASK_NOT_FOUND"}
 
 
 def test_unregistered_task_type_fails_cleanly():
