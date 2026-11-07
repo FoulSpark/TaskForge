@@ -1,0 +1,112 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "1. Total Submitted Tasks",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(taskforge_tasks_submitted_total)", "legendFormat": "Submitted" }]
+    },
+    {
+      "id": 2,
+      "title": "2. Successful Tasks",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(taskforge_tasks_completed_total{status='SUCCESS'})", "legendFormat": "Success" }]
+    },
+    {
+      "id": 3,
+      "title": "3. Failed Tasks",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "sum(taskforge_tasks_completed_total{status='FAILED'})", "legendFormat": "Failed" }]
+    },
+    {
+      "id": 4,
+      "title": "4. Task Throughput (tasks/sec)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "sum(rate(taskforge_tasks_completed_total[1m]))", "legendFormat": "Throughput" }]
+    },
+    {
+      "id": 5,
+      "title": "5. API Request Latency (P50/P95/P99)",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(taskforge_api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(taskforge_api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(taskforge_api_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "6. Queue Wait Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(taskforge_task_queue_wait_seconds_bucket[5m])) by (le))", "legendFormat": "Queue Wait P95" }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "7. Task Execution Latency by Workload",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 10 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(taskforge_task_execution_duration_seconds_bucket[5m])) by (le, task_type))", "legendFormat": "{{task_type}} P95" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "8. Queue Depth by Priority",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 10 },
+      "targets": [
+        { "expr": "taskforge_queue_depth", "legendFormat": "Priority {{priority}}" }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "9. Active Workers",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+      "targets": [{ "expr": "taskforge_active_workers", "legendFormat": "Active" }]
+    },
+    {
+      "id": 10,
+      "title": "10. Worker Fleet Concurrency & Load",
+      "type": "timeseries",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 16 },
+      "targets": [{ "expr": "sum(taskforge_db_pool_checkedout)", "legendFormat": "Active DB Conns" }]
+    },
+    {
+      "id": 11,
+      "title": "11. Retry Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+      "targets": [{ "expr": "sum(rate(taskforge_retry_total[1m]))", "legendFormat": "Retries/sec" }]
+    },
+    {
+      "id": 12,
+      "title": "12. Dead-Letter Task Count",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+      "targets": [{ "expr": "sum(taskforge_dead_letter_total)", "legendFormat": "DLQ Tasks" }]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["taskforge", "distributed", "workers", "tasks"],
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "utc",
+  "title": "TaskForge Platform Observability"
+}

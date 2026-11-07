@@ -1,0 +1,47 @@
+groups:
+  - name: taskforge_alerts
+    rules:
+      - alert: TaskForgeHighFailureRate
+        expr: rate(taskforge_tasks_completed_total{status="FAILED"}[5m]) / rate(taskforge_tasks_completed_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High task failure rate detected (> 5%)"
+          description: "Over 5% of completed tasks have failed in the last 5 minutes."
+
+      - alert: TaskForgeQueueBuildup
+        expr: sum(taskforge_queue_depth) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Task queue depth exceeded threshold"
+          description: "Queue depth has exceeded 100 tasks for more than 5 minutes."
+
+      - alert: TaskForgeNoActiveWorkers
+        expr: taskforge_active_workers == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active workers available"
+          description: "Zero active worker heartbeats detected. Task processing is halted."
+
+      - alert: TaskForgeDeadLetterDetected
+        expr: increase(taskforge_dead_letter_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tasks routed to Dead-Letter Queue"
+          description: "One or more tasks have exhausted max retries and moved to DLQ."
+
+      - alert: TaskForgeHighApiLatency
+        expr: histogram_quantile(0.95, sum(rate(taskforge_api_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API P95 latency high (> 500ms)"
+          description: "FastAPI request handler P95 latency is exceeding 500 milliseconds."

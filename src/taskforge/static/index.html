@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TaskForge - Distributed Asynchronous Task Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(16, 24, 40, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(255, 255, 255, 0.12);
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.25);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.15);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.15);
+      --purple: #8b5cf6;
+      --purple-bg: rgba(139, 92, 246, 0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      background-image: 
+        radial-gradient(at 10% 20%, rgba(59, 130, 246, 0.12) 0px, transparent 40%),
+        radial-gradient(at 90% 80%, rgba(139, 92, 246, 0.1) 0px, transparent 45%);
+      background-attachment: fixed;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px var(--accent-glow);
+    }
+    .brand-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 9999px;
+      background: var(--success-bg);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .dot-pulse {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 8px #34d399;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+      outline: none;
+    }
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+      box-shadow: 0 2px 10px rgba(59, 130, 246, 0.35);
+    }
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--card-border);
+      color: var(--text);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--card-hover);
+    }
+    .btn-danger {
+      background: var(--danger-bg);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.3);
+    }
+    .btn-sm {
+      padding: 0.35rem 0.65rem;
+      font-size: 0.75rem;
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      padding: 1.5rem 2rem 3rem;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Metrics KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 1rem;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      transition: border-color 0.2s ease;
+    }
+    .kpi-card:hover {
+      border-color: var(--card-hover);
+    }
+    .kpi-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .kpi-value {
+      font-size: 1.65rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .kpi-sub {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    /* Layout: 2 Columns (Tasks Table + Chaos/Control Sidebar) */
+    .content-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.5rem;
+      align-items: start;
+    }
+    @media (max-width: 1100px) {
+      .content-layout { grid-template-columns: 1fr; }
+    }
+
+    /* Section Card */
+    .panel-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .panel-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      background: rgba(0, 0, 0, 0.15);
+    }
+    .filter-select {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      outline: none;
+    }
+    .filter-select:focus {
+      border-color: var(--accent);
+    }
+
+    /* Table */
+    .table-container {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+    th {
+      padding: 0.75rem 1.25rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.1);
+    }
+    td {
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+    }
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Status Pills */
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .pill-PENDING { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+    .pill-QUEUED { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .pill-RUNNING { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+    .pill-SUCCESS { background: var(--success-bg); color: #34d399; }
+    .pill-RETRY_WAIT { background: var(--warning-bg); color: #fbbf24; }
+    .pill-FAILED { background: var(--danger-bg); color: #f87171; }
+    .pill-DEAD_LETTER { background: rgba(239, 68, 68, 0.25); color: #fca5a5; font-weight: 700; }
+    .pill-CANCELLED { background: rgba(100, 116, 139, 0.2); color: #94a3b8; }
+
+    /* Priority Pills */
+    .priority-4 { color: #f87171; font-weight: 700; }
+    .priority-3 { color: #fbbf24; font-weight: 600; }
+    .priority-2 { color: #60a5fa; }
+    .priority-1 { color: #94a3b8; }
+
+    .code-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #93c5fd;
+      cursor: pointer;
+    }
+    .code-id:hover { text-decoration: underline; }
+
+    /* Sidebar cards */
+    .sidebar-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .sidebar-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .action-btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    /* Modal / Drawer */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-card {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 650px;
+      max-height: 90vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header {
+      padding: 1.25rem;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-body {
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .form-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .form-input, .form-textarea, .form-select {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 0.6rem 0.85rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      outline: none;
+      font-family: inherit;
+    }
+    .form-textarea {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      min-height: 90px;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .json-box {
+      background: #060910;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+      overflow-x: auto;
+      max-height: 250px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">TASKFORGE</div>
+      </div>
+      <div class="badge-live">
+        <div class="dot-pulse"></div>
+        Backend Active
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="fetchTasks()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        Refresh
+      </button>
+      <button class="btn btn-primary" onclick="openNewTaskModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Submit Task
+      </button>
+      <a href="/docs" target="_blank" class="btn btn-secondary btn-sm">API Docs</a>
+      <a href="/metrics" target="_blank" class="btn btn-secondary btn-sm">Prometheus</a>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <!-- KPI Metrics Grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Submitted</div>
+        <div class="kpi-value" id="kpi-total">0</div>
+        <div class="kpi-sub">Lifetime Tasks</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Queued & Running</div>
+        <div class="kpi-value" style="color: #60a5fa;" id="kpi-active">0</div>
+        <div class="kpi-sub">In-Flight Tasks</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Succeeded</div>
+        <div class="kpi-value" style="color: #34d399;" id="kpi-succeeded">0</div>
+        <div class="kpi-sub" id="kpi-success-rate">100% Success</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Retry Waiting</div>
+        <div class="kpi-value" style="color: #fbbf24;" id="kpi-retry">0</div>
+        <div class="kpi-sub">Exponential Backoff</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Dead-Letter Queue</div>
+        <div class="kpi-value" style="color: #f87171;" id="kpi-dlq">0</div>
+        <div class="kpi-sub">Exhausted Retries</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Active Workers</div>
+        <div class="kpi-value" style="color: #a78bfa;" id="kpi-workers">0</div>
+        <div class="kpi-sub">Heartbeat Monitored</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Avg Execution</div>
+        <div class="kpi-value" id="kpi-latency">0 ms</div>
+        <div class="kpi-sub">Worker Duration</div>
+      </div>
+    </div>
+
+    <!-- 2 Column Layout -->
+    <div class="content-layout">
+      <!-- Left Column: Tasks Table -->
+      <div class="panel-card">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+            Task Execution Stream
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-dim);" id="task-count-label">Showing 0 tasks</div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+          <select class="filter-select" id="filter-status" onchange="fetchTasks()">
+            <option value="">Status: All</option>
+            <option value="QUEUED">Queued</option>
+            <option value="RUNNING">Running</option>
+            <option value="SUCCESS">Success</option>
+            <option value="RETRY_WAIT">Retry Wait</option>
+            <option value="FAILED">Failed</option>
+            <option value="DEAD_LETTER">Dead Letter</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+          <select class="filter-select" id="filter-type" onchange="fetchTasks()">
+            <option value="">Type: All Workloads</option>
+            <option value="json_transform">JSON Transform</option>
+            <option value="compute_prime">Compute Prime</option>
+            <option value="io_simulation">I/O Simulation</option>
+            <option value="db_process">DB Process</option>
+            <option value="long_running">Long Running</option>
+            <option value="failure_simulation">Failure Simulation</option>
+            <option value="timeout_simulation">Timeout Simulation</option>
+          </select>
+          <select class="filter-select" id="filter-priority" onchange="fetchTasks()">
+            <option value="">Priority: All</option>
+            <option value="4">P4 - Critical</option>
+            <option value="3">P3 - High</option>
+            <option value="2">P2 - Medium</option>
+            <option value="1">P1 - Low</option>
+          </select>
+        </div>
+
+        <!-- Table Container -->
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Task & ID</th>
+                <th>Workload Type</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Attempts</th>
+                <th>Execution Time</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tasks-table-body">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-dim); padding: 2.5rem;">
+                  Loading task stream...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right Column: Chaos Lab & Quick Actions -->
+      <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+        
+        <!-- Chaos Engineering Lab Card -->
+        <div class="sidebar-card">
+          <div class="sidebar-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Chaos & Verification Lab
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
+            Inject deliberate component failures, test deadline enforcement, and verify automated recovery mechanisms live.
+          </p>
+          <div class="action-btn-group">
+            <button class="btn btn-secondary" onclick="triggerBatch(10)">
+              ⚡ Submit Batch (10 Tasks)
+            </button>
+            <button class="btn btn-secondary" onclick="triggerBatch(50)">
+              🚀 Submit Batch (50 Tasks)
+            </button>
+            <button class="btn btn-secondary" onclick="triggerIdempotencyStorm()">
+              🛡️ Test 100x Idempotency Storm
+            </button>
+            <button class="btn btn-secondary" onclick="triggerRetryDLQ()">
+              ⚠️ Trigger Retry & DLQ Outage
+            </button>
+            <button class="btn btn-secondary" onclick="triggerTimeoutViolation()">
+              ⏱️ Trigger Timeout Violation
+            </button>
+            <button class="btn btn-secondary" onclick="triggerStaleRecovery()">
+              🔄 Trigger Stale Lease Recovery
+            </button>
+          </div>
+        </div>
+
+        <!-- Active Worker Status Card -->
+        <div class="sidebar-card">
+          <div class="sidebar-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+            Worker Fleet Status
+          </div>
+          <div id="workers-list-container" style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.8rem;">
+            <div style="color: var(--text-dim);">Detecting workers...</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Submit Task Modal -->
+  <div class="modal-overlay" id="task-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; font-weight: 700;">Submit Asynchronous Task</h3>
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('task-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Task Name</label>
+          <input type="text" class="form-input" id="new-task-name" value="Data Transformation Job">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Workload Type</label>
+            <select class="form-select" id="new-task-type" onchange="updateDefaultPayload()">
+              <option value="json_transform">JSON Transform</option>
+              <option value="compute_prime">Compute Prime (CPU)</option>
+              <option value="io_simulation">I/O Simulation</option>
+              <option value="db_process">Database Batch Process</option>
+              <option value="long_running">Long Running Pipeline</option>
+              <option value="failure_simulation">Failure Simulation (Chaos)</option>
+              <option value="timeout_simulation">Timeout Simulation (Chaos)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Priority</label>
+            <select class="form-select" id="new-task-priority">
+              <option value="4">P4 - Critical</option>
+              <option value="3">P3 - High</option>
+              <option value="2" selected>P2 - Medium</option>
+              <option value="1">P1 - Low</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Timeout (seconds)</label>
+            <input type="number" class="form-input" id="new-task-timeout" value="60" min="1" max="3600">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Max Retries</label>
+            <input type="number" class="form-input" id="new-task-retries" value="3" min="0" max="10">
+          </div>
+        </div>
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label class="form-label">Idempotency Key (Optional)</label>
+            <span style="font-size: 0.72rem; color: #60a5fa; cursor: pointer;" onclick="generateKey()">Generate UUID</span>
+          </div>
+          <input type="text" class="form-input" id="new-task-idemp" placeholder="e.g. client-tx-10023">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payload (JSON)</label>
+          <textarea class="form-textarea" id="new-task-payload">{"records": [10, 25, 40, 55, 70]}</textarea>
+        </div>
+      </div>
+      <div style="padding: 1.25rem; border-top: 1px solid var(--card-border); display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button class="btn btn-secondary" onclick="closeModal('task-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitNewTask()">Queue Task</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Detail Drawer / Inspector Modal -->
+  <div class="modal-overlay" id="detail-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="font-size: 1.1rem; font-weight: 700;" id="detail-title">Task Inspector</h3>
+          <span class="code-id" id="detail-id"></span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('detail-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; gap: 0.5rem; align-items: center;" id="detail-badges"></div>
+
+        <div class="form-group">
+          <label class="form-label">Execution Result</label>
+          <pre class="json-box" id="detail-result">No result recorded yet.</pre>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Attempt History</label>
+          <div id="detail-attempts" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">State Transition Events</label>
+          <div id="detail-events" style="display: flex; flex-direction: column; gap: 0.4rem;"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Raw Task Payload</label>
+          <pre class="json-box" id="detail-payload"></pre>
+        </div>
+      </div>
+      <div style="padding: 1.25rem; border-top: 1px solid var(--card-border); display: flex; justify-content: space-between; align-items: center;" id="detail-actions">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_PAYLOADS = {
+      json_transform: '{"records": [10, 25, 40, 55, 70]}',
+      compute_prime: '{"n": 2500}',
+      io_simulation: '{"delay_seconds": 0.2, "jitter": true, "size_bytes": 4096}',
+      db_process: '{"batch_size": 100}',
+      long_running: '{"steps": 5, "step_duration": 0.1}',
+      failure_simulation: '{"fail_until_attempt": 999, "error_message": "Transient network outage"}',
+      timeout_simulation: '{"sleep_seconds": 5.0}'
+    };
+
+    function updateDefaultPayload() {
+      const type = document.getElementById('new-task-type').value;
+      document.getElementById('new-task-payload').value = DEFAULT_PAYLOADS[type] || '{}';
+    }
+
+    function generateKey() {
+      document.getElementById('new-task-idemp').value = 'key-' + Math.random().toString(36).substring(2, 10);
+    }
+
+    function openNewTaskModal() {
+      document.getElementById('task-modal').classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/v1/stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        document.getElementById('kpi-total').innerText = data.tasks.total;
+        document.getElementById('kpi-active').innerText = (data.tasks.queued + data.tasks.running);
+        document.getElementById('kpi-succeeded').innerText = data.tasks.succeeded;
+        document.getElementById('kpi-retry').innerText = data.tasks.retry_wait;
+        document.getElementById('kpi-dlq').innerText = data.tasks.dead_letter;
+        document.getElementById('kpi-workers').innerText = data.workers.active_count;
+        document.getElementById('kpi-latency').innerText = data.performance.avg_execution_ms + ' ms';
+
+        const totalFinished = data.tasks.succeeded + data.tasks.failed + data.tasks.dead_letter;
+        const rate = totalFinished > 0 ? Math.round((data.tasks.succeeded / totalFinished) * 100) : 100;
+        document.getElementById('kpi-success-rate').innerText = rate + '% Success Rate';
+
+        // Render Workers List
+        const workersContainer = document.getElementById('workers-list-container');
+        if (data.workers.list.length === 0) {
+          workersContainer.innerHTML = '<div style="color: var(--text-dim);">No active workers registered.</div>';
+        } else {
+          workersContainer.innerHTML = data.workers.list.map(w => `
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.6rem;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; color: #a78bfa;">${w.worker_id}</span>
+                <span class="pill pill-SUCCESS">${w.status}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 0.3rem; color: var(--text-dim); font-size: 0.75rem;">
+                <span>Concurrency: ${w.concurrency}</span>
+                <span>Active: ${w.active_tasks}</span>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (e) {
+        console.error('Error fetching stats:', e);
+      }
+    }
+
+    async function fetchTasks() {
+      try {
+        const status = document.getElementById('filter-status').value;
+        const type = document.getElementById('filter-type').value;
+        const priority = document.getElementById('filter-priority').value;
+
+        const params = new URLSearchParams({ limit: 40 });
+        if (status) params.append('status', status);
+        if (type) params.append('task_type', type);
+        if (priority) params.append('priority', priority);
+
+        const res = await fetch(`/api/v1/tasks?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        document.getElementById('task-count-label').innerText = `Showing ${data.items.length} of ${data.total} tasks`;
+
+        const tbody = document.getElementById('tasks-table-body');
+        if (data.items.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 2.5rem;">No tasks matching current filter.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.items.map(t => {
+          const dur = t.result?.execution_metadata?.duration_ms ? `${t.result.execution_metadata.duration_ms} ms` : '-';
+          const created = new Date(t.created_at).toLocaleTimeString();
+          const pNames = { 4: 'Critical', 3: 'High', 2: 'Medium', 1: 'Low' };
+
+          return `
+            <tr>
+              <td>
+                <div style="font-weight: 600;">${t.task_name}</div>
+                <div class="code-id" onclick="inspectTask('${t.id}')">${t.id.substring(0, 13)}...</div>
+              </td>
+              <td><span style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;">${t.task_type}</span></td>
+              <td><span class="priority-${t.priority}">P${t.priority} (${pNames[t.priority]})</span></td>
+              <td><span class="pill pill-${t.status}">${t.status}</span></td>
+              <td>${t.attempts ? t.attempts.length : 0} / ${t.max_retries}</td>
+              <td>${dur}</td>
+              <td style="color: var(--text-dim); font-size: 0.8rem;">${created}</td>
+              <td>
+                <button class="btn btn-secondary btn-sm" onclick="inspectTask('${t.id}')">Inspect</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (e) {
+        console.error('Error fetching tasks:', e);
+      }
+    }
+
+    async function inspectTask(taskId) {
+      try {
+        const res = await fetch(`/api/v1/tasks/${taskId}`);
+        if (!res.ok) return;
+        const task = await res.json();
+
+        document.getElementById('detail-title').innerText = task.task_name;
+        document.getElementById('detail-id').innerText = task.id;
+
+        const pNames = { 4: 'Critical', 3: 'High', 2: 'Medium', 1: 'Low' };
+        document.getElementById('detail-badges').innerHTML = `
+          <span class="pill pill-${task.status}">${task.status}</span>
+          <span class="priority-${task.priority}">P${task.priority} ${pNames[task.priority]}</span>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">Timeout: ${task.timeout_seconds}s</span>
+        `;
+
+        document.getElementById('detail-payload').innerText = JSON.stringify(task.payload, null, 2);
+
+        if (task.result) {
+          document.getElementById('detail-result').innerText = JSON.stringify(task.result.return_value, null, 2);
+        } else {
+          document.getElementById('detail-result').innerText = 'No result recorded yet.';
+        }
+
+        // Attempts
+        const attContainer = document.getElementById('detail-attempts');
+        if (!task.attempts || task.attempts.length === 0) {
+          attContainer.innerHTML = '<div style="color: var(--text-dim); font-size: 0.8rem;">No execution attempts logged yet.</div>';
+        } else {
+          attContainer.innerHTML = task.attempts.map(a => `
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 0.6rem; font-size: 0.8rem;">
+              <div style="display: flex; justify-content: space-between;">
+                <span>Attempt #${a.attempt_number} by <b>${a.worker_id || 'unknown'}</b></span>
+                <span class="pill pill-${a.status}">${a.status}</span>
+              </div>
+              <div style="margin-top: 0.3rem; color: var(--text-dim); font-size: 0.75rem;">
+                Duration: ${a.duration_ms ? a.duration_ms + ' ms' : '-'} | Started: ${new Date(a.started_at).toLocaleTimeString()}
+              </div>
+              ${a.error_message ? `<div style="margin-top: 0.4rem; color: #f87171; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;">${a.error_message}</div>` : ''}
+            </div>
+          `).join('');
+        }
+
+        // Events
+        const eventsContainer = document.getElementById('detail-events');
+        if (!task.events || task.events.length === 0) {
+          eventsContainer.innerHTML = '<div style="color: var(--text-dim); font-size: 0.8rem;">No events logged.</div>';
+        } else {
+          eventsContainer.innerHTML = task.events.map(ev => `
+            <div style="font-size: 0.78rem; display: flex; justify-content: space-between; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.03); padding: 0.25rem 0;">
+              <span>${ev.event_type} (${ev.from_state || 'START'} → <b>${ev.to_state}</b>)</span>
+              <span style="color: var(--text-dim);">${new Date(ev.created_at).toLocaleTimeString()}</span>
+            </div>
+          `).join('');
+        }
+
+        // Action buttons
+        const actionsContainer = document.getElementById('detail-actions');
+        let btns = '';
+        if (['PENDING', 'QUEUED', 'RUNNING', 'RETRY_WAIT'].includes(task.status)) {
+          btns += `<button class="btn btn-danger btn-sm" onclick="cancelTask('${task.id}')">Cancel Task</button>`;
+        }
+        if (['FAILED', 'DEAD_LETTER'].includes(task.status)) {
+          btns += `<button class="btn btn-primary btn-sm" onclick="retryTask('${task.id}')">Retry Task</button>`;
+        }
+        actionsContainer.innerHTML = `<div>${btns}</div><button class="btn btn-secondary btn-sm" onclick="closeModal('detail-modal')">Close</button>`;
+
+        document.getElementById('detail-modal').classList.add('active');
+      } catch (e) {
+        console.error('Error inspecting task:', e);
+      }
+    }
+
+    async function submitNewTask() {
+      try {
+        const name = document.getElementById('new-task-name').value;
+        const type = document.getElementById('new-task-type').value;
+        const priority = parseInt(document.getElementById('new-task-priority').value);
+        const timeout = parseInt(document.getElementById('new-task-timeout').value);
+        const retries = parseInt(document.getElementById('new-task-retries').value);
+        const idemp = document.getElementById('new-task-idemp').value.trim() || null;
+        let payload = {};
+        try {
+          payload = JSON.parse(document.getElementById('new-task-payload').value);
+        } catch (e) {
+          alert('Invalid JSON in payload field!');
+          return;
+        }
+
+        const res = await fetch('/api/v1/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_name: name,
+            task_type: type,
+            priority: priority,
+            timeout_seconds: timeout,
+            max_retries: retries,
+            idempotency_key: idemp,
+            payload: payload
+          })
+        });
+
+        if (res.ok) {
+          closeModal('task-modal');
+          fetchTasks();
+          fetchStats();
+        } else {
+          const err = await res.json();
+          alert('Submission error: ' + (err.error?.message || 'Check inputs'));
+        }
+      } catch (e) {
+        console.error('Submit error:', e);
+      }
+    }
+
+    async function cancelTask(taskId) {
+      if (!confirm('Are you sure you want to cancel this task?')) return;
+      await fetch(`/api/v1/tasks/${taskId}/cancel`, { method: 'POST' });
+      inspectTask(taskId);
+      fetchTasks();
+      fetchStats();
+    }
+
+    async function retryTask(taskId) {
+      await fetch(`/api/v1/tasks/${taskId}/retry`, { method: 'POST' });
+      inspectTask(taskId);
+      fetchTasks();
+      fetchStats();
+    }
+
+    // Chaos Lab Actions
+    async function triggerBatch(count) {
+      const res = await fetch(`/api/v1/chaos/batch?count=${count}`, { method: 'POST' });
+      const data = await res.json();
+      alert(`Queued ${count} tasks across all 5 workload types!`);
+      fetchTasks();
+      fetchStats();
+    }
+
+    async function triggerIdempotencyStorm() {
+      const res = await fetch('/api/v1/chaos/idempotency-storm?count=100', { method: 'POST' });
+      const data = await res.json();
+      alert(`Idempotency Storm Complete!\n\n100 HTTP requests submitted with key: ${data.idempotency_key}\nTasks Created: ${data.tasks_created}\nDuplicates Absorbed: ${data.duplicate_requests_absorbed}\nResulting Task ID: ${data.resulting_task_id}`);
+      fetchTasks();
+      fetchStats();
+    }
+
+    async function triggerRetryDLQ() {
+      const res = await fetch('/api/v1/chaos/fail-task?fail_until_attempt=999&max_retries=3', { method: 'POST' });
+      const data = await res.json();
+      alert(`Failure Injected (Task ${data.task_id.substring(0, 8)}).\n\nWorker will retry 3 times with exponential backoff and jitter, then transition to DEAD_LETTER.`);
+      fetchTasks();
+      fetchStats();
+    }
+
+    async function triggerTimeoutViolation() {
+      const res = await fetch('/api/v1/chaos/timeout-task?timeout_seconds=1&sleep_seconds=3.0', { method: 'POST' });
+      const data = await res.json();
+      alert(`Timeout Task Injected (Task ${data.task_id.substring(0, 8)}).\n\nWorker will enforce 1s deadline against 3s sleep and abort execution.`);
+      fetchTasks();
+      fetchStats();
+    }
+
+    async function triggerStaleRecovery() {
+      const res = await fetch('/api/v1/chaos/recover-stale', { method: 'POST' });
+      const data = await res.json();
+      alert(`Lease Reaper Sweep: Recovered ${data.recovered_count} expired task leases.`);
+      fetchTasks();
+      fetchStats();
+    }
+
+    // Polling cycles
+    fetchStats();
+    fetchTasks();
+    setInterval(fetchStats, 2000);
+    setInterval(fetchTasks, 3000);
+  </script>
+</body>
+</html>
