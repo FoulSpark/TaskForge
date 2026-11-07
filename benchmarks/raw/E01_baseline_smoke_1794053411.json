@@ -1,0 +1,89 @@
+{
+  "experiment_id": "E01_baseline",
+  "timestamp_utc": "2026-11-07T12:10:11.161255+00:00",
+  "profile": "smoke",
+  "task_type": "json_transform",
+  "total_tasks_per_trial": 100,
+  "trials_count": 5,
+  "hardware": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+    "python_version": "3.12.10"
+  },
+  "aggregate_metrics": {
+    "throughput_rps": {
+      "median": 72.56,
+      "mean": 74.06,
+      "stdev": 3.73
+    },
+    "latency_p50_ms": {
+      "median": 12.63,
+      "mean": 12.78
+    },
+    "latency_p95_ms": {
+      "median": 17.0,
+      "mean": 17.69
+    },
+    "latency_p99_ms": {
+      "median": 33.42,
+      "mean": 40.02
+    }
+  },
+  "trials": [
+    {
+      "total_tasks": 100,
+      "duration_seconds": 1.31,
+      "throughput_rps": 76.31,
+      "latency_p50_ms": 12.16,
+      "latency_p95_ms": 13.27,
+      "latency_p99_ms": 76.42,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "trial_number": 1
+    },
+    {
+      "total_tasks": 100,
+      "duration_seconds": 1.262,
+      "throughput_rps": 79.26,
+      "latency_p50_ms": 12.28,
+      "latency_p95_ms": 13.69,
+      "latency_p99_ms": 33.42,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "trial_number": 2
+    },
+    {
+      "total_tasks": 100,
+      "duration_seconds": 1.378,
+      "throughput_rps": 72.56,
+      "latency_p50_ms": 12.63,
+      "latency_p95_ms": 19.99,
+      "latency_p99_ms": 23.98,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "trial_number": 3
+    },
+    {
+      "total_tasks": 100,
+      "duration_seconds": 1.434,
+      "throughput_rps": 69.76,
+      "latency_p50_ms": 13.26,
+      "latency_p95_ms": 24.49,
+      "latency_p99_ms": 44.25,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "trial_number": 4
+    },
+    {
+      "total_tasks": 100,
+      "duration_seconds": 1.381,
+      "throughput_rps": 72.41,
+      "latency_p50_ms": 13.56,
+      "latency_p95_ms": 17.0,
+      "latency_p99_ms": 22.05,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "trial_number": 5
+    }
+  ]
+}

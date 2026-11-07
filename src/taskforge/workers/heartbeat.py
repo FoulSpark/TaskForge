@@ -94,3 +94,4 @@ def get_active_workers() -> List[Dict[str, Any]]:
             except Exception:
                 active.append(info)
     return active
+

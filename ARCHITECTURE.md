@@ -102,3 +102,4 @@ stateDiagram-v2
 | **Duplicate message delivery** | Task status already `SUCCESS` or terminal | Execution engine detects terminal state, acknowledges message safely. |
 | **Client duplicate submission** | Same `idempotency_key` | Database unique constraint prevents duplicate task; API returns existing task. |
 | **Broker temporary outage** | Redis connection drops | Transactional outbox retains events in DB until broker recovers. |
+

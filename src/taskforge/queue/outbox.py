@@ -88,3 +88,4 @@ class OutboxPublisherWorker:
             except Exception as exc:
                 logger.error("outbox_publisher_cycle_error", error=str(exc))
             self._stop_event.wait(self.poll_interval)
+

@@ -33,3 +33,4 @@ We designate **PostgreSQL** as the definitive source of truth for all persistent
 
 ## Validation Evidence
 Verified in test criteria P1-01 through P1-08 and AC-03. All 100 submitted tasks persisted and survived application lifecycles.
+

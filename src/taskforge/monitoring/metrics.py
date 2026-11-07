@@ -85,3 +85,4 @@ DB_POOL_CHECKEDOUT = Gauge(
 def get_metrics_content() -> bytes:
     """Generate Prometheus scrape format output."""
     return generate_latest()
+

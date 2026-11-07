@@ -30,3 +30,4 @@ We implement the **Transactional Outbox Pattern** using the `outbox_events` tabl
 
 ## Validation Evidence
 Verified in `test_async_submission_and_outbox_flush`. Outbox events safely staged in DB before publisher dispatch.
+

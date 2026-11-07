@@ -96,3 +96,4 @@ class ErrorDetail(BaseModel):
 
 class APIErrorResponse(BaseModel):
     error: ErrorDetail
+

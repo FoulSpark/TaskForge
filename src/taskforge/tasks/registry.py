@@ -26,3 +26,4 @@ def get_handler(name: str) -> TaskHandler:
 
 def list_registered_handlers() -> list[str]:
     return list(_HANDLERS.keys())
+

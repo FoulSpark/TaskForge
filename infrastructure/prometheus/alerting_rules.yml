@@ -45,3 +45,4 @@ groups:
         annotations:
           summary: "API P95 latency high (> 500ms)"
           description: "FastAPI request handler P95 latency is exceeding 500 milliseconds."
+

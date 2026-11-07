@@ -53,3 +53,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Chaos Engineering Lab for interactive fault injection.
   - Architecture Decision Records ADR-001 through ADR-010.
   - Complete documentation suite: README, ARCHITECTURE, REQUIREMENTS, BENCHMARKS, SECURITY.
+

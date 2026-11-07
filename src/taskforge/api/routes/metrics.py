@@ -74,3 +74,4 @@ def system_stats(db: Session = Depends(get_db)):
             "list": active_workers,
         },
     }
+

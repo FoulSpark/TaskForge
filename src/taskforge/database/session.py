@@ -34,6 +34,13 @@ def build_engine(database_url: str | None = None):
         )
 
 
+def init_db(engine_override=None) -> None:
+    """Create all tables in the database."""
+    target_engine = engine_override or engine
+    from taskforge.database.models import Task, TaskAttempt, TaskResult, TaskEvent, OutboxEvent  # noqa: F401
+    Base.metadata.create_all(bind=target_engine)
+
+
 def get_working_engine():
     """Returns configured engine, falling back to SQLite if PostgreSQL is unreachable."""
     primary_url = settings.database_url
@@ -50,10 +57,12 @@ def get_working_engine():
         )
         fallback_url = "sqlite:///./taskforge_dev.db"
         eng = build_engine(fallback_url)
+        init_db(eng)
         return eng
 
 
 engine = get_working_engine()
+init_db(engine)
 
 SessionLocal = sessionmaker(
     bind=engine,
@@ -61,13 +70,6 @@ SessionLocal = sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
-
-
-def init_db(engine_override=None) -> None:
-    """Create all tables in the database."""
-    target_engine = engine_override or engine
-    from taskforge.database.models import Task, TaskAttempt, TaskResult, TaskEvent, OutboxEvent  # noqa: F401
-    Base.metadata.create_all(bind=target_engine)
 
 
 def get_db() -> Generator[Session, None, None]:

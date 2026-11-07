@@ -19,3 +19,4 @@ If you discover a security vulnerability within TaskForge, please disclose respo
 - **Do NOT** open a public GitHub issue.
 - Please email the maintainers with a detailed description, reproduction steps, and proof-of-concept.
 - We will acknowledge receipt within 48 hours and work with you on a coordinated fix.
+

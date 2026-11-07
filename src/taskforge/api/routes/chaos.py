@@ -150,3 +150,4 @@ def recover_stale_leases(db: Session = Depends(get_db)):
         "recovered_count": len(recovered),
         "recovered_tasks": [{"id": t.id, "status": t.status} for t in recovered],
     }
+

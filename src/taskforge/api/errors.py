@@ -89,3 +89,4 @@ def register_error_handlers(app: FastAPI) -> None:
                 )
             ).model_dump(),
         )
+

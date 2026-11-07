@@ -137,3 +137,4 @@ def handle_timeout_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
     sleep_seconds = float(payload.get("sleep_seconds", 10.0))
     time.sleep(sleep_seconds)
     return {"status": "finished_after_sleep", "slept": sleep_seconds}
+

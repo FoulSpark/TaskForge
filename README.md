@@ -159,3 +159,4 @@ Key architectural choices are formally documented with context, alternatives, an
 ## 🛡️ License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+

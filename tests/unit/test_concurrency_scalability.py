@@ -64,3 +64,4 @@ def test_task_cache_set_get_and_invalidate():
     cache.invalidate("task-123")
     miss = cache.get("task-123")
     assert miss is None
+

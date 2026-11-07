@@ -30,3 +30,4 @@ We implement a **Dual Execution Architecture**. `WorkerDispatcher` provides ligh
 
 ## Validation Evidence
 Verified in `tests/integration/test_execution.py` across all 5 workload types and in automated benchmark runner.
+

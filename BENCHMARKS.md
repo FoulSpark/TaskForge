@@ -74,3 +74,4 @@ python benchmarks/runner/run_benchmarks.py --url http://127.0.0.1:8000 --profile
 
 1. **Hardware Dependent:** Measurements reflect local host hardware (AMD64 8-Core processor). Production deployments on cloud virtual machines will vary depending on network and storage IOPS.
 2. **SQLite vs PostgreSQL:** In-memory SQLite measurements exhibit near-instant write latencies but lack true concurrent write scaling compared to PostgreSQL multi-connection pools.
+

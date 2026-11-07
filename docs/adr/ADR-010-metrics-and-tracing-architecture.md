@@ -26,3 +26,4 @@ We implement **Prometheus pull-based metrics (`/metrics`) combined with OpenTele
 
 ## Validation Evidence
 Verified in `tests/integration/test_observability.py`. `/metrics` and `/api/v1/stats` validated with zero high-cardinality label explosion.
+

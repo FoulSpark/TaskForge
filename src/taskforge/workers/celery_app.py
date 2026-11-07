@@ -27,3 +27,4 @@ def run_celery_task(self, task_id: str):
     worker_id = f"celery-{self.request.hostname}"
     success = execute_task(task_id, worker_id)
     return {"task_id": task_id, "success": success}
+

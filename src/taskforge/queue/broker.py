@@ -118,3 +118,4 @@ def set_global_broker(broker: MessageBroker) -> None:
     global _global_broker
     with _broker_lock:
         _global_broker = broker
+

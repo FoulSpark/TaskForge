@@ -29,3 +29,4 @@ TaskForge implements **At-Least-Once Delivery** semantics paired with idempotent
 
 ## Validation Evidence
 Verified in `test_p3_06_duplicate_delivery_safety` (Acceptance Criterion P3-06).
+

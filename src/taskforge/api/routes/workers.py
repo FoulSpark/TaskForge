@@ -11,3 +11,4 @@ def list_workers():
         "active_workers_count": len(workers),
         "workers": workers,
     }
+

@@ -33,3 +33,4 @@ We choose the **Modular Monolith** architecture for TaskForge. All domain logic 
 
 ## Validation Evidence
 Verified in Phase 0 and Phase 1 test suites. Clean startup, zero cross-service network flakiness, and test runs executing in seconds.
+

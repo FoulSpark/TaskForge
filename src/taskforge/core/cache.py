@@ -71,3 +71,4 @@ def get_cache(redis_client: Optional[redis.Redis] = None) -> TaskCache:
         if _global_cache is None:
             _global_cache = TaskCache(redis_client=redis_client)
         return _global_cache
+

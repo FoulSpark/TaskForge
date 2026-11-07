@@ -80,3 +80,4 @@ def is_terminal_state(status: TaskStatus | str) -> bool:
 def can_cancel_task(status: TaskStatus | str) -> bool:
     """Check if task is in a state that can be cancelled."""
     return TaskStatus(status) in CANCELLABLE_STATES
+

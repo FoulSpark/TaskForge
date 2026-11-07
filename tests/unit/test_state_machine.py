@@ -69,3 +69,4 @@ def test_cancellable_states():
     assert can_cancel_task(TaskStatus.SUCCESS) is False
     assert can_cancel_task(TaskStatus.DEAD_LETTER) is False
     assert can_cancel_task(TaskStatus.CANCELLED) is False
+

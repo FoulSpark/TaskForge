@@ -85,3 +85,4 @@ This register documents the 10 engineering experiments conducted to characterize
   - P1 (Low) Queue Wait P95: 4.82 s
   - P4 (Critical) Queue Wait P95: 0.12 s
 - **Conclusion:** Priority queue ordering reliably prioritized critical compute workloads.
+

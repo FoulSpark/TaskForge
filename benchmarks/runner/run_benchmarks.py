@@ -4,11 +4,18 @@ import json
 import os
 import platform
 import statistics
+import sys
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
+
+# Ensure 'src' is discoverable on python path regardless of execution environment
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SRC_DIR = REPO_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 import httpx
 
@@ -44,6 +51,8 @@ def run_single_trial(
         os.environ["TASKFORGE_TESTING"] = "1"
         from fastapi.testclient import TestClient
         from taskforge.main import app
+        from taskforge.database.session import init_db
+        init_db()
         client = TestClient(app)
     else:
         client = httpx.Client(base_url=base_url, timeout=30.0)
@@ -70,6 +79,11 @@ def run_single_trial(
                 errors += 1
         except Exception:
             errors += 1
+
+    try:
+        client.close()
+    except Exception:
+        pass
 
     total_time = time.perf_counter() - start_wall
     throughput = round(total_tasks / total_time, 2) if total_time > 0 else 0

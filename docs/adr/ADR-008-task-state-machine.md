@@ -42,3 +42,4 @@ We enforce a **Strict Task State Machine** with 8 explicit states:
 
 ## Validation Evidence
 Verified in `tests/unit/test_state_machine.py`. 100% legal transitions accepted, all illegal transitions rejected.
+

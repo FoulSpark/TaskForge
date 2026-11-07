@@ -87,3 +87,4 @@ class TaskService:
         task.status = TaskStatus.QUEUED.value
         self.repo.update_status(task_id, TaskStatus.QUEUED, {"reason": "manual_retry_triggered"})
         return self.repo.get_by_id(task_id)  # type: ignore
+
