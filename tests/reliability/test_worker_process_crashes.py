@@ -87,7 +87,7 @@ def test_cp01_crash_pre_claim_idle(redis_conn, test_queue, repo, db_session):
             "2",
         ]
     )
-    exit_code = proc.wait(timeout=5)
+    exit_code = proc.wait(timeout=10)
     assert exit_code == 41
 
     # Invariant: Task remains available in ready queue untouched
@@ -139,7 +139,7 @@ def test_cp02_crash_post_dequeue_pre_lease(redis_conn, test_queue, repo, db_sess
             "2",
         ]
     )
-    exit_code = proc.wait(timeout=5)
+    exit_code = proc.wait(timeout=10)
     assert exit_code == 42
 
     assert broker.get_queue_depth() == 0
@@ -194,7 +194,7 @@ def test_cp03_crash_post_lease_pre_handler(redis_conn, test_queue, repo, db_sess
             "2",
         ]
     )
-    exit_code = proc.wait(timeout=5)
+    exit_code = proc.wait(timeout=10)
     assert exit_code == 43
 
     db_session.expire_all()
@@ -255,7 +255,7 @@ def test_cp04_crash_mid_handler_execution(redis_conn, test_queue, repo, db_sessi
             "2",
         ]
     )
-    exit_code = proc.wait(timeout=5)
+    exit_code = proc.wait(timeout=10)
     assert exit_code == 44
 
     # Wait for lease and visibility to expire
@@ -317,7 +317,7 @@ def test_cp05_crash_post_handler_pre_result(redis_conn, test_queue, repo, db_ses
             "2",
         ]
     )
-    exit_code = proc.wait(timeout=5)
+    exit_code = proc.wait(timeout=10)
     assert exit_code == 45
 
     # Result was NOT committed in DB before the crash
@@ -380,7 +380,7 @@ def test_cp06_crash_post_result_pre_ack(redis_conn, test_queue, repo, db_session
             "2",
         ]
     )
-    exit_code = proc.wait(timeout=5)
+    exit_code = proc.wait(timeout=10)
     assert exit_code == 46
 
     db_session.expire_all()

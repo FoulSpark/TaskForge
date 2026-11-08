@@ -176,7 +176,7 @@ class WorkerDispatcher:
 
             # DISPATCHER ACK CONTRACT:
             # ONLY acknowledge delivery if work completed, was an existing terminal duplicate,
-            # or terminal failure was committed to PostgreSQL.
+            # terminal failure was committed to PostgreSQL, or retry publication was durably committed to outbox.
             # STRICTLY REFUSE TO ACK if:
             # - OWNERSHIP_REJECTED (active lease belongs to another worker; preserves delivery)
             # - RETRY_PENDING_PUBLICATION (retry state committed, but durable retry outbox publication is pending)
@@ -185,6 +185,7 @@ class WorkerDispatcher:
                 ExecutionDisposition.COMPLETED,
                 ExecutionDisposition.TERMINAL_DUPLICATE,
                 ExecutionDisposition.TERMINAL_FAILURE_RECORDED,
+                ExecutionDisposition.RETRY_DURABLY_SCHEDULED,
             ):
                 self.broker.ack(task_id, task_msg, delivery_token=delivery_token)
             else:

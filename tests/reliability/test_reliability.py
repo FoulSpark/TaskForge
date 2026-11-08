@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import uuid
 
 import pytest
@@ -115,12 +116,18 @@ def test_p3_02_and_p3_05_max_retries_and_dead_letter(setup_test_env):
         assert t1["retry_count"] == 1
         assert len(t1["attempts"]) == 1
 
+        # Wait for attempt 1 backoff delay (1s) to elapse
+        time.sleep(1.1)
+
         # Run attempt 2 (retry 1)
         execute_task(task_id, "worker-1")
         t2 = client.get(f"/api/v1/tasks/{task_id}").json()
         assert t2["status"] == "RETRY_WAIT"
         assert t2["retry_count"] == 2
         assert len(t2["attempts"]) == 2
+
+        # Wait for attempt 2 backoff delay (2s) to elapse
+        time.sleep(2.1)
 
         # Run attempt 3 (retry 2, reaching max_retries 2)
         execute_task(task_id, "worker-1")

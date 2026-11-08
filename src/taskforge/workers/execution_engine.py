@@ -1,18 +1,18 @@
 import concurrent.futures
 import random
-import threading
 import time
 import traceback
 from enum import StrEnum
 from typing import Any
 
+from sqlalchemy import func, select
+
 import taskforge.tasks  # noqa: F401
 from taskforge.core.logging import get_logger
 from taskforge.core.state_machine import TaskStatus, is_terminal_state
-from taskforge.database.models import get_utc_now
+from taskforge.database.models import TaskAttempt, get_utc_now
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
-from taskforge.queue.broker import get_broker
 from taskforge.tasks.registry import get_handler
 from taskforge.workers.lease_manager import LeaseManager
 
@@ -25,6 +25,7 @@ class ExecutionDisposition(StrEnum):
     COMPLETED = "completed"
     TERMINAL_DUPLICATE = "terminal_duplicate"
     TERMINAL_FAILURE_RECORDED = "terminal_failure_recorded"
+    RETRY_DURABLY_SCHEDULED = "retry_durably_scheduled"
     RETRY_PENDING_PUBLICATION = "retry_pending_publication"
     OWNERSHIP_REJECTED = "ownership_rejected"
     UNEXPECTED_FAILURE = "unexpected_failure"
@@ -37,6 +38,7 @@ class ExecutionDisposition(StrEnum):
             ExecutionDisposition.COMPLETED,
             ExecutionDisposition.TERMINAL_DUPLICATE,
             ExecutionDisposition.TERMINAL_FAILURE_RECORDED,
+            ExecutionDisposition.RETRY_DURABLY_SCHEDULED,
         )
 
     def __bool__(self) -> bool:
@@ -62,9 +64,10 @@ def execute_task(
     lease_manager: LeaseManager | None = None,
     timeout_seconds: int | None = None,
     lease_token: str | None = None,
+    use_outbox: bool = True,
 ) -> ExecutionDisposition:
     """Executes a single task run with lease management, timeout enforcement,
-    attempt tracking, atomic result persistence, and retry backoff.
+    attempt tracking, atomic result persistence, and retry publication.
     Returns an ExecutionDisposition indicating the outcome and ACK eligibility.
     """
     if lease_token and not lease_manager:
@@ -115,7 +118,16 @@ def execute_task(
                 )
                 return ExecutionDisposition.TERMINAL_DUPLICATE
 
-            attempt_num = task.retry_count + 1
+            # Calculate strictly monotonic attempt number per task
+            max_attempt = (
+                db.scalars(
+                    select(func.max(TaskAttempt.attempt_number)).where(
+                        TaskAttempt.task_id == task_id
+                    )
+                ).first()
+                or 0
+            )
+            attempt_num = max(task.retry_count + 1, max_attempt + 1)
 
             if task.status == TaskStatus.RETRY_WAIT.value:
                 repo.update_status(
@@ -232,30 +244,12 @@ def execute_task(
                     is_timeout=is_timeout,
                     attempt_id=attempt_id,
                     duration_ms=duration_ms,
+                    publish_to_outbox=use_outbox,
                 )
 
-            # Schedule retry re-enqueue if retryable
             if is_retryable:
-                backoff_delay = calculate_backoff(task_updated.retry_count)
-
-                def re_enqueue():
-                    time.sleep(backoff_delay)
-                    try:
-                        with SessionLocal() as re_db:
-                            re_repo = TaskRepository(re_db)
-                            cur = re_repo.get_by_id(task_id)
-                            if cur and cur.status == TaskStatus.RETRY_WAIT.value:
-                                re_repo.update_status(
-                                    task_id,
-                                    TaskStatus.QUEUED,
-                                    {"reason": "retry_backoff_elapsed"},
-                                )
-                                broker = get_broker()
-                                broker.enqueue(task_id, cur.priority, cur.payload)
-                    except Exception as err:
-                        logger.error("retry_re_enqueue_error", task_id=task_id, error=str(err))
-
-                threading.Thread(target=re_enqueue, daemon=True).start()
+                if use_outbox:
+                    return ExecutionDisposition.RETRY_DURABLY_SCHEDULED
                 return ExecutionDisposition.RETRY_PENDING_PUBLICATION
             else:
                 return ExecutionDisposition.TERMINAL_FAILURE_RECORDED
@@ -280,6 +274,7 @@ def execute_task_process_isolated(
     worker_id: str,
     timeout_seconds: int = 60,
     lease_manager: LeaseManager | None = None,
+    use_outbox: bool = True,
 ) -> ExecutionDisposition:
     """Executes a task in a dedicated OS subprocess with hard timeout enforcement.
     If execution exceeds timeout_seconds, the OS subprocess is forcibly killed via proc.kill()
@@ -338,15 +333,22 @@ def execute_task_process_isolated(
     proc = subprocess.Popen(cmd)
     try:
         proc.wait(timeout=timeout_seconds)
-        if proc.returncode == 0:
-            with SessionLocal() as db:
-                repo = TaskRepository(db)
-                final_t = repo.get_by_id(task_id)
-                if final_t and final_t.status == TaskStatus.SUCCESS.value:
+        with SessionLocal() as db:
+            repo = TaskRepository(db)
+            final_t = repo.get_by_id(task_id)
+            if final_t:
+                if final_t.status == TaskStatus.SUCCESS.value:
                     return ExecutionDisposition.COMPLETED
-                elif final_t and is_terminal_state(final_t.status):
+                elif final_t.status == TaskStatus.DEAD_LETTER.value:
+                    return ExecutionDisposition.TERMINAL_FAILURE_RECORDED
+                elif final_t.status == TaskStatus.RETRY_WAIT.value:
+                    return (
+                        ExecutionDisposition.RETRY_DURABLY_SCHEDULED
+                        if use_outbox
+                        else ExecutionDisposition.RETRY_PENDING_PUBLICATION
+                    )
+                elif is_terminal_state(final_t.status):
                     return ExecutionDisposition.TERMINAL_DUPLICATE
-            return ExecutionDisposition.COMPLETED
         return ExecutionDisposition.UNEXPECTED_FAILURE
     except subprocess.TimeoutExpired:
         logger.warning(
@@ -375,28 +377,11 @@ def execute_task_process_isolated(
                     error_message=f"Task timed out after {timeout_seconds}s (hard OS process kill)",
                     is_timeout=True,
                     duration_ms=timeout_seconds * 1000.0,
+                    publish_to_outbox=use_outbox,
                 )
                 if is_retryable:
-                    backoff_delay = calculate_backoff(task_updated.retry_count)
-
-                    def re_enqueue():
-                        time.sleep(backoff_delay)
-                        try:
-                            with SessionLocal() as re_db:
-                                re_repo = TaskRepository(re_db)
-                                cur = re_repo.get_by_id(task_id)
-                                if cur and cur.status == TaskStatus.RETRY_WAIT.value:
-                                    re_repo.update_status(
-                                        task_id,
-                                        TaskStatus.QUEUED,
-                                        {"reason": "retry_backoff_elapsed"},
-                                    )
-                                    broker = get_broker()
-                                    broker.enqueue(task_id, cur.priority, cur.payload)
-                        except Exception as err:
-                            logger.error("retry_re_enqueue_error", task_id=task_id, error=str(err))
-
-                    threading.Thread(target=re_enqueue, daemon=True).start()
+                    if use_outbox:
+                        return ExecutionDisposition.RETRY_DURABLY_SCHEDULED
                     return ExecutionDisposition.RETRY_PENDING_PUBLICATION
                 return ExecutionDisposition.TERMINAL_FAILURE_RECORDED
         except Exception as exc:

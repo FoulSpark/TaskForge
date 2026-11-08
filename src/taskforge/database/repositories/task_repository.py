@@ -499,10 +499,11 @@ class TaskRepository:
         is_timeout: bool = False,
         attempt_id: int | None = None,
         duration_ms: float | None = None,
+        publish_to_outbox: bool = True,
     ) -> tuple[Task, bool]:
         """Atomically record attempt failure, evaluate retries under lock,
-        transition Task to RETRY_WAIT or DEAD_LETTER, release lease, and record event
-        in one transaction under strict lease fencing.
+        transition Task to RETRY_WAIT or DEAD_LETTER, record OutboxEvent for TASK_RETRY,
+        release lease, and record event in one transaction under strict lease fencing.
         Returns (task, is_retryable).
         """
         stmt = select(Task).where(Task.id == task_id).with_for_update()
@@ -553,6 +554,11 @@ class TaskRepository:
                 validate_transition(curr_status, nxt_status)
                 task.status = nxt_status.value
 
+                # Retry backoff timing: calculate eligibility time
+                backoff_delay = min(1.0 * (2 ** (task.retry_count - 1)), 60.0)
+                retry_scheduled_at = now + timedelta(seconds=backoff_delay)
+                task.scheduled_at = retry_scheduled_at
+
                 event = TaskEvent(
                     task_id=task.id,
                     event_type="STATUS_CHANGED",
@@ -563,10 +569,33 @@ class TaskRepository:
                         "retry_count": task.retry_count,
                         "reason": reason,
                         "is_timeout": is_timeout,
+                        "scheduled_at": retry_scheduled_at.isoformat(),
                     },
                     created_at=now,
                 )
                 self.db.add(event)
+
+                # Atomically record OutboxEvent for transactional retry publication
+                if publish_to_outbox:
+                    retry_outbox = OutboxEvent(
+                        aggregate_type="task",
+                        aggregate_id=task.id,
+                        event_type="TASK_RETRY",
+                        payload={
+                            "task_id": task.id,
+                            "task_name": task.task_name,
+                            "task_type": task.task_type,
+                            "priority": task.priority,
+                            "payload": task.payload,
+                            "timeout_seconds": task.timeout_seconds,
+                            "max_retries": task.max_retries,
+                            "retry_count": task.retry_count,
+                            "scheduled_at": retry_scheduled_at.isoformat(),
+                        },
+                        status="PENDING",
+                        created_at=now,
+                    )
+                    self.db.add(retry_outbox)
             else:
                 # Multi-step state machine transition: RUNNING -> FAILED -> DEAD_LETTER
                 validate_transition(curr_status, TaskStatus.FAILED)

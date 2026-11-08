@@ -2,7 +2,7 @@
   "gate": "8.3.1",
   "description": "Graceful Shutdown In-Flight Task Drain Verification",
   "active_tasks_at_shutdown_signal": 2,
-  "drain_duration_seconds": 0.843,
+  "drain_duration_seconds": 0.84,
   "grace_period_configured": 4.0,
   "task_1_status": "SUCCESS",
   "task_2_status": "SUCCESS",

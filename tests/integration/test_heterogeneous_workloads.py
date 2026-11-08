@@ -110,8 +110,12 @@ def test_deterministic_workload_correctness_and_latency_profiles(repo, db_sessio
     fail_id = t_fail.id
     # Attempt 1 -> RETRY_WAIT
     assert not execute_task(fail_id, "worker-fail").is_success()
+    # Wait for attempt 1 backoff (1s) to elapse before attempt 2
+    time.sleep(1.1)
     # Attempt 2 -> RETRY_WAIT
     assert not execute_task(fail_id, "worker-fail").is_success()
+    # Wait for attempt 2 backoff (2s) to elapse before attempt 3
+    time.sleep(2.1)
     # Attempt 3 -> max_retries exhausted -> DEAD_LETTER
     assert not execute_task(fail_id, "worker-fail").is_success()
 

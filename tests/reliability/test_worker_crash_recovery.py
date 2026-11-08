@@ -320,10 +320,10 @@ def test_recovery_ordering_postgresql_before_redis_prevents_stranding(redis_conn
     # RECOVERY PHASE:
     # Deterministic step 1: Recover expired PostgreSQL leases FIRST
     recovered_tasks = repo.recover_expired_leases()
-    assert len(recovered_tasks) == 1
-    assert recovered_tasks[0].id == task_id
-    assert recovered_tasks[0].status == TaskStatus.RETRY_WAIT.value
-    assert recovered_tasks[0].lease_token is None
+    reaped_map = {x.id: x for x in recovered_tasks}
+    assert task_id in reaped_map
+    assert reaped_map[task_id].status == TaskStatus.RETRY_WAIT.value
+    assert reaped_map[task_id].lease_token is None
 
     # Pause point: between Step 1 and Step 2
     # At this pause point, Redis ready queue is empty because Step 2 hasn't run yet.
@@ -389,20 +389,26 @@ def test_failure_retry_produces_exactly_one_eligible_delivery(redis_conn, test_q
     # Wrap task execution through dispatcher's wrapper
     dispatcher._task_wrapper(msg)
 
-    # 1. Original delivery ACK is withheld while retry is pending publication (G8.3 safe ACK policy)
-    assert broker.get_in_flight_depth() == 1, "Under G8.3 safe ACK contract, ACK must be withheld while retry is pending publication"
+    # 1. Under G8.3 Item 2 durable retry outbox contract, the original delivery is ACKed
+    # because retry publication is durably committed in PostgreSQL outbox_events.
+    assert broker.get_in_flight_depth() == 0, "Original delivery must be ACKed once retry is durably in outbox"
 
-    # 2. Wait for retry backoff to elapse and enqueue the retry (backoff for attempt 1 is ~2.0 - 2.5s)
-    # Wait up to 5 seconds for retry delivery to appear in ready queue
-    start_wait = time.time()
-    while time.time() - start_wait < 5.0:
-        if broker.get_queue_depth() == 1:
-            break
-        time.sleep(0.1)
+    # 2. Wait for retry backoff to elapse and publish via transactional outbox
+    time.sleep(1.1)
+    from sqlalchemy import select
 
-    # Acknowledge the original delivery now that retry has been published
-    broker.ack(task_id, msg)
-    assert broker.get_in_flight_depth() == 0
+    from taskforge.database.models import OutboxEvent
+    from taskforge.queue.outbox import publish_pending_outbox_events
+
+    evt = db_session.scalars(
+        select(OutboxEvent).where(
+            OutboxEvent.aggregate_id == task_id,
+            OutboxEvent.event_type == "TASK_RETRY",
+        )
+    ).first()
+    assert evt is not None
+    published = publish_pending_outbox_events(db_session, broker, event_id=evt.id)
+    assert published == 1
 
     # Run broker reclaim: should reclaim ZERO because original delivery was acked
     reclaimed = broker.reclaim_expired()

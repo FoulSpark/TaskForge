@@ -268,8 +268,8 @@ def test_dispatcher_process_isolated_execution_mode_kills_runaway_task(repo, db_
     # Hard timeout occurred and terminated child process in ~1-2s (not 10s!)
     assert elapsed < 4.0, f"Dispatcher failed to kill runaway process in time: {elapsed:.2f}s"
 
-    # Delivery token ACK withheld under G8.3 safe ACK policy (retry pending publication)
-    assert broker.get_in_flight_depth() == 1
+    # Delivery acknowledged under G8.3 Item 2 durable retry outbox contract (RETRY_DURABLY_SCHEDULED)
+    assert broker.get_in_flight_depth() == 0
 
     # DB state verified: attempt timed out and task transitioned to RETRY_WAIT under lease fencing
     db_session.expire_all()

@@ -55,6 +55,28 @@ def publish_pending_outbox_events(
             # Enqueue to message broker
             broker.enqueue(task_id=task_id, priority=priority, payload=event.payload)
 
+            # If retry event, update task status from RETRY_WAIT to QUEUED
+            if event.event_type in ("TASK_RETRY", "task.retry"):
+                from taskforge.core.state_machine import TaskStatus
+                from taskforge.database.models import Task, TaskEvent
+
+                stmt_t = select(Task).where(Task.id == task_id).with_for_update()
+                t = db.scalars(stmt_t).first()
+                if t and t.status == TaskStatus.RETRY_WAIT.value:
+                    t.status = TaskStatus.QUEUED.value
+                    t.scheduled_at = None
+                    t.updated_at = now
+                    db.add(
+                        TaskEvent(
+                            task_id=t.id,
+                            event_type="STATUS_CHANGED",
+                            from_state=TaskStatus.RETRY_WAIT.value,
+                            to_state=TaskStatus.QUEUED.value,
+                            metadata_json={"reason": "outbox_retry_published"},
+                            created_at=now,
+                        )
+                    )
+
             event.status = "PUBLISHED"
             event.published_at = now
             published_count += 1

@@ -350,13 +350,13 @@ def test_g831_t06_crash_between_stages_recovers_on_subsequent_cycle(redis_conn, 
 
 
 def test_g831_t07_retryable_failure_is_not_acked_before_durable_retry_publication(
-    redis_conn, test_queue
+    redis_conn, test_queue, monkeypatch
 ):
     """T07: Retryable failure ACK withholding test.
-    When a worker records a retryable failure (task transitions to RETRY_WAIT),
+    When a worker records a retryable failure without durable outbox publication,
     execute_task returns RETRY_PENDING_PUBLICATION.
     The dispatcher must NOT ACK the Redis delivery, ensuring delivery durability
-    is not lost before transactional retry publication is implemented.
+    is preserved until transactional retry publication is confirmed.
     """
     with SessionLocal() as db:
         repo = TaskRepository(db)
@@ -387,6 +387,14 @@ def test_g831_t07_retryable_failure_is_not_acked_before_durable_retry_publicatio
     broker.ack = spy_ack
 
     try:
+        from taskforge.workers.execution_engine import execute_task as orig_execute
+
+        monkeypatch.setattr(
+            "taskforge.workers.dispatcher.execute_task",
+            lambda t_id, w_id, lease_manager=None: orig_execute(
+                t_id, w_id, lease_manager=lease_manager, use_outbox=False
+            ),
+        )
         dispatcher._task_wrapper(delivery)
 
         # Invariant 1: Dispatcher strictly withheld ACK
@@ -572,7 +580,7 @@ def test_g831_t10_retry_timing_and_scheduled_at_reclaim_guard(redis_conn, test_q
         assert repo.acquire_lease(task_id, "worker-replacement-immediate") is True
 
 
-def test_g831_t11_execution_mode_parity_and_dispatcher_ack_contract(redis_conn, test_queue):
+def test_g831_t11_execution_mode_parity_and_dispatcher_ack_contract(redis_conn, test_queue, monkeypatch):
     """T11: Execution mode parity & Dispatcher ACK contract test.
     Verifies that:
     1. Both thread-based and process-isolated modes return ExecutionDisposition.
@@ -661,6 +669,16 @@ def test_g831_t11_execution_mode_parity_and_dispatcher_ack_contract(redis_conn, 
         )
 
         # Case C: Process-isolated RETRY_PENDING_PUBLICATION -> Dispatcher withholds ACK
+        from taskforge.workers.execution_engine import (
+            execute_task_process_isolated as orig_proc_exec,
+        )
+
+        monkeypatch.setattr(
+            "taskforge.workers.dispatcher.execute_task_process_isolated",
+            lambda t_id, w_id, timeout_seconds=60, lease_manager=None: orig_proc_exec(
+                t_id, w_id, timeout_seconds=timeout_seconds, lease_manager=lease_manager, use_outbox=False
+            ),
+        )
         with SessionLocal() as db:
             repo = TaskRepository(db)
             task_c = repo.create_task(
