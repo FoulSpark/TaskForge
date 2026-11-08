@@ -636,13 +636,23 @@ class TaskRepository:
             TaskStatus.RETRY_WAIT.value,
         }
         # RUNNING tasks with an active or expired lease token MUST pass through recover_expired_leases().
-        # A RUNNING task is only claimable if its lease was explicitly vacated (lease_token is None).
-        if task.status == TaskStatus.RUNNING.value and task.lease_token is None:
-            pass
+        # A RUNNING task is only claimable if its lease was cleanly vacated:
+        # BOTH lease_token MUST be None AND lease_expires_at MUST be None.
+        # An inconsistent state (e.g. lease_token is None but lease_expires_at is set) is strictly rejected.
+        if task.status == TaskStatus.RUNNING.value:
+            if task.lease_token is not None or task.lease_expires_at is not None:
+                return False
         elif task.status not in CLAIMABLE_STATUSES:
             return False
 
         now = get_utc_now()
+        # Scheduled Execution Guard: Do not permit lease acquisition earlier than scheduled_at
+        if task.scheduled_at is not None:
+            sched = task.scheduled_at
+            if sched.tzinfo is None:
+                sched = sched.replace(tzinfo=UTC)
+            if sched > now:
+                return False
         if task.lease_expires_at is not None:
             exp = task.lease_expires_at
             if exp.tzinfo is None:

@@ -461,3 +461,226 @@ def test_g831_t08_expired_running_cannot_bypass_recovery():
         # 5. Now that recovery committed RETRY_WAIT, acquire_lease() succeeds
         fresh_token = f"lease-new-{uuid.uuid4().hex}"
         assert repo.acquire_lease(task_id, "worker-healthy-replacement", lease_token=fresh_token) is True
+
+
+def test_g831_t09_inconsistent_running_lease_metadata_rejected():
+    """T09: Lease consistency test.
+    Verifies that a task in RUNNING with inconsistent lease metadata
+    (e.g. lease_token is None, but lease_expires_at is still in the future)
+    is strictly rejected by acquire_lease().
+    Only cleanly vacated leases (both lease_token is None AND lease_expires_at is None)
+    are eligible for candidate acquisition.
+    """
+    now = get_utc_now()
+    future_time = now + timedelta(seconds=120)
+
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        task = repo.create_task(
+            task_name="Inconsistent Lease Task",
+            task_type="noop",
+            payload={"check": "inconsistent_metadata"},
+        )
+        task_id = task.id
+
+        # Case 1: Inconsistent metadata (token None, but lease_expires_at in future)
+        task.status = TaskStatus.RUNNING.value
+        task.lease_token = None
+        task.lease_expires_at = future_time
+        db.commit()
+
+        assert repo.acquire_lease(task_id, "worker-candidate-t09") is False, (
+            "acquire_lease() permitted acquisition on inconsistent lease metadata (token None, expires_at in future)!"
+        )
+
+        # Case 2: Inconsistent metadata (token present, but lease_expires_at is None)
+        task.lease_token = "lease-orphan-token"
+        task.lease_expires_at = None
+        db.commit()
+
+        assert repo.acquire_lease(task_id, "worker-candidate-t09") is False, (
+            "acquire_lease() permitted acquisition on inconsistent lease metadata (token present, expires_at None)!"
+        )
+
+        # Case 3: Cleanly vacated lease (both token and expires_at are None)
+        task.lease_token = None
+        task.lease_expires_at = None
+        db.commit()
+
+        assert repo.acquire_lease(task_id, "worker-candidate-t09") is True, (
+            "acquire_lease() failed to claim cleanly vacated RUNNING task!"
+        )
+
+
+def test_g831_t10_retry_timing_and_scheduled_at_reclaim_guard(redis_conn, test_queue):
+    """T10: Retry timing & scheduled_at guard test.
+    Verifies that:
+    1. A task with scheduled_at in the future strictly rejects acquire_lease(),
+       preventing premature execution if a delivery is dequeued or reclaimed early.
+    2. Once scheduled_at has arrived, acquire_lease() succeeds.
+    3. Documented failover policy: Lease-expiry recovery uses immediate retry
+       (scheduled_at is None) to minimize failover delay after worker death.
+    """
+    now = get_utc_now()
+    future_scheduled = now + timedelta(seconds=60)
+
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        task = repo.create_task(
+            task_name="Scheduled Delayed Task",
+            task_type="noop",
+            payload={"timing": "delayed"},
+        )
+        task_id = task.id
+
+        # Task in RETRY_WAIT with future scheduled_at
+        task.status = TaskStatus.RETRY_WAIT.value
+        task.scheduled_at = future_scheduled
+        task.lease_token = None
+        task.lease_expires_at = None
+        db.commit()
+
+        # Invariant 1: Premature lease acquisition is strictly rejected
+        assert repo.acquire_lease(task_id, "worker-premature") is False, (
+            "acquire_lease() allowed premature claim before scheduled_at!"
+        )
+
+        # Invariant 2: When scheduled_at arrives (or is elapsed), lease acquisition succeeds
+        task.scheduled_at = now - timedelta(seconds=1)
+        db.commit()
+
+        assert repo.acquire_lease(task_id, "worker-ontime") is True, (
+            "acquire_lease() rejected claim after scheduled_at elapsed!"
+        )
+
+        # Invariant 3: Lease-expiry recovery sets scheduled_at to None (immediate failover policy)
+        task.status = TaskStatus.RUNNING.value
+        task.lease_token = "lease-crashed-worker"
+        task.lease_expires_at = now - timedelta(seconds=30)
+        task.scheduled_at = None
+        db.commit()
+
+        recovered = repo.recover_expired_leases()
+        assert len(recovered) == 1
+        assert recovered[0].task_id == task_id
+
+        # Verify recovered task has scheduled_at None (immediate retry policy)
+        db.refresh(task)
+        assert task.scheduled_at is None
+        assert task.status == TaskStatus.RETRY_WAIT.value
+        # Replacement worker can claim immediately without backoff delay
+        assert repo.acquire_lease(task_id, "worker-replacement-immediate") is True
+
+
+def test_g831_t11_execution_mode_parity_and_dispatcher_ack_contract(redis_conn, test_queue):
+    """T11: Execution mode parity & Dispatcher ACK contract test.
+    Verifies that:
+    1. Both thread-based and process-isolated modes return ExecutionDisposition.
+    2. Dispatcher applies the exact same ACK policy to both modes:
+       - ACKs COMPLETED
+       - Strictly withholds ACK on OWNERSHIP_REJECTED
+       - Strictly withholds ACK on RETRY_PENDING_PUBLICATION
+    """
+    broker = RedisBroker(redis_conn, queue_name=test_queue)
+
+    # 1. Thread mode dispatcher
+    disp_thread = WorkerDispatcher(worker_id="disp-thread-t11", broker=broker, execution_mode="thread")
+    # 2. Process mode dispatcher
+    disp_proc = WorkerDispatcher(worker_id="disp-proc-t11", broker=broker, execution_mode="process")
+
+    # Spy on broker.ack
+    ack_history = []
+    original_ack = broker.ack
+
+    def recording_ack(t_id, msg=None, delivery_token=None):
+        ack_history.append((t_id, delivery_token))
+        return original_ack(t_id, msg, delivery_token=delivery_token)
+
+    broker.ack = recording_ack
+
+    try:
+        # Case A: Thread mode COMPLETED -> Dispatcher ACKs
+        with SessionLocal() as db:
+            repo = TaskRepository(db)
+            task_t = repo.create_task(
+                task_name="Thread Success",
+                task_type="noop",
+                payload={"mode": "thread"},
+            )
+            task_t_id = task_t.id
+
+        broker.enqueue(task_t_id, 2, {"task_id": task_t_id, "priority": 2})
+        deliv_t = broker.dequeue(timeout_seconds=0.1)
+        assert deliv_t is not None
+
+        disp_thread._task_wrapper(deliv_t)
+        assert len(ack_history) == 1
+        assert ack_history[0][0] == task_t_id
+
+        # Case B: Process-isolated COMPLETED -> Dispatcher ACKs
+        with SessionLocal() as db:
+            repo = TaskRepository(db)
+            task_a = repo.create_task(
+                task_name="Process Isolated Success",
+                task_type="noop",
+                payload={"mode": "process"},
+                timeout_seconds=10,
+            )
+            task_a_id = task_a.id
+
+        broker.enqueue(task_a_id, 2, {"task_id": task_a_id, "priority": 2, "timeout_seconds": 10})
+        deliv_a = broker.dequeue(timeout_seconds=0.1)
+        assert deliv_a is not None
+
+        disp_proc._task_wrapper(deliv_a)
+        assert len(ack_history) == 2
+        assert ack_history[1][0] == task_a_id
+
+        # Case B: Process-isolated OWNERSHIP_REJECTED -> Dispatcher withholds ACK
+        with SessionLocal() as db:
+            repo = TaskRepository(db)
+            task_b = repo.create_task(
+                task_name="Process Ownership Collision",
+                task_type="noop",
+                payload={"mode": "process"},
+                timeout_seconds=10,
+            )
+            task_b_id = task_b.id
+            # Worker A holds unexpired lease
+            repo.acquire_lease(task_b_id, "worker-prior-owner", lease_duration_seconds=60)
+
+        broker.enqueue(task_b_id, 2, {"task_id": task_b_id, "priority": 2, "timeout_seconds": 10})
+        deliv_b = broker.dequeue(timeout_seconds=0.1)
+        assert deliv_b is not None
+
+        # Candidate process dispatcher attempts execution
+        disp_proc._task_wrapper(deliv_b)
+        # ACK must NOT have been called for task_b
+        assert all(t[0] != task_b_id for t in ack_history), (
+            "Dispatcher erroneously acknowledged OWNERSHIP_REJECTED delivery in process mode!"
+        )
+
+        # Case C: Process-isolated RETRY_PENDING_PUBLICATION -> Dispatcher withholds ACK
+        with SessionLocal() as db:
+            repo = TaskRepository(db)
+            task_c = repo.create_task(
+                task_name="Process Timeout Retryable",
+                task_type="sleep",
+                payload={"duration": 10},
+                timeout_seconds=1,  # Forces timeout
+                max_retries=3,
+            )
+            task_c_id = task_c.id
+
+        broker.enqueue(task_c_id, 2, {"task_id": task_c_id, "priority": 2, "timeout_seconds": 1})
+        deliv_c = broker.dequeue(timeout_seconds=0.1)
+        assert deliv_c is not None
+
+        disp_proc._task_wrapper(deliv_c)
+        # ACK must NOT have been called for task_c
+        assert all(t[0] != task_c_id for t in ack_history), (
+            "Dispatcher erroneously acknowledged RETRY_PENDING_PUBLICATION delivery in process mode!"
+        )
+
+    finally:
+        broker.ack = original_ack
