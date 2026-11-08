@@ -4,7 +4,7 @@
   "configuration": {
     "consumers": 20,
     "total_tasks": 2000,
-    "queue_name": "taskforge:g82:test:ac024378a85b4de593b4739fdab51ba5:tasks"
+    "queue_name": "taskforge:g82:test:bc2b4a08eb214b01ad5d41d792d95fe1:tasks"
   },
   "results": {
     "submitted_count": 2000,
@@ -13,30 +13,30 @@
     "unaccounted_task_count": 0,
     "completed_count": 2000,
     "failed_count": 0,
-    "elapsed_seconds": 0.3296,
-    "drain_rate_tasks_per_sec": 6067.65,
+    "elapsed_seconds": 0.3616,
+    "drain_rate_tasks_per_sec": 5530.29,
     "final_queue_depth": 0,
     "consumer_distribution": {
-      "consumer-08": 106,
-      "consumer-17": 101,
-      "consumer-12": 87,
-      "consumer-04": 102,
-      "consumer-07": 107,
-      "consumer-06": 104,
-      "consumer-00": 104,
-      "consumer-15": 102,
-      "consumer-02": 101,
-      "consumer-18": 97,
-      "consumer-16": 100,
-      "consumer-13": 97,
-      "consumer-19": 103,
-      "consumer-10": 88,
-      "consumer-14": 99,
-      "consumer-11": 96,
-      "consumer-01": 103,
-      "consumer-03": 96,
-      "consumer-09": 104,
-      "consumer-05": 103
+      "consumer-11": 99,
+      "consumer-03": 109,
+      "consumer-19": 97,
+      "consumer-06": 108,
+      "consumer-01": 90,
+      "consumer-17": 98,
+      "consumer-13": 101,
+      "consumer-02": 90,
+      "consumer-05": 100,
+      "consumer-08": 105,
+      "consumer-09": 103,
+      "consumer-16": 98,
+      "consumer-12": 94,
+      "consumer-18": 108,
+      "consumer-14": 97,
+      "consumer-04": 90,
+      "consumer-07": 105,
+      "consumer-10": 111,
+      "consumer-15": 95,
+      "consumer-00": 102
     }
   }
 }

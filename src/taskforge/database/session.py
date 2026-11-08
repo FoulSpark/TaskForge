@@ -39,6 +39,26 @@ def init_db(engine_override=None) -> None:
     from taskforge.database.models import OutboxEvent, Task, TaskAttempt, TaskEvent, TaskResult  # noqa: F401
 
     Base.metadata.create_all(bind=target_engine)
+    try:
+        with target_engine.connect() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE outbox_events ADD COLUMN IF NOT EXISTS available_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_outbox_status_available ON outbox_events (status, available_at);"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_task_attempts_task_attempt ON task_attempts (task_id, attempt_number);"
+                )
+            )
+            conn.commit()
+    except Exception:
+        pass
 
 
 def sanitize_db_url(url: str) -> str:

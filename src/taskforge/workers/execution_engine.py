@@ -146,12 +146,13 @@ def execute_task(
                     lease_token=lease_token,
                 )
 
-            # Record attempt start
+            # Record attempt start under strict lease fencing
             attempt = repo.record_attempt(
                 task_id=task_id,
                 attempt_number=attempt_num,
                 worker_id=worker_id,
                 status="RUNNING",
+                lease_token=lease_token,
                 started_at=start_utc,
             )
             attempt_id = attempt.id

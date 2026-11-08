@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -105,7 +106,10 @@ class TaskAttempt(Base):
 
     task: Mapped["Task"] = relationship("Task", back_populates="attempts")
 
-    __table_args__ = (Index("ix_task_attempts_task_attempt", "task_id", "attempt_number"),)
+    __table_args__ = (
+        UniqueConstraint("task_id", "attempt_number", name="uq_task_attempts_task_attempt"),
+        Index("ix_task_attempts_task_attempt", "task_id", "attempt_number"),
+    )
 
 
 class TaskResult(Base):
@@ -159,9 +163,15 @@ class OutboxEvent(Base):
     )  # PENDING, PUBLISHED, FAILED
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    available_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    __table_args__ = (Index("ix_outbox_status_created", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_outbox_status_available", "status", "available_at"),
+        Index("ix_outbox_status_created", "status", "created_at"),
+    )

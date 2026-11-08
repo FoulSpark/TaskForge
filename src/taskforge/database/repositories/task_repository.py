@@ -198,6 +198,7 @@ class TaskRepository:
                     "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
                 },
                 status="PENDING",
+                available_at=scheduled_at or now,
                 created_at=now,
             )
             self.db.add(outbox)
@@ -339,16 +340,55 @@ class TaskRepository:
     def record_attempt(
         self,
         task_id: str,
-        attempt_number: int,
-        worker_id: str | None,
-        status: str,
+        attempt_number: int | None = None,
+        worker_id: str | None = None,
+        status: str = "RUNNING",
+        lease_token: str | None = None,
         error_message: str | None = None,
         error_traceback: str | None = None,
         duration_ms: float | None = None,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> TaskAttempt:
+        """Record task attempt under strict lease fencing and serialized attempt allocation.
+        Validates lease ownership against active task row lock.
+        Calculates monotonic, non-reusing attempt number atomically if not provided.
+        """
+        stmt = select(Task).where(Task.id == task_id).with_for_update()
+        task = self.db.scalars(stmt).first()
+        if not task:
+            raise ValueError(f"Task with id {task_id} not found")
+
+        # Fencing validation: if task has an active lease or lease_token is provided, enforce exact match
+        if task.lease_token is not None or lease_token is not None:
+            if not lease_token or task.lease_token != lease_token:
+                raise PermissionError(
+                    f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
+                )
+
         now = get_utc_now()
+        # Verify lease has not expired at this instant
+        if task.lease_expires_at is not None:
+            exp = task.lease_expires_at
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=UTC)
+            if exp < now:
+                raise PermissionError(
+                    f"Fencing violation: lease expired at {exp.isoformat()} (current time {now.isoformat()})"
+                )
+
+        # Allocate monotonic, non-reusing attempt number under task row lock if not specified
+        if attempt_number is None:
+            max_attempt = (
+                self.db.scalars(
+                    select(func.max(TaskAttempt.attempt_number)).where(
+                        TaskAttempt.task_id == task_id
+                    )
+                ).first()
+                or 0
+            )
+            attempt_number = max(task.retry_count + 1, max_attempt + 1)
+
         attempt = TaskAttempt(
             task_id=task_id,
             attempt_number=attempt_number,
@@ -362,6 +402,7 @@ class TaskRepository:
         )
         self.db.add(attempt)
         self.db.commit()
+        self.db.refresh(attempt)
         return attempt
 
     def record_result(
@@ -593,6 +634,7 @@ class TaskRepository:
                             "scheduled_at": retry_scheduled_at.isoformat(),
                         },
                         status="PENDING",
+                        available_at=retry_scheduled_at,
                         created_at=now,
                     )
                     self.db.add(retry_outbox)

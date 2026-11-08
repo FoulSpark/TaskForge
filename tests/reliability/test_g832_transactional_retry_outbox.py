@@ -17,9 +17,9 @@ from datetime import timedelta
 
 import pytest
 import redis
-from sqlalchemy import select
+from sqlalchemy import select, text
 
-from taskforge.core.state_machine import TaskStatus
+from taskforge.core.state_machine import TaskPriority, TaskStatus
 from taskforge.database.models import (
     OutboxEvent,
     Task,
@@ -33,6 +33,12 @@ from taskforge.queue.broker import RedisBroker
 from taskforge.queue.outbox import publish_pending_outbox_events
 from taskforge.queue.redis_client import create_redis_client
 from taskforge.workers.dispatcher import WorkerDispatcher
+from taskforge.workers.execution_engine import (
+    ExecutionDisposition,
+    execute_task,
+    execute_task_process_isolated,
+)
+from taskforge.workers.lease_manager import LeaseManager
 
 TEST_KEY_PREFIX = "taskforge:g832:test:"
 
@@ -83,7 +89,14 @@ def test_g832_t01_atomic_failure_and_retry_outbox_transaction():
         token = "lease-token-t01"
         repo.acquire_lease(task_id, "worker-t01", lease_duration_seconds=30, lease_token=token)
         repo.update_status(task_id, TaskStatus.RUNNING, {"worker": "worker-t01"}, lease_token=token)
-        attempt = repo.record_attempt(task_id, 1, "worker-t01", "RUNNING", get_utc_now())
+        attempt = repo.record_attempt(
+            task_id=task_id,
+            attempt_number=1,
+            worker_id="worker-t01",
+            status="RUNNING",
+            lease_token=token,
+            started_at=get_utc_now(),
+        )
         attempt_id = attempt.id
 
         now_before = get_utc_now()
@@ -202,7 +215,7 @@ def test_g832_t03_outbox_publisher_respects_scheduled_at_backoff(redis_conn, tes
         task.scheduled_at = future_time
         db.commit()
 
-        # Insert pending retry event with future scheduled_at
+        # Insert pending retry event with future scheduled_at and available_at
         outbox_event = OutboxEvent(
             aggregate_id=task_id,
             event_type="TASK_RETRY",
@@ -212,6 +225,7 @@ def test_g832_t03_outbox_publisher_respects_scheduled_at_backoff(redis_conn, tes
                 "scheduled_at": future_time.isoformat(),
             },
             status="PENDING",
+            available_at=future_time,
             created_at=now,
         )
         db.add(outbox_event)
@@ -227,10 +241,12 @@ def test_g832_t03_outbox_publisher_respects_scheduled_at_backoff(redis_conn, tes
     # Advance time: simulate arrival of scheduled_at
     with SessionLocal() as db:
         evt = db.scalars(select(OutboxEvent).where(OutboxEvent.id == outbox_event_id)).first()
+        past_time = now - timedelta(seconds=1)
+        evt.available_at = past_time
         evt.payload = {
             "task_id": task_id,
             "priority": 2,
-            "scheduled_at": (now - timedelta(seconds=1)).isoformat(),
+            "scheduled_at": past_time.isoformat(),
         }
         db.commit()
 
@@ -291,15 +307,17 @@ def test_g832_t04_crash_after_db_commit_before_redis_publication_never_loses_tas
 
     # 3. Simulate publisher sweep (with scheduled_at elapsed)
     with SessionLocal() as db:
-        # Normalize scheduled_at to now for immediate test processing
+        # Normalize available_at and scheduled_at to past for immediate test processing
         evt = db.scalars(
             select(OutboxEvent).where(
                 OutboxEvent.aggregate_id == task_id,
                 OutboxEvent.event_type == "TASK_RETRY",
             )
         ).first()
+        past_time = get_utc_now() - timedelta(seconds=1)
+        evt.available_at = past_time
         payload = dict(evt.payload)
-        payload["scheduled_at"] = (get_utc_now() - timedelta(seconds=1)).isoformat()
+        payload["scheduled_at"] = past_time.isoformat()
         evt.payload = payload
         db.commit()
 
@@ -351,6 +369,7 @@ def test_g832_t05_crash_after_redis_enqueue_before_outbox_commit_is_idempotent(r
             event_type="TASK_RETRY",
             payload={"task_id": task_id, "priority": 2, "scheduled_at": (now - timedelta(seconds=1)).isoformat()},
             status="PENDING",
+            available_at=now - timedelta(seconds=1),
             created_at=now,
         )
         db.add(outbox_event)
@@ -461,8 +480,10 @@ def test_g832_t06_exactly_one_eligible_delivery_after_retry_delay(redis_conn, te
     # 4. Outbox publisher flushes retry after scheduled_at arrives
     with SessionLocal() as db:
         evt = db.scalars(select(OutboxEvent).where(OutboxEvent.aggregate_id == task_id)).first()
+        past_time = get_utc_now() - timedelta(seconds=1)
+        evt.available_at = past_time
         payload = dict(evt.payload)
-        payload["scheduled_at"] = (get_utc_now() - timedelta(seconds=1)).isoformat()
+        payload["scheduled_at"] = past_time.isoformat()
         evt.payload = payload
         db.commit()
 
@@ -551,5 +572,116 @@ def test_g832_t07_all_six_dispositions_parity_across_both_execution_modes(redis_
             dispatcher._task_wrapper(m5)
             assert t5_id not in ack_calls, f"Mode {mode} erroneously ACKed OWNERSHIP_REJECTED"
 
+            # 6. RETRY_PENDING_PUBLICATION (legacy/non-outbox path) -> should WITHHOLD ACK
+            with SessionLocal() as db:
+                repo = TaskRepository(db)
+                t6 = repo.create_task(f"p6-{mode}", "failing", {"err": 6}, max_retries=2, timeout_seconds=10)
+                t6_id = t6.id
+            broker.enqueue(t6_id, 2, {"task_id": t6_id, "priority": 2, "timeout_seconds": 10})
+            _ = broker.dequeue(timeout_seconds=0.1)
+            lease6 = LeaseManager(t6_id, f"worker-test-{mode}")
+            if mode == "process":
+                disp6 = execute_task_process_isolated(t6_id, f"worker-test-{mode}", timeout_seconds=10, lease_manager=lease6, use_outbox=False)
+            else:
+                disp6 = execute_task(t6_id, f"worker-test-{mode}", lease_manager=lease6, use_outbox=False)
+            assert disp6 == ExecutionDisposition.RETRY_PENDING_PUBLICATION
+            assert not disp6.should_ack()
+
+            # 7. UNEXPECTED_FAILURE -> should WITHHOLD ACK
+            fake_id = f"non-existent-{uuid.uuid4().hex}"
+            fake_msg = {"task_id": fake_id, "delivery_token": "tok-fake", "priority": 2}
+            dispatcher._task_wrapper(fake_msg)
+            assert fake_id not in ack_calls, f"Mode {mode} erroneously ACKed UNEXPECTED_FAILURE"
+
         finally:
             broker.ack = orig_ack
+
+
+def test_g832_t08_future_event_outbox_starvation_prevention(redis_conn, test_queue):
+    """T08: Outbox starvation prevention regression test.
+    Concrete scenario:
+    - Publisher batch limit: 50.
+    - 55 pending events scheduled for tomorrow (available_at > now).
+    - 1 pending event eligible immediately (available_at <= now).
+    - Verifies that future-scheduled events are filtered at the database level
+      and DO NOT consume or exhaust the eligible publisher batch.
+    - The immediately eligible event must publish on the very first sweep!
+    """
+    broker = RedisBroker(redis_conn, queue_name=test_queue)
+    now = get_utc_now()
+    future_time = now + timedelta(days=1)
+    immediate_task_id = f"imm-task-{uuid.uuid4().hex[:8]}"
+
+    # Isolate test by marking any stale legacy outbox events as PUBLISHED
+    with SessionLocal() as db:
+        db.execute(text("UPDATE outbox_events SET status = 'PUBLISHED' WHERE status = 'PENDING'"))
+        db.commit()
+
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        # Create 55 future-scheduled events
+        for i in range(55):
+            repo.create_task(f"future-{i}", "noop", {"idx": i}, scheduled_at=future_time)
+
+        # Create 1 immediately eligible task
+        t_imm = repo.create_task("immediate-task", "noop", {"target": True}, scheduled_at=None)
+        immediate_task_id = t_imm.id
+
+    # Execute a single publisher cycle with limit=50
+    with SessionLocal() as db:
+        published_count = publish_pending_outbox_events(db, broker, limit=50)
+        assert published_count == 1, f"Expected exactly 1 immediately eligible event published, got {published_count}"
+
+    # Verify message in broker is the immediate task
+    assert broker.get_queue_depth() == 1
+    msg = broker.dequeue(timeout_seconds=0.1)
+    assert msg is not None
+    assert msg["task_id"] == immediate_task_id
+
+
+def test_g832_t09_stale_worker_attempt_creation_fenced_rejection(db_session):
+    """T09: Strict lease fencing on record_attempt() and attempt-number allocation.
+    Concrete sequence:
+    1. Worker A acquires a 1-second lease.
+    2. Worker A pauses / sleeps for 1.3 seconds so its lease expires.
+    3. Worker B recovers the task and acquires a new lease.
+    4. Worker A attempts to call record_attempt() using its stale lease token.
+    5. Invariant: record_attempt() strictly raises PermissionError under row lock!
+    6. Stale worker cannot pollute attempts table or allocate duplicate/invalid attempt numbers.
+    """
+    repo = TaskRepository(db_session)
+    t = repo.create_task("fenced-attempt-task", "noop", {}, TaskPriority.HIGH.value)
+    task_id = t.id
+
+    stale_token = "lease-worker-a-stale"
+    assert repo.acquire_lease(task_id, "worker-a", lease_duration_seconds=1, lease_token=stale_token) is True
+    repo.update_status(task_id, TaskStatus.RUNNING, {"worker": "worker-a"}, lease_token=stale_token)
+
+    # Worker A's lease expires
+    time.sleep(1.3)
+
+    # Lease expired, task recovered by Worker B
+    recovered = repo.recover_expired_leases()
+    assert task_id in [x.id for x in recovered]
+
+    fresh_token = "lease-worker-b-fresh"
+    assert repo.acquire_lease(task_id, "worker-b", lease_duration_seconds=30, lease_token=fresh_token) is True
+
+    # Worker A attempts record_attempt with stale token -> strictly rejected
+    with pytest.raises(PermissionError, match="Fencing violation: lease token 'lease-worker-a-stale' does not match"):
+        repo.record_attempt(
+            task_id=task_id,
+            worker_id="worker-a",
+            status="RUNNING",
+            lease_token=stale_token,
+        )
+
+    # Worker B records attempt with valid fresh token -> succeeds
+    att_b = repo.record_attempt(
+        task_id=task_id,
+        worker_id="worker-b",
+        status="RUNNING",
+        lease_token=fresh_token,
+    )
+    assert att_b.attempt_number == 2
+    assert att_b.worker_id == "worker-b"

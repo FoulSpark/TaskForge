@@ -149,6 +149,7 @@ def test_g823_worker_crash_during_execution_lease_recovery(redis_conn, test_queu
         attempt_number=1,
         worker_id=worker_1,
         status="RUNNING",
+        lease_token=token_1,
     )
 
     # Worker 1 crashes (no release_lease called). Wait 1.3s for lease expiration

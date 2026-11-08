@@ -17,17 +17,21 @@ def publish_pending_outbox_events(
 ) -> int:
     """
     Fetch pending outbox events and publish them to the message broker.
-    Ensures at-least-once delivery and respects scheduled_at execution delays.
+    Ensures at-least-once delivery and respects available_at/scheduled_at execution delays.
+    Starvation-free: Future-scheduled events are filtered at the database level and do not consume the batch.
     """
+    now = get_utc_now()
     stmt = (
         select(OutboxEvent)
         .where(OutboxEvent.status == "PENDING")
     )
     if event_id:
         stmt = stmt.where(OutboxEvent.id == event_id)
+    else:
+        stmt = stmt.where(OutboxEvent.available_at <= now)
 
     stmt = (
-        stmt.order_by(OutboxEvent.created_at.asc())
+        stmt.order_by(OutboxEvent.available_at.asc(), OutboxEvent.created_at.asc())
         .limit(limit)
         .with_for_update(skip_locked=True)
     )
@@ -36,17 +40,22 @@ def publish_pending_outbox_events(
         return 0
 
     published_count = 0
-    now = get_utc_now()
 
     for event in events:
         try:
-            # Respect scheduled execution time: if scheduled_at is in the future, keep PENDING
+            # Respect scheduled execution time: if scheduled_at or available_at is in the future, keep PENDING
             scheduled_at_str = event.payload.get("scheduled_at")
             if scheduled_at_str:
                 sched_dt = datetime.fromisoformat(scheduled_at_str)
                 if sched_dt.tzinfo is None:
                     sched_dt = sched_dt.replace(tzinfo=UTC)
                 if sched_dt > now:
+                    continue
+            elif event.available_at is not None:
+                avail = event.available_at
+                if avail.tzinfo is None:
+                    avail = avail.replace(tzinfo=UTC)
+                if avail > now:
                     continue
 
             task_id = event.payload.get("task_id", event.aggregate_id)
