@@ -311,8 +311,8 @@ def test_attempt_ownership_and_terminal_status_strictly_verified(db_session):
     t1 = repo.create_task("task-1", "noop", {}, TaskPriority.HIGH.value)
     t2 = repo.create_task("task-2", "noop", {}, TaskPriority.HIGH.value)
 
-    att1 = repo.record_attempt(t1.id, 1, "worker-1", "RUNNING", _privileged_bypass=True)
-    att2 = repo.record_attempt(t2.id, 1, "worker-2", "RUNNING", _privileged_bypass=True)
+    att1 = repo.record_administrative_attempt(t1.id, 1, "worker-1", "RUNNING")
+    att2 = repo.record_administrative_attempt(t2.id, 1, "worker-2", "RUNNING")
 
     token_1 = "lease-token-t1"
     assert repo.acquire_lease(t1.id, "worker-1", lease_token=token_1) is True

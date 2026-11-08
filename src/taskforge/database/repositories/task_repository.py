@@ -349,41 +349,38 @@ class TaskRepository:
         duration_ms: float | None = None,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
-        _privileged_bypass: bool = False,
     ) -> TaskAttempt:
         """Record task attempt under strict fail-closed lease fencing and monotonic attempt allocation.
         Validates lease ownership against active task row lock.
         Calculates monotonic, non-reusing attempt number atomically and rejects arbitrary bypasses.
+        Normal execution workers MUST supply a valid, active lease token and unexpired lease.
         """
         stmt = select(Task).where(Task.id == task_id).with_for_update()
         task = self.db.scalars(stmt).first()
         if not task:
             raise ValueError(f"Task with id {task_id} not found")
 
-        # Strict fail-closed lease fencing (unless _privileged_bypass=True):
-        if not _privileged_bypass:
-            if not lease_token:
-                raise PermissionError(
-                    "Fencing violation: lease_token must be provided to record execution attempt"
-                )
-            if not task.lease_token or task.lease_token != lease_token:
-                raise PermissionError(
-                    f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
-                )
-            if not task.lease_expires_at:
-                raise PermissionError(
-                    "Fencing violation: active task lease has no expiration timestamp"
-                )
-            now = get_utc_now()
-            exp = task.lease_expires_at
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=UTC)
-            if exp < now:
-                raise PermissionError(
-                    f"Fencing violation: lease expired at {exp.isoformat()} (current time {now.isoformat()})"
-                )
-        else:
-            now = get_utc_now()
+        # Strict fail-closed lease fencing: non-empty token, exact match, non-null expiry, unexpired
+        if not lease_token:
+            raise PermissionError(
+                "Fencing violation: lease_token must be provided to record execution attempt"
+            )
+        if not task.lease_token or task.lease_token != lease_token:
+            raise PermissionError(
+                f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
+            )
+        if not task.lease_expires_at:
+            raise PermissionError(
+                "Fencing violation: active task lease has no expiration timestamp"
+            )
+        now = get_utc_now()
+        exp = task.lease_expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=UTC)
+        if exp < now:
+            raise PermissionError(
+                f"Fencing violation: lease expired at {exp.isoformat()} (current time {now.isoformat()})"
+            )
 
         # Allocate monotonic, non-reusing attempt number under task row lock
         max_attempt = (
@@ -395,7 +392,7 @@ class TaskRepository:
             or 0
         )
         next_permitted = max(task.retry_count + 1, max_attempt + 1)
-        if attempt_number is not None and not _privileged_bypass:
+        if attempt_number is not None:
             if attempt_number != next_permitted:
                 raise ValueError(
                     f"Attempt numbering violation: caller supplied attempt_number {attempt_number}, but next monotonic attempt number is {next_permitted}"
@@ -413,6 +410,48 @@ class TaskRepository:
             completed_at=completed_at,
             duration_ms=duration_ms,
         )
+        self.db.add(attempt)
+        self.db.commit()
+        self.db.refresh(attempt)
+        return attempt
+
+    def record_administrative_attempt(
+        self,
+        task_id: str,
+        attempt_number: int,
+        worker_id: str | None = None,
+        status: str = "RUNNING",
+        error_message: str | None = None,
+        error_traceback: str | None = None,
+        duration_ms: float | None = None,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+    ) -> TaskAttempt:
+        """Administrative method for test fixtures and data migration setup ONLY.
+        Allows explicit attempt record creation without requiring an active worker lease.
+        Worker execution processes and dispatchers MUST NEVER call this method.
+        """
+        stmt = select(Task).where(Task.id == task_id).with_for_update()
+        task = self.db.scalars(stmt).first()
+        if not task:
+            raise ValueError(f"Task with id {task_id} not found")
+
+        now = get_utc_now()
+        attempt = TaskAttempt(
+            task_id=task_id,
+            attempt_number=attempt_number,
+            worker_id=worker_id,
+            status=status,
+            error_message=error_message,
+            error_traceback=error_traceback,
+            started_at=started_at or now,
+            completed_at=completed_at,
+            duration_ms=duration_ms,
+        )
+        self.db.add(attempt)
+        self.db.commit()
+        self.db.refresh(attempt)
+        return attempt
         self.db.add(attempt)
         self.db.commit()
         self.db.refresh(attempt)

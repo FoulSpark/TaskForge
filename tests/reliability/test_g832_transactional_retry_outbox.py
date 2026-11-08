@@ -13,7 +13,7 @@ Verifies that:
 
 import time
 import uuid
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 import pytest
 import redis
@@ -838,4 +838,136 @@ def test_g832_t13_exact_delivery_token_ack_fencing(redis_conn, test_queue):
 
     # 5. Duplicate/replay ACK with same token -> returns False (idempotent removal)
     assert broker.ack(task_id, delivery_token=valid_token) is False
+
+
+def test_g832_t14_record_attempt_cannot_bypass_fencing_via_arguments(db_session):
+    """T14: Invariant hardening — record_attempt() has no caller-controlled bypass.
+    1. Supplying _privileged_bypass=True strictly raises TypeError (unexpected keyword argument).
+    2. Ordinary execution path strictly requires valid, active lease token and unexpired expiry.
+    3. Monotonic attempt numbering cannot be circumvented.
+    4. Administrative test method record_administrative_attempt() is a distinct, separate method.
+    """
+    repo = TaskRepository(db_session)
+    t = repo.create_task("t14-no-bypass-task", "noop", {}, TaskPriority.HIGH.value)
+    task_id = t.id
+
+    # 1. Any attempt to supply _privileged_bypass is rejected as invalid argument
+    with pytest.raises(TypeError, match="unexpected keyword argument '_privileged_bypass'"):
+        repo.record_attempt(task_id=task_id, _privileged_bypass=True)  # type: ignore
+
+    # 2. Ordinary call without lease_token fails closed
+    with pytest.raises(PermissionError, match="lease_token must be provided"):
+        repo.record_attempt(task_id=task_id, status="RUNNING")
+
+    # 3. Dedicated administrative method exists and works for fixture setup
+    att_admin = repo.record_administrative_attempt(task_id=task_id, attempt_number=1, status="RUNNING")
+    assert att_admin.id is not None
+    assert att_admin.attempt_number == 1
+
+
+def test_g832_t15_migration_historical_backfill_and_starvation_prevention(db_session, redis_conn, test_queue):
+    """T15: Migration historical data backfill preserves scheduling semantics and prevents outbox starvation.
+    Scenario:
+    1. Create 55 historical pending outbox events where payload has future scheduled_at (tomorrow),
+       but available_at was defaulted to NOW() (simulating pre-migration or naive migration state).
+    2. Create 1 historical pending outbox event with immediate eligibility (no future schedule).
+    3. Run the migration backfill SQL (simulating alembic upgrade backfill).
+    4. Invariant: The 55 future events now have available_at set to tomorrow (> now).
+    5. Invariant: The 1 immediate event retains available_at <= now.
+    6. Run publisher sweep with batch limit = 50.
+    7. Invariant: The 1 immediate event is published during the sweep.
+    8. Invariant: The 55 future events remain PENDING and are not starved or prematurely dispatched.
+    """
+    now = get_utc_now()
+    tomorrow = now + timedelta(days=1)
+    tomorrow_iso = tomorrow.isoformat()
+
+    broker = RedisBroker(redis_conn, queue_name=test_queue)
+
+    # 1. Insert 55 historical events with future scheduled_at in payload but available_at = now
+    future_event_ids = []
+    for i in range(55):
+        evt_id = f"hist-future-{uuid.uuid4().hex[:12]}"
+        evt = OutboxEvent(
+            id=evt_id,
+            aggregate_type="task",
+            aggregate_id=f"hist-task-{i}",
+            event_type="TASK_RETRY",
+            payload={
+                "task_id": f"hist-task-{i}",
+                "scheduled_at": tomorrow_iso,
+            },
+            status="PENDING",
+            available_at=now,  # naive migration or pre-migration timestamp
+            created_at=now,
+        )
+        db_session.add(evt)
+        future_event_ids.append(evt_id)
+
+    # 2. Insert 1 immediate event with no future schedule
+    immediate_id = f"hist-immed-{uuid.uuid4().hex[:12]}"
+    immediate_evt = OutboxEvent(
+        id=immediate_id,
+        aggregate_type="task",
+        aggregate_id="hist-task-immed",
+        event_type="TASK_SUBMITTED",
+        payload={
+            "task_id": "hist-task-immed",
+        },
+        status="PENDING",
+        available_at=now,
+        created_at=now,
+    )
+    db_session.add(immediate_evt)
+    db_session.commit()
+
+    # 3. Execute the migration backfill logic on PostgreSQL
+    is_postgres = db_session.bind.dialect.name == "postgresql"
+    if is_postgres:
+        db_session.execute(text("""
+            UPDATE outbox_events
+            SET available_at = (payload->>'scheduled_at')::timestamptz
+            WHERE (payload->>'scheduled_at') IS NOT NULL
+              AND (payload->>'scheduled_at') != ''
+              AND (payload->>'scheduled_at') != 'null'
+              AND id = ANY(:ids);
+        """), {"ids": future_event_ids})
+    else:
+        db_session.execute(text("""
+            UPDATE outbox_events
+            SET available_at = json_extract(payload, '$.scheduled_at')
+            WHERE json_extract(payload, '$.scheduled_at') IS NOT NULL
+              AND id IN :ids;
+        """), {"ids": tuple(future_event_ids)})
+    db_session.commit()
+    db_session.expire_all()
+
+    # 4. Verify in DB that all 55 future events have available_at >= tomorrow (future)
+    future_evts = list(
+        db_session.scalars(select(OutboxEvent).where(OutboxEvent.id.in_(future_event_ids))).all()
+    )
+    assert len(future_evts) == 55
+    for fe in future_evts:
+        avail = fe.available_at
+        if avail.tzinfo is None:
+            avail = avail.replace(tzinfo=UTC)
+        assert avail >= now + timedelta(hours=23)
+
+    # 5. Verify immediate event still has available_at <= now
+    immed_db = db_session.get(OutboxEvent, immediate_id)
+    assert immed_db.available_at <= get_utc_now()
+
+    # 6. Run publisher sweep with batch limit = 50 (smaller than the 55 future events)
+    published_count = publish_pending_outbox_events(db_session, broker, limit=50)
+
+    # 7. Invariant: The immediate event was published despite 55 future events existing
+    assert published_count >= 1
+    db_session.refresh(immed_db)
+    assert immed_db.status == "PUBLISHED"
+
+    # 8. Invariant: The 55 future events remain PENDING (not starved, not prematurely dispatched)
+    for fe in future_evts:
+        db_session.refresh(fe)
+        assert fe.status == "PENDING"
+
 
