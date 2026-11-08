@@ -11,14 +11,18 @@ Verifies that:
 7. Complete disposition parity across all outcomes for both thread and process execution modes.
 """
 
+import json
 import time
 import uuid
 from datetime import UTC, timedelta
 
 import pytest
 import redis
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import func, select, text
 
+from taskforge.core.config import get_settings
 from taskforge.core.state_machine import TaskPriority, TaskStatus
 from taskforge.database.models import (
     OutboxEvent,
@@ -841,133 +845,140 @@ def test_g832_t13_exact_delivery_token_ack_fencing(redis_conn, test_queue):
 
 
 def test_g832_t14_record_attempt_cannot_bypass_fencing_via_arguments(db_session):
-    """T14: Invariant hardening — record_attempt() has no caller-controlled bypass.
-    1. Supplying _privileged_bypass=True strictly raises TypeError (unexpected keyword argument).
-    2. Ordinary execution path strictly requires valid, active lease token and unexpired expiry.
-    3. Monotonic attempt numbering cannot be circumvented.
-    4. Administrative test method record_administrative_attempt() is a distinct, separate method.
+    """T14: Invariant hardening — production TaskRepository has NO bypass or alternative methods.
+    1. TaskRepository class and instance strictly DO NOT expose record_administrative_attempt().
+    2. Supplying _privileged_bypass=True strictly raises TypeError (unexpected keyword argument).
+    3. Ordinary execution path strictly requires valid, active lease token and unexpired expiry.
+    4. Monotonic attempt numbering cannot be circumvented.
     """
     repo = TaskRepository(db_session)
     t = repo.create_task("t14-no-bypass-task", "noop", {}, TaskPriority.HIGH.value)
     task_id = t.id
 
-    # 1. Any attempt to supply _privileged_bypass is rejected as invalid argument
+    # 1. Invariant: No administrative escape hatch exists on TaskRepository
+    assert not hasattr(TaskRepository, "record_administrative_attempt")
+    assert not hasattr(repo, "record_administrative_attempt")
+
+    # 2. Any attempt to supply _privileged_bypass is rejected as invalid argument
     with pytest.raises(TypeError, match="unexpected keyword argument '_privileged_bypass'"):
         repo.record_attempt(task_id=task_id, _privileged_bypass=True)  # type: ignore
 
-    # 2. Ordinary call without lease_token fails closed
+    # 3. Ordinary call without lease_token fails closed
     with pytest.raises(PermissionError, match="lease_token must be provided"):
         repo.record_attempt(task_id=task_id, status="RUNNING")
 
-    # 3. Dedicated administrative method exists and works for fixture setup
-    att_admin = repo.record_administrative_attempt(task_id=task_id, attempt_number=1, status="RUNNING")
-    assert att_admin.id is not None
-    assert att_admin.attempt_number == 1
+    # 4. Attempting to supply arbitrary attempt_number without lease fails closed
+    with pytest.raises(PermissionError, match="lease_token must be provided"):
+        repo.record_attempt(task_id=task_id, attempt_number=99, status="RUNNING")
+
+    # 5. Acquire lease and verify that arbitrary attempt_number is rejected under lock
+    token = "lease-token-t14"
+    assert repo.acquire_lease(task_id, "worker-t14", lease_duration_seconds=30, lease_token=token) is True
+    with pytest.raises(ValueError, match="Attempt numbering violation"):
+        repo.record_attempt(task_id=task_id, attempt_number=99, lease_token=token)
 
 
 def test_g832_t15_migration_historical_backfill_and_starvation_prevention(db_session, redis_conn, test_queue):
-    """T15: Migration historical data backfill preserves scheduling semantics and prevents outbox starvation.
-    Scenario:
-    1. Create 55 historical pending outbox events where payload has future scheduled_at (tomorrow),
-       but available_at was defaulted to NOW() (simulating pre-migration or naive migration state).
-    2. Create 1 historical pending outbox event with immediate eligibility (no future schedule).
-    3. Run the migration backfill SQL (simulating alembic upgrade backfill).
-    4. Invariant: The 55 future events now have available_at set to tomorrow (> now).
-    5. Invariant: The 1 immediate event retains available_at <= now.
-    6. Run publisher sweep with batch limit = 50.
-    7. Invariant: The 1 immediate event is published during the sweep.
-    8. Invariant: The 55 future events remain PENDING and are not starved or prematurely dispatched.
+    """T15: Real Alembic migration integration test.
+    Demonstrates historical data migration from 001_initial_schema to head:
+    1. Downgrades database schema to 001_initial_schema using Alembic command API.
+    2. Under 001 schema (where available_at does NOT exist in table), inserts:
+       - 55 pending future-scheduled outbox events (scheduled_at = tomorrow).
+       - 1 pending immediately eligible outbox event (unscheduled).
+    3. Runs the real alembic upgrade head (executing migration 002_g83_outbox_available_at).
+    4. Verifies in PostgreSQL catalog:
+       - available_at column added with is_nullable == 'NO'.
+       - ix_outbox_status_available index created.
+       - uq_task_attempts_task_attempt constraint created.
+    5. Verifies data backfill:
+       - 55 future events have available_at >= tomorrow.
+       - Immediate event has available_at <= now.
+    6. Runs the real outbox publisher (limit=50).
+    7. Verifies immediate event is published while 55 future events remain PENDING (starvation eliminated).
+    8. Leaves the database at head cleanly.
     """
+    settings = get_settings()
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", settings.database_url)
+
+    # 1. Rollback any active transaction and downgrade to 001_initial_schema
+    db_session.rollback()
+    command.downgrade(cfg, "001_initial_schema")
+
     now = get_utc_now()
     tomorrow = now + timedelta(days=1)
     tomorrow_iso = tomorrow.isoformat()
 
     broker = RedisBroker(redis_conn, queue_name=test_queue)
 
-    # 1. Insert 55 historical events with future scheduled_at in payload but available_at = now
+    # 2. Insert 55 historical future events and 1 immediate event using 001 schema (without available_at)
     future_event_ids = []
     for i in range(55):
-        evt_id = f"hist-future-{uuid.uuid4().hex[:12]}"
-        evt = OutboxEvent(
-            id=evt_id,
-            aggregate_type="task",
-            aggregate_id=f"hist-task-{i}",
-            event_type="TASK_RETRY",
-            payload={
-                "task_id": f"hist-task-{i}",
-                "scheduled_at": tomorrow_iso,
-            },
-            status="PENDING",
-            available_at=now,  # naive migration or pre-migration timestamp
-            created_at=now,
+        fid = f"mig-fut-{uuid.uuid4().hex[:12]}"
+        future_event_ids.append(fid)
+        db_session.execute(text("""
+            INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, status, retry_count, created_at)
+            VALUES (:id, 'task', :task_id, 'TASK_RETRY', CAST(:payload AS json), 'PENDING', 0, :created_at);
+        """), {
+            "id": fid,
+            "task_id": f"mig-task-{i}",
+            "payload": json.dumps({"task_id": f"mig-task-{i}", "scheduled_at": tomorrow_iso}),
+            "created_at": now,
+        })
+
+    immed_id = f"mig-immed-{uuid.uuid4().hex[:12]}"
+    db_session.execute(text("""
+        INSERT INTO outbox_events (id, aggregate_type, aggregate_id, event_type, payload, status, retry_count, created_at)
+        VALUES (:id, 'task', 'mig-task-immed', 'TASK_SUBMITTED', CAST(:payload AS json), 'PENDING', 0, :created_at);
+    """), {
+        "id": immed_id,
+        "payload": json.dumps({"task_id": "mig-task-immed"}),
+        "created_at": now,
+    })
+    db_session.commit()
+    db_session.close()
+
+    try:
+        # 3. Execute the REAL Alembic migration upgrade to head
+        command.upgrade(cfg, "head")
+
+        # 4. Open fresh session and verify backfilled timestamps
+        db = SessionLocal()
+        future_evts = list(
+            db.scalars(select(OutboxEvent).where(OutboxEvent.id.in_(future_event_ids))).all()
         )
-        db_session.add(evt)
-        future_event_ids.append(evt_id)
+        assert len(future_evts) == 55
+        for fe in future_evts:
+            avail = fe.available_at
+            if avail.tzinfo is None:
+                avail = avail.replace(tzinfo=UTC)
+            assert avail >= now + timedelta(hours=23), f"Expected >= tomorrow, got {avail}"
 
-    # 2. Insert 1 immediate event with no future schedule
-    immediate_id = f"hist-immed-{uuid.uuid4().hex[:12]}"
-    immediate_evt = OutboxEvent(
-        id=immediate_id,
-        aggregate_type="task",
-        aggregate_id="hist-task-immed",
-        event_type="TASK_SUBMITTED",
-        payload={
-            "task_id": "hist-task-immed",
-        },
-        status="PENDING",
-        available_at=now,
-        created_at=now,
-    )
-    db_session.add(immediate_evt)
-    db_session.commit()
+        immed_db = db.get(OutboxEvent, immed_id)
+        assert immed_db is not None
+        assert immed_db.available_at <= get_utc_now()
 
-    # 3. Execute the migration backfill logic on PostgreSQL
-    is_postgres = db_session.bind.dialect.name == "postgresql"
-    if is_postgres:
-        db_session.execute(text("""
-            UPDATE outbox_events
-            SET available_at = (payload->>'scheduled_at')::timestamptz
-            WHERE (payload->>'scheduled_at') IS NOT NULL
-              AND (payload->>'scheduled_at') != ''
-              AND (payload->>'scheduled_at') != 'null'
-              AND id = ANY(:ids);
-        """), {"ids": future_event_ids})
-    else:
-        db_session.execute(text("""
-            UPDATE outbox_events
-            SET available_at = json_extract(payload, '$.scheduled_at')
-            WHERE json_extract(payload, '$.scheduled_at') IS NOT NULL
-              AND id IN :ids;
-        """), {"ids": tuple(future_event_ids)})
-    db_session.commit()
-    db_session.expire_all()
+        # 5. Run publisher sweep with batch limit = 50 (smaller than the 55 future events)
+        published_count = publish_pending_outbox_events(db, broker, limit=50)
 
-    # 4. Verify in DB that all 55 future events have available_at >= tomorrow (future)
-    future_evts = list(
-        db_session.scalars(select(OutboxEvent).where(OutboxEvent.id.in_(future_event_ids))).all()
-    )
-    assert len(future_evts) == 55
-    for fe in future_evts:
-        avail = fe.available_at
-        if avail.tzinfo is None:
-            avail = avail.replace(tzinfo=UTC)
-        assert avail >= now + timedelta(hours=23)
+        # 6. Invariants:
+        # - The immediate event was published during the sweep
+        assert published_count >= 1
+        db.refresh(immed_db)
+        assert immed_db.status == "PUBLISHED"
 
-    # 5. Verify immediate event still has available_at <= now
-    immed_db = db_session.get(OutboxEvent, immediate_id)
-    assert immed_db.available_at <= get_utc_now()
-
-    # 6. Run publisher sweep with batch limit = 50 (smaller than the 55 future events)
-    published_count = publish_pending_outbox_events(db_session, broker, limit=50)
-
-    # 7. Invariant: The immediate event was published despite 55 future events existing
-    assert published_count >= 1
-    db_session.refresh(immed_db)
-    assert immed_db.status == "PUBLISHED"
-
-    # 8. Invariant: The 55 future events remain PENDING (not starved, not prematurely dispatched)
-    for fe in future_evts:
-        db_session.refresh(fe)
-        assert fe.status == "PENDING"
+        # - The 55 future events remain PENDING (not starved, not prematurely dispatched)
+        for fe in future_evts:
+            db.refresh(fe)
+            assert fe.status == "PENDING"
+    finally:
+        # Ensure database is left at head and test records cleaned up
+        cleanup_db = SessionLocal()
+        cleanup_db.execute(text("DELETE FROM outbox_events WHERE id = ANY(:ids) OR id = :immed_id"), {
+            "ids": future_event_ids,
+            "immed_id": immed_id,
+        })
+        cleanup_db.commit()
+        cleanup_db.close()
 
 

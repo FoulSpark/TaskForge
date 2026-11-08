@@ -415,48 +415,6 @@ class TaskRepository:
         self.db.refresh(attempt)
         return attempt
 
-    def record_administrative_attempt(
-        self,
-        task_id: str,
-        attempt_number: int,
-        worker_id: str | None = None,
-        status: str = "RUNNING",
-        error_message: str | None = None,
-        error_traceback: str | None = None,
-        duration_ms: float | None = None,
-        started_at: datetime | None = None,
-        completed_at: datetime | None = None,
-    ) -> TaskAttempt:
-        """Administrative method for test fixtures and data migration setup ONLY.
-        Allows explicit attempt record creation without requiring an active worker lease.
-        Worker execution processes and dispatchers MUST NEVER call this method.
-        """
-        stmt = select(Task).where(Task.id == task_id).with_for_update()
-        task = self.db.scalars(stmt).first()
-        if not task:
-            raise ValueError(f"Task with id {task_id} not found")
-
-        now = get_utc_now()
-        attempt = TaskAttempt(
-            task_id=task_id,
-            attempt_number=attempt_number,
-            worker_id=worker_id,
-            status=status,
-            error_message=error_message,
-            error_traceback=error_traceback,
-            started_at=started_at or now,
-            completed_at=completed_at,
-            duration_ms=duration_ms,
-        )
-        self.db.add(attempt)
-        self.db.commit()
-        self.db.refresh(attempt)
-        return attempt
-        self.db.add(attempt)
-        self.db.commit()
-        self.db.refresh(attempt)
-        return attempt
-
     def record_result(
         self,
         task_id: str,

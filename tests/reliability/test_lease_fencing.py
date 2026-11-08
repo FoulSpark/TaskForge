@@ -311,12 +311,15 @@ def test_attempt_ownership_and_terminal_status_strictly_verified(db_session):
     t1 = repo.create_task("task-1", "noop", {}, TaskPriority.HIGH.value)
     t2 = repo.create_task("task-2", "noop", {}, TaskPriority.HIGH.value)
 
-    att1 = repo.record_administrative_attempt(t1.id, 1, "worker-1", "RUNNING")
-    att2 = repo.record_administrative_attempt(t2.id, 1, "worker-2", "RUNNING")
-
     token_1 = "lease-token-t1"
     assert repo.acquire_lease(t1.id, "worker-1", lease_token=token_1) is True
     repo.update_status(t1.id, TaskStatus.RUNNING, {"worker": "worker-1"}, lease_token=token_1)
+    att1 = repo.record_attempt(t1.id, 1, "worker-1", "RUNNING", lease_token=token_1)
+
+    token_2 = "lease-token-t2"
+    assert repo.acquire_lease(t2.id, "worker-2", lease_token=token_2) is True
+    repo.update_status(t2.id, TaskStatus.RUNNING, {"worker": "worker-2"}, lease_token=token_2)
+    att2 = repo.record_attempt(t2.id, 1, "worker-2", "RUNNING", lease_token=token_2)
 
     # 1. Attempting complete_task_success on t1 using attempt belonging to t2 -> REJECTED
     with pytest.raises(ValueError, match="Attempt ownership violation"):
