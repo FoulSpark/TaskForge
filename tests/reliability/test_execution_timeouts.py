@@ -27,7 +27,7 @@ def test_handler_completes_within_timeout(repo, db_session):
     success = execute_task(task_id, "worker-timeout-test-1")
     duration = time.perf_counter() - start
 
-    assert success is True
+    assert success.is_success()
     assert duration < 2.0
 
     db_session.expire_all()
@@ -59,8 +59,8 @@ def test_handler_exceeding_timeout_aborts_without_blocking_executor(repo, db_ses
     success = execute_task(task_id, "worker-timeout-test-2")
     duration = time.perf_counter() - start
 
-    # execute_task returns False on failure/timeout
-    assert success is False
+    # execute_task returns non-success disposition on failure/timeout
+    assert not success.is_success()
     # CRITICAL: Verify execute_task did NOT block for 4 seconds!
     assert duration < 2.5, (
         f"Executor blocked waiting for thread to exit! Duration was {duration:.2f}s"
@@ -92,7 +92,7 @@ def test_handler_infinite_loop_timeout_non_blocking(repo, db_session):
     success = execute_task(task_id, "worker-timeout-test-3")
     duration = time.perf_counter() - start
 
-    assert success is False
+    assert not success.is_success()
     assert duration < 2.5, (
         f"Executor blocked waiting for uncooperative thread! Duration was {duration:.2f}s"
     )
@@ -225,7 +225,7 @@ def test_execute_task_process_isolated_hard_timeout(repo, db_session):
     success = execute_task_process_isolated(task_id, "worker-iso-test", timeout_seconds=1)
     duration = time.perf_counter() - start
 
-    assert success is False
+    assert not success.is_success()
     assert duration < 3.0, f"Process isolation timed out late: {duration:.2f}s"
 
 
@@ -268,8 +268,8 @@ def test_dispatcher_process_isolated_execution_mode_kills_runaway_task(repo, db_
     # Hard timeout occurred and terminated child process in ~1-2s (not 10s!)
     assert elapsed < 4.0, f"Dispatcher failed to kill runaway process in time: {elapsed:.2f}s"
 
-    # Delivery token acknowledged from in-flight
-    assert broker.get_in_flight_depth() == 0
+    # Delivery token ACK withheld under G8.3 safe ACK policy (retry pending publication)
+    assert broker.get_in_flight_depth() == 1
 
     # DB state verified: attempt timed out and task transitioned to RETRY_WAIT under lease fencing
     db_session.expire_all()

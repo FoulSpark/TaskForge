@@ -52,12 +52,14 @@ def test_stale_worker_fenced_write_rejected(db_session):
 
     # 2. Worker A hangs; lease expires
     time.sleep(1.2)
+    repo.recover_expired_leases()
 
     # 3. Worker B acquires the task with token_B
     assert (
         repo.acquire_lease(task_id, "worker-B", lease_duration_seconds=10, lease_token=token_b)
         is True
     )
+    repo.update_status(task_id, TaskStatus.RUNNING, {"worker_id": "worker-B"}, lease_token=token_b)
 
     db_session.expire_all()
     task_under_b = repo.get_by_id(task_id)
@@ -240,12 +242,14 @@ def test_stale_worker_failure_path_fenced_write_rejected(db_session):
 
     # Worker A hangs, lease expires
     time.sleep(1.2)
+    repo.recover_expired_leases()
 
     # Worker B acquires lease with token_b
     assert (
         repo.acquire_lease(task_id, "worker-B", lease_duration_seconds=10, lease_token=token_b)
         is True
     )
+    repo.update_status(task_id, TaskStatus.RUNNING, {"worker_id": "worker-B"}, lease_token=token_b)
 
     # 1. Worker A attempts complete_task_failure using stale token_a -> REJECTED
     with pytest.raises(PermissionError, match="Fencing violation"):
@@ -296,7 +300,7 @@ def test_stale_worker_failure_path_fenced_write_rejected(db_session):
     final_task = repo.get_by_id(task_id)
     assert final_task.status == TaskStatus.SUCCESS.value
     assert final_task.result.return_value == {"completed_by": "worker-B"}
-    assert final_task.retry_count == 0  # Stale worker was unable to increment retry_count
+    assert final_task.retry_count == 1  # Incremented once by lease recovery; stale worker was unable to increment retry_count to 2
 
 
 def test_attempt_ownership_and_terminal_status_strictly_verified(db_session):

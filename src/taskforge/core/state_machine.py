@@ -41,7 +41,11 @@ ALLOWED_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
         TaskStatus.FAILED,
         TaskStatus.CANCELLED,
     },
-    TaskStatus.RETRY_WAIT: {TaskStatus.QUEUED, TaskStatus.CANCELLED},
+    TaskStatus.RETRY_WAIT: {
+        TaskStatus.QUEUED,
+        TaskStatus.RUNNING,
+        TaskStatus.CANCELLED,
+    },
     TaskStatus.FAILED: {TaskStatus.DEAD_LETTER},
     TaskStatus.SUCCESS: set(),
     TaskStatus.DEAD_LETTER: set(),

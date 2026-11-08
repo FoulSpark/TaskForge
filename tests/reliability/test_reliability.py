@@ -152,13 +152,13 @@ def test_p3_06_duplicate_delivery_safety(setup_test_env):
         task_id = res.json()["id"]
 
         # Execute once -> SUCCESS
-        assert execute_task(task_id, "worker-1") is True
+        assert execute_task(task_id, "worker-1").is_success()
         t_after = client.get(f"/api/v1/tasks/{task_id}").json()
         assert t_after["status"] == "SUCCESS"
         assert len(t_after["attempts"]) == 1
 
         # Deliver the duplicate message to worker
-        assert execute_task(task_id, "worker-1") is True
+        assert execute_task(task_id, "worker-1").is_success()
 
         # Status remains SUCCESS and attempts are not duplicated
         t_duplicate = client.get(f"/api/v1/tasks/{task_id}").json()

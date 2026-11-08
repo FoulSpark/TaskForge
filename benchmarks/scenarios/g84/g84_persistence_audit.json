@@ -1,8 +1,8 @@
 {
   "gate": "G8.4.5",
   "test": "persistence_integrity_audit",
-  "total_tasks": 78791,
-  "total_outbox_events": 49487,
+  "total_tasks": 136275,
+  "total_outbox_events": 12999,
   "orphaned_attempts": 0,
   "orphaned_results": 0,
   "orphaned_events": 0,

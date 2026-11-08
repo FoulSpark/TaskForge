@@ -100,7 +100,7 @@ def test_cp01_crash_pre_claim_idle(redis_conn, test_queue, repo, db_session):
     msg = broker.dequeue(timeout_seconds=0.1)
     assert msg is not None
     assert msg["task_id"] == t.id
-    assert execute_task(t.id, "worker-replacement-cp01") is True
+    assert execute_task(t.id, "worker-replacement-cp01").is_success()
     broker.ack(t.id, msg)
 
     db_session.expire_all()
@@ -156,7 +156,7 @@ def test_cp02_crash_post_dequeue_pre_lease(redis_conn, test_queue, repo, db_sess
     recovered_msg = broker.dequeue(timeout_seconds=0.1)
     assert recovered_msg is not None
     assert recovered_msg["task_id"] == t.id
-    assert execute_task(t.id, "worker-replacement-cp02") is True
+    assert execute_task(t.id, "worker-replacement-cp02").is_success()
     broker.ack(t.id, recovered_msg)
 
     db_session.expire_all()
@@ -217,7 +217,7 @@ def test_cp03_crash_post_lease_pre_handler(redis_conn, test_queue, repo, db_sess
     repl_msg = broker.dequeue(timeout_seconds=0.1)
     assert repl_msg is not None
     assert repl_msg["task_id"] == t.id
-    assert execute_task(t.id, "worker-replacement-cp03") is True
+    assert execute_task(t.id, "worker-replacement-cp03").is_success()
     broker.ack(t.id, repl_msg)
 
     db_session.expire_all()
@@ -277,7 +277,7 @@ def test_cp04_crash_mid_handler_execution(redis_conn, test_queue, repo, db_sessi
     repl_msg = broker.dequeue(timeout_seconds=0.1)
     assert repl_msg is not None
     assert repl_msg["task_id"] == t.id
-    assert execute_task(t.id, "worker-replacement-cp04") is True
+    assert execute_task(t.id, "worker-replacement-cp04").is_success()
     broker.ack(t.id, repl_msg)
 
     db_session.expire_all()
@@ -340,7 +340,7 @@ def test_cp05_crash_post_handler_pre_result(redis_conn, test_queue, repo, db_ses
     repl_msg = broker.dequeue(timeout_seconds=0.1)
     assert repl_msg is not None
     assert repl_msg["task_id"] == t.id
-    assert execute_task(t.id, "worker-replacement-cp05") is True
+    assert execute_task(t.id, "worker-replacement-cp05").is_success()
     broker.ack(t.id, repl_msg)
 
     db_session.expire_all()

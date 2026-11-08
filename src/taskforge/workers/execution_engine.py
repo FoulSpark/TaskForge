@@ -3,6 +3,8 @@ import random
 import threading
 import time
 import traceback
+from enum import StrEnum
+from typing import Any
 
 import taskforge.tasks  # noqa: F401
 from taskforge.core.logging import get_logger
@@ -15,6 +17,35 @@ from taskforge.tasks.registry import get_handler
 from taskforge.workers.lease_manager import LeaseManager
 
 logger = get_logger(__name__)
+
+
+class ExecutionDisposition(StrEnum):
+    """Explicit outcome contract for task execution to govern queue delivery ACK decisions."""
+
+    COMPLETED = "completed"
+    TERMINAL_DUPLICATE = "terminal_duplicate"
+    TERMINAL_FAILURE_RECORDED = "terminal_failure_recorded"
+    RETRY_PENDING_PUBLICATION = "retry_pending_publication"
+    OWNERSHIP_REJECTED = "ownership_rejected"
+    UNEXPECTED_FAILURE = "unexpected_failure"
+
+    def is_success(self) -> bool:
+        return self in (ExecutionDisposition.COMPLETED, ExecutionDisposition.TERMINAL_DUPLICATE)
+
+    def should_ack(self) -> bool:
+        return self in (
+            ExecutionDisposition.COMPLETED,
+            ExecutionDisposition.TERMINAL_DUPLICATE,
+            ExecutionDisposition.TERMINAL_FAILURE_RECORDED,
+        )
+
+    def __bool__(self) -> bool:
+        return self.is_success()
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, bool):
+            return self.is_success() is other
+        return super().__eq__(other)
 
 
 def calculate_backoff(attempt: int, base: float = 1.0, max_backoff: float = 60.0) -> float:
@@ -31,17 +62,17 @@ def execute_task(
     lease_manager: LeaseManager | None = None,
     timeout_seconds: int | None = None,
     lease_token: str | None = None,
-) -> bool:
+) -> ExecutionDisposition:
     """Executes a single task run with lease management, timeout enforcement,
     attempt tracking, atomic result persistence, and retry backoff.
-    Returns True if execution succeeded, False otherwise.
+    Returns an ExecutionDisposition indicating the outcome and ACK eligibility.
     """
     if lease_token and not lease_manager:
         lease = LeaseManager(task_id, worker_id, lease_token=lease_token)
     else:
         lease = lease_manager or LeaseManager(task_id, worker_id)
         if not lease.acquire():
-            # AC-12 / Finding 7: If lease acquisition was rejected because task is already terminal,
+            # If lease acquisition was rejected because task is already terminal,
             # safely ignore duplicate delivery without performing unnecessary work or side effects.
             with SessionLocal() as db:
                 repo = TaskRepository(db)
@@ -52,9 +83,13 @@ def execute_task(
                         task_id=task_id,
                         status=cur_task.status,
                     )
-                    return True
-            logger.warning("task_lease_acquisition_failed", task_id=task_id, worker_id=worker_id)
-            return False
+                    return ExecutionDisposition.TERMINAL_DUPLICATE
+            logger.warning(
+                "task_lease_acquisition_failed_ownership_rejected",
+                task_id=task_id,
+                worker_id=worker_id,
+            )
+            return ExecutionDisposition.OWNERSHIP_REJECTED
 
     lease_token = lease.lease_token
 
@@ -69,16 +104,16 @@ def execute_task(
             task = repo.get_by_id(task_id)
             if not task:
                 logger.error("task_not_found_for_execution", task_id=task_id)
-                return False
+                return ExecutionDisposition.UNEXPECTED_FAILURE
 
-            # AC-12: Duplicate message handling - if already in terminal state, ignore safely
+            # Duplicate message handling - if already in terminal state, ignore safely
             if is_terminal_state(task.status):
                 logger.info(
                     "duplicate_delivery_ignored_terminal_state",
                     task_id=task_id,
                     status=task.status,
                 )
-                return True
+                return ExecutionDisposition.TERMINAL_DUPLICATE
 
             attempt_num = task.retry_count + 1
 
@@ -90,13 +125,14 @@ def execute_task(
                     lease_token=lease_token,
                 )
 
-            # Transition to RUNNING with lease fencing
-            repo.update_status(
-                task_id,
-                TaskStatus.RUNNING,
-                {"worker_id": worker_id},
-                lease_token=lease_token,
-            )
+            # Transition to RUNNING with lease fencing if not already running
+            if task.status != TaskStatus.RUNNING.value:
+                repo.update_status(
+                    task_id,
+                    TaskStatus.RUNNING,
+                    {"worker_id": worker_id},
+                    lease_token=lease_token,
+                )
 
             # Record attempt start
             attempt = repo.record_attempt(
@@ -159,7 +195,7 @@ def execute_task(
             attempt=attempt_num,
             duration_ms=duration_ms,
         )
-        return True
+        return ExecutionDisposition.COMPLETED
 
     except Exception as exc:
         if isinstance(exc, PermissionError):
@@ -169,7 +205,7 @@ def execute_task(
                 worker_id=worker_id,
                 error=str(exc),
             )
-            return False
+            return ExecutionDisposition.OWNERSHIP_REJECTED
 
         duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
         is_timeout = isinstance(exc, concurrent.futures.TimeoutError)
@@ -220,6 +256,9 @@ def execute_task(
                         logger.error("retry_re_enqueue_error", task_id=task_id, error=str(err))
 
                 threading.Thread(target=re_enqueue, daemon=True).start()
+                return ExecutionDisposition.RETRY_PENDING_PUBLICATION
+            else:
+                return ExecutionDisposition.TERMINAL_FAILURE_RECORDED
 
         except PermissionError as perm_err:
             logger.warning(
@@ -228,9 +267,9 @@ def execute_task(
                 worker_id=worker_id,
                 error=str(perm_err),
             )
-            return False
+            return ExecutionDisposition.OWNERSHIP_REJECTED
 
-        return False
+        return ExecutionDisposition.UNEXPECTED_FAILURE
 
     finally:
         lease.release()
@@ -241,11 +280,12 @@ def execute_task_process_isolated(
     worker_id: str,
     timeout_seconds: int = 60,
     lease_manager: LeaseManager | None = None,
-) -> bool:
+) -> ExecutionDisposition:
     """Executes a task in a dedicated OS subprocess with hard timeout enforcement.
     If execution exceeds timeout_seconds, the OS subprocess is forcibly killed via proc.kill()
     (Win32 TerminateProcess / POSIX SIGKILL), ensuring complete CPU and memory reclamation.
     Lease fencing guarantees that any post-termination mutations are rejected.
+    Returns an ExecutionDisposition indicating the outcome and ACK eligibility.
     """
     import subprocess
     import sys
@@ -253,12 +293,33 @@ def execute_task_process_isolated(
     lease = lease_manager or LeaseManager(task_id, worker_id)
     if not lease.lease_token:
         if not lease.acquire():
+            with SessionLocal() as db:
+                repo = TaskRepository(db)
+                cur_task = repo.get_by_id(task_id)
+                if cur_task and is_terminal_state(cur_task.status):
+                    return ExecutionDisposition.TERMINAL_DUPLICATE
             logger.warning(
                 "process_isolated_lease_acquisition_failed",
                 task_id=task_id,
                 worker_id=worker_id,
             )
-            return False
+            return ExecutionDisposition.OWNERSHIP_REJECTED
+
+    # Ensure task is marked RUNNING under lease fencing before launching child process
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        cur_task = repo.get_by_id(task_id)
+        if not cur_task:
+            return ExecutionDisposition.UNEXPECTED_FAILURE
+        if is_terminal_state(cur_task.status):
+            return ExecutionDisposition.TERMINAL_DUPLICATE
+        if cur_task.status != TaskStatus.RUNNING.value:
+            repo.update_status(
+                task_id,
+                TaskStatus.RUNNING,
+                {"worker_id": worker_id, "attempt": cur_task.retry_count + 1},
+                lease_token=lease.lease_token,
+            )
 
     cmd = [
         sys.executable,
@@ -277,7 +338,16 @@ def execute_task_process_isolated(
     proc = subprocess.Popen(cmd)
     try:
         proc.wait(timeout=timeout_seconds)
-        return proc.returncode == 0
+        if proc.returncode == 0:
+            with SessionLocal() as db:
+                repo = TaskRepository(db)
+                final_t = repo.get_by_id(task_id)
+                if final_t and final_t.status == TaskStatus.SUCCESS.value:
+                    return ExecutionDisposition.COMPLETED
+                elif final_t and is_terminal_state(final_t.status):
+                    return ExecutionDisposition.TERMINAL_DUPLICATE
+            return ExecutionDisposition.COMPLETED
+        return ExecutionDisposition.UNEXPECTED_FAILURE
     except subprocess.TimeoutExpired:
         logger.warning(
             "process_isolated_task_timed_out_killing_os_process",
@@ -299,19 +369,42 @@ def execute_task_process_isolated(
         try:
             with SessionLocal() as db:
                 repo = TaskRepository(db)
-                repo.complete_task_failure(
+                task_updated, is_retryable = repo.complete_task_failure(
                     task_id=task_id,
                     lease_token=lease.lease_token,
                     error_message=f"Task timed out after {timeout_seconds}s (hard OS process kill)",
                     is_timeout=True,
                     duration_ms=timeout_seconds * 1000.0,
                 )
+                if is_retryable:
+                    backoff_delay = calculate_backoff(task_updated.retry_count)
+
+                    def re_enqueue():
+                        time.sleep(backoff_delay)
+                        try:
+                            with SessionLocal() as re_db:
+                                re_repo = TaskRepository(re_db)
+                                cur = re_repo.get_by_id(task_id)
+                                if cur and cur.status == TaskStatus.RETRY_WAIT.value:
+                                    re_repo.update_status(
+                                        task_id,
+                                        TaskStatus.QUEUED,
+                                        {"reason": "retry_backoff_elapsed"},
+                                    )
+                                    broker = get_broker()
+                                    broker.enqueue(task_id, cur.priority, cur.payload)
+                        except Exception as err:
+                            logger.error("retry_re_enqueue_error", task_id=task_id, error=str(err))
+
+                    threading.Thread(target=re_enqueue, daemon=True).start()
+                    return ExecutionDisposition.RETRY_PENDING_PUBLICATION
+                return ExecutionDisposition.TERMINAL_FAILURE_RECORDED
         except Exception as exc:
             logger.warning(
                 "process_isolated_timeout_failure_recording_failed",
                 task_id=task_id,
                 error=str(exc),
             )
-        return False
+        return ExecutionDisposition.UNEXPECTED_FAILURE
     finally:
         lease.release()

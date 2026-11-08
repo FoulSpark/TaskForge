@@ -18,8 +18,8 @@ def test_relational_integrity_and_zero_orphans():
         # 1. Orphaned task_attempts
         orphaned_attempts = db.execute(
             text(
-                "SELECT COUNT(*) FROM task_attempts "
-                "WHERE task_id NOT IN (SELECT id FROM tasks)"
+                "SELECT COUNT(*) FROM task_attempts ta "
+                "WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = ta.task_id)"
             )
         ).scalar()
         assert orphaned_attempts == 0, f"Found {orphaned_attempts} orphaned task_attempts"
@@ -27,8 +27,8 @@ def test_relational_integrity_and_zero_orphans():
         # 2. Orphaned task_results
         orphaned_results = db.execute(
             text(
-                "SELECT COUNT(*) FROM task_results "
-                "WHERE task_id NOT IN (SELECT id FROM tasks)"
+                "SELECT COUNT(*) FROM task_results tr "
+                "WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = tr.task_id)"
             )
         ).scalar()
         assert orphaned_results == 0, f"Found {orphaned_results} orphaned task_results"
@@ -36,8 +36,8 @@ def test_relational_integrity_and_zero_orphans():
         # 3. Orphaned task_events
         orphaned_events = db.execute(
             text(
-                "SELECT COUNT(*) FROM task_events "
-                "WHERE task_id NOT IN (SELECT id FROM tasks)"
+                "SELECT COUNT(*) FROM task_events te "
+                "WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = te.task_id)"
             )
         ).scalar()
         assert orphaned_events == 0, f"Found {orphaned_events} orphaned task_events"
@@ -45,8 +45,8 @@ def test_relational_integrity_and_zero_orphans():
         # 4. Orphaned outbox_events
         orphaned_outbox = db.execute(
             text(
-                "SELECT COUNT(*) FROM outbox_events "
-                "WHERE aggregate_id NOT IN (SELECT id FROM tasks)"
+                "SELECT COUNT(*) FROM outbox_events oe "
+                "WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = oe.aggregate_id)"
             )
         ).scalar()
         assert orphaned_outbox == 0, f"Found {orphaned_outbox} orphaned outbox_events"

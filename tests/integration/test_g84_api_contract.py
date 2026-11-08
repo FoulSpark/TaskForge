@@ -141,8 +141,8 @@ def test_g84_api_pagination_and_filtering(client: TestClient):
     p2_ids = {item["id"] for item in p2["items"]}
     assert len(p1_ids.intersection(p2_ids)) == 0
 
-    # Large offset -> empty items list
-    p_empty = client.get("/api/v1/tasks?limit=10&offset=100000").json()
+    # Large offset beyond total -> empty items list
+    p_empty = client.get(f"/api/v1/tasks?limit=10&offset={p1['total'] + 1000}").json()
     assert len(p_empty["items"]) == 0
     assert p_empty["has_more"] is False
 

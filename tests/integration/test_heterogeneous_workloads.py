@@ -36,7 +36,7 @@ def test_deterministic_workload_correctness_and_latency_profiles(repo, db_sessio
     for i in range(10):
         t = repo.create_task("noop-test", "noop", {"idx": i}, TaskPriority.HIGH.value)
         start = time.perf_counter()
-        assert execute_task(t.id, f"worker-noop-{i}") is True
+        assert execute_task(t.id, f"worker-noop-{i}").is_success()
         noop_latencies.append((time.perf_counter() - start) * 1000.0)
 
         db_session.expire_all()
@@ -56,7 +56,7 @@ def test_deterministic_workload_correctness_and_latency_profiles(repo, db_sessio
     for i in range(5):
         t = repo.create_task("cpu-test", "cpu_bound", {"n": 10000}, TaskPriority.CRITICAL.value)
         start = time.perf_counter()
-        assert execute_task(t.id, f"worker-cpu-{i}") is True
+        assert execute_task(t.id, f"worker-cpu-{i}").is_success()
         cpu_latencies.append((time.perf_counter() - start) * 1000.0)
 
         db_session.expire_all()
@@ -83,7 +83,7 @@ def test_deterministic_workload_correctness_and_latency_profiles(repo, db_sessio
             TaskPriority.MEDIUM.value,
         )
         start = time.perf_counter()
-        assert execute_task(t.id, f"worker-io-{i}") is True
+        assert execute_task(t.id, f"worker-io-{i}").is_success()
         io_latencies.append((time.perf_counter() - start) * 1000.0)
 
         db_session.expire_all()
@@ -109,11 +109,11 @@ def test_deterministic_workload_correctness_and_latency_profiles(repo, db_sessio
     )
     fail_id = t_fail.id
     # Attempt 1 -> RETRY_WAIT
-    assert execute_task(fail_id, "worker-fail") is False
+    assert not execute_task(fail_id, "worker-fail").is_success()
     # Attempt 2 -> RETRY_WAIT
-    assert execute_task(fail_id, "worker-fail") is False
+    assert not execute_task(fail_id, "worker-fail").is_success()
     # Attempt 3 -> max_retries exhausted -> DEAD_LETTER
-    assert execute_task(fail_id, "worker-fail") is False
+    assert not execute_task(fail_id, "worker-fail").is_success()
 
     db_session.expire_all()
     failed_task = repo.get_by_id(fail_id)
@@ -132,7 +132,7 @@ def test_deterministic_workload_correctness_and_latency_profiles(repo, db_sessio
     # 5. SLEEP Workload (duration = 0.2s)
     t_sleep = repo.create_task("sleep-test", "sleep", {"duration": 0.2}, TaskPriority.MEDIUM.value)
     start = time.perf_counter()
-    assert execute_task(t_sleep.id, "worker-sleep") is True
+    assert execute_task(t_sleep.id, "worker-sleep").is_success()
     sleep_elapsed_ms = (time.perf_counter() - start) * 1000.0
 
     db_session.expire_all()

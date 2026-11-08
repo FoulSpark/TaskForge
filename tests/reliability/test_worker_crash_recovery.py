@@ -171,7 +171,7 @@ def test_g823_worker_crash_during_execution_lease_recovery(redis_conn, test_queu
     # Worker 2 picks up recovered task and completes execution
     worker_2 = "worker-healthy-02"
     success = execute_task(task_id, worker_2)
-    assert success is True
+    assert success.is_success()
 
     db_session.expire_all()
     final_task = repo.get_by_id(task_id)
@@ -271,7 +271,7 @@ def test_g823_in_flight_visibility_reclaims_crash_before_lease_acquisition(
     assert recovered_msg["task_id"] == task_id
 
     # Execute task to SUCCESS
-    assert execute_task(task_id, "worker-healthy-reclaimed") is True
+    assert execute_task(task_id, "worker-healthy-reclaimed").is_success()
 
     # 6. Acknowledge completion
     acked = broker.ack(task_id, recovered_msg)
@@ -389,8 +389,8 @@ def test_failure_retry_produces_exactly_one_eligible_delivery(redis_conn, test_q
     # Wrap task execution through dispatcher's wrapper
     dispatcher._task_wrapper(msg)
 
-    # 1. Original delivery MUST be acknowledged from in-flight:
-    assert broker.get_in_flight_depth() == 0, "Original failed delivery was not acknowledged from in-flight set!"
+    # 1. Original delivery ACK is withheld while retry is pending publication (G8.3 safe ACK policy)
+    assert broker.get_in_flight_depth() == 1, "Under G8.3 safe ACK contract, ACK must be withheld while retry is pending publication"
 
     # 2. Wait for retry backoff to elapse and enqueue the retry (backoff for attempt 1 is ~2.0 - 2.5s)
     # Wait up to 5 seconds for retry delivery to appear in ready queue
@@ -399,6 +399,10 @@ def test_failure_retry_produces_exactly_one_eligible_delivery(redis_conn, test_q
         if broker.get_queue_depth() == 1:
             break
         time.sleep(0.1)
+
+    # Acknowledge the original delivery now that retry has been published
+    broker.ack(task_id, msg)
+    assert broker.get_in_flight_depth() == 0
 
     # Run broker reclaim: should reclaim ZERO because original delivery was acked
     reclaimed = broker.reclaim_expired()

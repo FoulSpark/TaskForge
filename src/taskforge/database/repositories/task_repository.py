@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -22,6 +23,19 @@ from taskforge.database.models import (
 )
 
 
+@dataclass(frozen=True)
+class RecoveredTaskInfo:
+    """Immutable value object representing an expired task recovered by the lease reaper."""
+
+    task_id: str
+    status: str
+    lease_token: str | None = None
+
+    @property
+    def id(self) -> str:
+        return self.task_id
+
+
 class CreateTaskResult(tuple):
     """Result of create_task returning (task, created).
 
@@ -43,6 +57,9 @@ class CreateTaskResult(tuple):
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self[0], name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self[0], name, value)
 
 
 class TaskRepository:
@@ -224,7 +241,7 @@ class TaskRepository:
         total = self.db.scalar(count_stmt) or 0
 
         stmt = (
-            stmt.order_by(desc(Task.priority), desc(Task.created_at))
+            stmt.order_by(desc(Task.priority), desc(Task.created_at), desc(Task.id))
             .offset(offset)
             .limit(limit)
             .options(
@@ -610,15 +627,19 @@ class TaskRepository:
         if not task:
             return False
 
-        # Task State Guard: Enforce eligible states during lease acquisition under row lock.
-        # Terminal tasks (SUCCESS, DEAD_LETTER, CANCELLED) or other non-executable states cannot acquire lease.
+        # Task State Guard: Fresh lease acquisition restricted to claimable unstarted states.
+        # RUNNING tasks whose lease expired must be transitioned via recover_expired_leases() first.
+        # Terminal tasks (SUCCESS, DEAD_LETTER, CANCELLED) can never acquire leases.
         CLAIMABLE_STATUSES = {
             TaskStatus.PENDING.value,
             TaskStatus.QUEUED.value,
             TaskStatus.RETRY_WAIT.value,
-            TaskStatus.RUNNING.value,
         }
-        if task.status not in CLAIMABLE_STATUSES:
+        # RUNNING tasks with an active or expired lease token MUST pass through recover_expired_leases().
+        # A RUNNING task is only claimable if its lease was explicitly vacated (lease_token is None).
+        if task.status == TaskStatus.RUNNING.value and task.lease_token is None:
+            pass
+        elif task.status not in CLAIMABLE_STATUSES:
             return False
 
         now = get_utc_now()
@@ -678,49 +699,55 @@ class TaskRepository:
         self.db.commit()
         return True
 
-    def recover_expired_leases(self) -> list[Task]:
-        """Find RUNNING tasks whose lease has expired and transition them to RETRY_WAIT or QUEUED."""
+    def recover_expired_leases(self) -> list[RecoveredTaskInfo]:
+        """Find RUNNING tasks whose lease has expired and transition them to RETRY_WAIT or DEAD_LETTER.
+        Commits the transaction explicitly on success, or rolls back on exception before re-raising.
+        Returns a list of immutable RecoveredTaskInfo objects.
+        """
         now = get_utc_now()
-        stmt = (
-            select(Task)
-            .where(Task.status == TaskStatus.RUNNING.value)
-            .where(Task.lease_expires_at < now)
-            .with_for_update(skip_locked=True)
-        )
-        expired_tasks = list(self.db.scalars(stmt).all())
-        recovered = []
-        for task in expired_tasks:
-            # Re-check under row lock
-            if task.lease_expires_at is not None:
-                exp = task.lease_expires_at
-                if exp.tzinfo is None:
-                    exp = exp.replace(tzinfo=UTC)
-                if exp >= now:
-                    continue
-
-            task.retry_count += 1
-            if task.retry_count <= task.max_retries:
-                task.status = TaskStatus.RETRY_WAIT.value
-                event_reason = f"lease_expired_recovered_for_retry_{task.retry_count}"
-            else:
-                task.status = TaskStatus.DEAD_LETTER.value
-                event_reason = "lease_expired_retries_exhausted_sent_to_dlq"
-
-            task.lease_token = None
-            task.lease_expires_at = None
-            task.updated_at = now
-
-            event = TaskEvent(
-                task_id=task.id,
-                event_type="LEASE_EXPIRED_RECOVERED",
-                from_state=TaskStatus.RUNNING.value,
-                to_state=task.status,
-                metadata_json={"reason": event_reason},
-                created_at=now,
+        try:
+            stmt = (
+                select(Task)
+                .where(Task.status == TaskStatus.RUNNING.value)
+                .where(Task.lease_expires_at < now)
+                .with_for_update(skip_locked=True)
             )
-            self.db.add(event)
-            recovered.append(task)
+            expired_tasks = list(self.db.scalars(stmt).all())
+            recovered: list[RecoveredTaskInfo] = []
+            for task in expired_tasks:
+                # Re-check under row lock
+                if task.lease_expires_at is not None:
+                    exp = task.lease_expires_at
+                    if exp.tzinfo is None:
+                        exp = exp.replace(tzinfo=UTC)
+                    if exp >= now:
+                        continue
 
-        if recovered:
+                task.retry_count += 1
+                if task.retry_count <= task.max_retries:
+                    task.status = TaskStatus.RETRY_WAIT.value
+                    event_reason = f"lease_expired_recovered_for_retry_{task.retry_count}"
+                else:
+                    task.status = TaskStatus.DEAD_LETTER.value
+                    event_reason = "lease_expired_retries_exhausted_sent_to_dlq"
+
+                task.lease_token = None
+                task.lease_expires_at = None
+                task.updated_at = now
+
+                event = TaskEvent(
+                    task_id=task.id,
+                    event_type="LEASE_EXPIRED_RECOVERED",
+                    from_state=TaskStatus.RUNNING.value,
+                    to_state=task.status,
+                    metadata_json={"reason": event_reason},
+                    created_at=now,
+                )
+                self.db.add(event)
+                recovered.append(RecoveredTaskInfo(task_id=task.id, status=task.status))
+
             self.db.commit()
-        return recovered
+            return recovered
+        except Exception:
+            self.db.rollback()
+            raise

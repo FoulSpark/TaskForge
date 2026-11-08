@@ -10,7 +10,11 @@ from taskforge.core.logging import get_logger
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
 from taskforge.queue.broker import MessageBroker, get_broker
-from taskforge.workers.execution_engine import execute_task, execute_task_process_isolated
+from taskforge.workers.execution_engine import (
+    ExecutionDisposition,
+    execute_task,
+    execute_task_process_isolated,
+)
 from taskforge.workers.heartbeat import WorkerHeartbeat
 from taskforge.workers.lease_manager import LeaseManager
 
@@ -150,6 +154,7 @@ class WorkerDispatcher:
         with self._leases_lock:
             self._active_leases[task_id] = lease
 
+        disposition = ExecutionDisposition.UNEXPECTED_FAILURE
         try:
             if self.execution_mode == "process":
                 timeout = task_msg.get("timeout_seconds")
@@ -160,18 +165,35 @@ class WorkerDispatcher:
                         repo = TaskRepository(db)
                         t = repo.get_by_id(task_id)
                         timeout = t.timeout_seconds if t else 60
-                execute_task_process_isolated(
+                disposition = execute_task_process_isolated(
                     task_id=task_id,
                     worker_id=self.worker_id,
                     timeout_seconds=timeout,
                     lease_manager=lease,
                 )
             else:
-                execute_task(task_id, self.worker_id, lease_manager=lease)
+                disposition = execute_task(task_id, self.worker_id, lease_manager=lease)
 
-            # Both success and handled failure (transitioned to RETRY_WAIT / DEAD_LETTER) have processed this delivery.
-            # Acknowledge this delivery token to prevent duplicate reclaim from Redis in-flight.
-            self.broker.ack(task_id, task_msg, delivery_token=delivery_token)
+            # DISPATCHER ACK CONTRACT:
+            # ONLY acknowledge delivery if work completed, was an existing terminal duplicate,
+            # or terminal failure was committed to PostgreSQL.
+            # STRICTLY REFUSE TO ACK if:
+            # - OWNERSHIP_REJECTED (active lease belongs to another worker; preserves delivery)
+            # - RETRY_PENDING_PUBLICATION (retry state committed, but durable retry outbox publication is pending)
+            # - UNEXPECTED_FAILURE
+            if disposition in (
+                ExecutionDisposition.COMPLETED,
+                ExecutionDisposition.TERMINAL_DUPLICATE,
+                ExecutionDisposition.TERMINAL_FAILURE_RECORDED,
+            ):
+                self.broker.ack(task_id, task_msg, delivery_token=delivery_token)
+            else:
+                logger.warning(
+                    "delivery_ack_withheld_for_disposition",
+                    task_id=task_id,
+                    worker_id=self.worker_id,
+                    disposition=disposition.value,
+                )
         except PermissionError as perm_err:
             # Stale/fenced worker: lost ownership, strictly do not ack so legitimate worker owns it
             logger.warning("stale_worker_fenced_cannot_ack", task_id=task_id, error=str(perm_err))
@@ -184,6 +206,26 @@ class WorkerDispatcher:
             with self._active_lock:
                 self._active_tasks = max(0, self._active_tasks - 1)
                 self._heartbeat.set_active_tasks(self._active_tasks)
+
+    def run_recovery_cycle(
+        self,
+        visibility_timeout_seconds: float = 30.0,
+    ) -> tuple[int, int]:
+        """Recover PostgreSQL task ownership first, then reclaim expired Redis deliveries.
+        Redis reclamation must never run if PostgreSQL recovery fails to commit successfully.
+        Returns (recovered_tasks_count, reclaimed_deliveries_count).
+        """
+        # Stage 1: PostgreSQL is authoritative for task ownership.
+        with SessionLocal() as db:
+            repo = TaskRepository(db)
+            recovered_tasks = repo.recover_expired_leases()
+            recovered_count = len(recovered_tasks)
+
+        # Stage 2: Reclaim expired broker deliveries (only reached after DB commit and session closure).
+        reclaimed_count = self.broker.reclaim_expired(
+            timeout_seconds=visibility_timeout_seconds
+        )
+        return recovered_count, reclaimed_count
 
     def _stale_lease_recovery_loop(self) -> None:
         """Periodically check for crashed worker leases and recover unacked in-flight queue items.
@@ -198,23 +240,22 @@ class WorkerDispatcher:
             if self._stop_event.is_set():
                 break
             try:
-                # 1. Authoritative PostgreSQL lease expiration reaper (runs and commits first)
-                with SessionLocal() as db:
-                    repo = TaskRepository(db)
-                    recovered = repo.recover_expired_leases()
-                    for t in recovered:
-                        logger.info(
-                            "stale_task_recovered_from_expired_lease",
-                            task_id=t.id,
-                            status=t.status,
-                        )
-
-                # 2. Reclaim expired unacknowledged in-flight queue items back to ready queue
-                reclaimed = self.broker.reclaim_expired(timeout_seconds=30.0)
-                if reclaimed > 0:
-                    logger.info("reclaimed_expired_in_flight_tasks", count=reclaimed)
-            except Exception as exc:
-                logger.debug("stale_lease_reaper_error", error=str(exc))
+                recovered, reclaimed = self.run_recovery_cycle(visibility_timeout_seconds=30.0)
+                if recovered:
+                    logger.info(
+                        "stale_task_recovery_completed",
+                        recovered_count=recovered,
+                    )
+                if reclaimed:
+                    logger.info(
+                        "redis_delivery_reclaim_completed",
+                        reclaimed_count=reclaimed,
+                    )
+            except Exception:
+                logger.exception(
+                    "stale_lease_recovery_cycle_failed",
+                    worker_id=self.worker_id,
+                )
 
 
 if __name__ == "__main__":

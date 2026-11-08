@@ -112,7 +112,7 @@ def test_outbox_crash_and_duplicate_delivery(redis_conn, test_queue, db_session,
     assert outbox_recovered.status == "PUBLISHED"
 
     # 4. Sequential duplicate execution: Worker executes first delivery
-    assert execute_task(task_id, "worker-1") is True
+    assert execute_task(task_id, "worker-1").is_success()
 
     db_session.expire_all()
     task_done = repo.get_by_id(task_id)
@@ -120,7 +120,7 @@ def test_outbox_crash_and_duplicate_delivery(redis_conn, test_queue, db_session,
     assert len(task_done.attempts) == 1
 
     # Worker executes duplicate second delivery
-    assert execute_task(task_id, "worker-2") is True  # Idempotent terminal skip
+    assert execute_task(task_id, "worker-2").is_success()  # Idempotent terminal skip
 
     db_session.expire_all()
     task_final = repo.get_by_id(task_id)
