@@ -1,4 +1,5 @@
 import threading
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,15 +12,22 @@ from taskforge.queue.broker import MessageBroker, get_broker
 logger = get_logger(__name__)
 
 
-def publish_pending_outbox_events(db: Session, broker: MessageBroker, limit: int = 50) -> int:
+def publish_pending_outbox_events(
+    db: Session, broker: MessageBroker, limit: int = 50, event_id: str | None = None
+) -> int:
     """
     Fetch pending outbox events and publish them to the message broker.
-    Ensures at-least-once delivery.
+    Ensures at-least-once delivery and respects scheduled_at execution delays.
     """
     stmt = (
         select(OutboxEvent)
         .where(OutboxEvent.status == "PENDING")
-        .order_by(OutboxEvent.created_at.asc())
+    )
+    if event_id:
+        stmt = stmt.where(OutboxEvent.id == event_id)
+
+    stmt = (
+        stmt.order_by(OutboxEvent.created_at.asc())
         .limit(limit)
         .with_for_update(skip_locked=True)
     )
@@ -32,6 +40,15 @@ def publish_pending_outbox_events(db: Session, broker: MessageBroker, limit: int
 
     for event in events:
         try:
+            # Respect scheduled execution time: if scheduled_at is in the future, keep PENDING
+            scheduled_at_str = event.payload.get("scheduled_at")
+            if scheduled_at_str:
+                sched_dt = datetime.fromisoformat(scheduled_at_str)
+                if sched_dt.tzinfo is None:
+                    sched_dt = sched_dt.replace(tzinfo=UTC)
+                if sched_dt > now:
+                    continue
+
             task_id = event.payload.get("task_id", event.aggregate_id)
             priority = event.payload.get("priority", 2)
 

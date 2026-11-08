@@ -13,6 +13,9 @@ logger = get_logger(__name__)
 
 
 def _normalize_dt(dt: datetime | None) -> datetime | None:
+    """Normalizes timestamps to UTC for deterministic comparison.
+    If the datetime is naive (no tzinfo), UTC is assumed per API contract.
+    """
     if dt is None:
         return None
     if dt.tzinfo is None:

@@ -28,7 +28,8 @@ class TaskCreateRequest(BaseModel):
     )
     max_retries: int = Field(default=3, ge=0, le=10, description="Max retry attempts on failure")
     scheduled_at: datetime | None = Field(
-        default=None, description="Future timestamp to execute task"
+        default=None,
+        description="Future timestamp to execute task. If timezone offset is omitted (naive), UTC is assumed.",
     )
 
 

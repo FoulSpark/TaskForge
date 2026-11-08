@@ -53,6 +53,14 @@ class TaskRepository:
     def _is_idempotency_key_violation(exc: IntegrityError) -> bool:
         """Inspects underlying database exception to determine if it is strictly
         a unique constraint violation on tasks.idempotency_key (SQLSTATE 23505).
+
+        Enforces strict classification policy:
+        1. Requires SQLSTATE 23505 (unique_violation).
+        2. Requires the exact known PostgreSQL constraint name ('tasks_idempotency_key_key'
+           or explicit schema name 'uq_tasks_idempotency_key').
+        3. If PostgreSQL constraint name is unavailable or unverified, does not classify
+           the error as an idempotency collision.
+        4. Provides a separate, explicit dialect path for SQLite in-memory tests.
         """
         orig = getattr(exc, "orig", None)
         if orig is None:
@@ -60,19 +68,24 @@ class TaskRepository:
 
         # PostgreSQL with psycopg 3 or psycopg2: SQLSTATE 23505 (unique_violation)
         sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
-        if sqlstate == "23505":
+        if sqlstate is not None:
+            if sqlstate != "23505":
+                return False
             diag = getattr(orig, "diag", None)
             if diag:
                 cname = getattr(diag, "constraint_name", None) or ""
-                mdetail = getattr(diag, "message_detail", None) or ""
-                if "idempotency_key" in cname or "idempotency_key" in mdetail:
+                KNOWN_CONSTRAINTS = {"tasks_idempotency_key_key", "uq_tasks_idempotency_key"}
+                if cname in KNOWN_CONSTRAINTS:
                     return True
-            if "idempotency_key" in str(orig):
-                return True
+                mdetail = getattr(diag, "message_detail", None) or ""
+                if cname == "" and "Key (idempotency_key)=" in mdetail:
+                    return True
+            # PostgreSQL constraint name unverified; reject silent classification
+            return False
 
         # SQLite dialect support for in-memory testing
         orig_str = str(orig).lower()
-        if "unique constraint failed" in orig_str and "idempotency_key" in orig_str:
+        if "unique constraint failed" in orig_str and "tasks.idempotency_key" in orig_str:
             return True
 
         return False
@@ -165,6 +178,7 @@ class TaskRepository:
                     "priority": priority,
                     "timeout_seconds": timeout_seconds,
                     "max_retries": max_retries,
+                    "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
                 },
                 status="PENDING",
                 created_at=now,

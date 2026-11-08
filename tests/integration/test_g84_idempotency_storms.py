@@ -403,14 +403,20 @@ def test_concurrent_idempotency_race_with_conflicting_payloads():
 
 
 def test_idempotency_conflict_rejection_on_scheduled_at(client: TestClient):
-    """Submitting an existing idempotency key with conflicting scheduled_at returns 409 Conflict."""
-    from datetime import UTC, datetime
+    """Submitting an existing idempotency key with conflicting scheduled_at returns 409 Conflict.
+    Equivalent instants across different timezone offsets normalize cleanly to UTC and deduplicate (HTTP 200).
+    Also asserts scheduled_at survives into both Task and OutboxEvent.payload.
+    """
+    from datetime import UTC, datetime, timedelta, timezone
 
     key = f"sched-conflict-{uuid.uuid4()}"
-    t1 = datetime(2026, 11, 9, 10, 0, 0, tzinfo=UTC)
-    t2 = datetime(2026, 11, 12, 10, 0, 0, tzinfo=UTC)
+    t1_utc = datetime(2026, 11, 9, 10, 0, 0, tzinfo=UTC)
+    # Exact same instant expressed in UTC+5:30 (India Standard Time)
+    t1_ist = datetime(2026, 11, 9, 15, 30, 0, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    # Different instant
+    t2_utc = datetime(2026, 11, 12, 10, 0, 0, tzinfo=UTC)
 
-    # 1. Initial submission with scheduled_at = t1 -> 201 Created
+    # 1. Initial submission with scheduled_at = t1_utc -> 201 Created
     res1 = client.post(
         "/api/v1/tasks",
         json={
@@ -418,23 +424,38 @@ def test_idempotency_conflict_rejection_on_scheduled_at(client: TestClient):
             "task_type": "noop",
             "payload": {"schedule": True},
             "idempotency_key": key,
-            "scheduled_at": t1.isoformat(),
+            "scheduled_at": t1_utc.isoformat(),
         },
     )
     assert res1.status_code == 201
+    canonical_id = res1.json()["id"]
 
-    # 2. Re-submission with matching key and identical scheduled_at -> 200 OK (deduplicated)
-    res_match = client.post(
+    # Verify task and outbox event in DB contain scheduled_at
+    with SessionLocal() as db:
+        t = db.get(Task, canonical_id)
+        assert t is not None
+        assert t.scheduled_at is not None
+
+        outbox = db.scalars(
+            select(OutboxEvent).where(OutboxEvent.aggregate_id == canonical_id)
+        ).first()
+        assert outbox is not None
+        assert "scheduled_at" in outbox.payload
+        assert outbox.payload["scheduled_at"] == t1_utc.isoformat()
+
+    # 2. Re-submission with equivalent instant in different timezone (t1_ist == t1_utc) -> 200 OK
+    res_ist = client.post(
         "/api/v1/tasks",
         json={
             "task_name": "Scheduled Task",
             "task_type": "noop",
             "payload": {"schedule": True},
             "idempotency_key": key,
-            "scheduled_at": t1.isoformat(),
+            "scheduled_at": t1_ist.isoformat(),
         },
     )
-    assert res_match.status_code == 200
+    assert res_ist.status_code == 200
+    assert res_ist.json()["id"] == canonical_id
 
     # 3. Conflicting scheduled_at (t2 != t1) -> 409 Conflict
     res_conflict = client.post(
@@ -444,17 +465,83 @@ def test_idempotency_conflict_rejection_on_scheduled_at(client: TestClient):
             "task_type": "noop",
             "payload": {"schedule": True},
             "idempotency_key": key,
-            "scheduled_at": t2.isoformat(),
+            "scheduled_at": t2_utc.isoformat(),
         },
     )
     assert res_conflict.status_code == 409
     assert res_conflict.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
 
 
-def test_idempotency_re_raises_unrelated_database_errors():
-    """Verify TaskRepository only treats actual idempotency_key unique violations as collisions,
-    and cleanly re-raises all other IntegrityError or SQLAlchemyError exceptions.
+def test_scheduled_at_outbox_propagation_and_delayed_dispatch():
+    """Verify that tasks scheduled in the future remain in PENDING status in the outbox
+    and are not dispatched to the message broker until their scheduled instant arrives.
     """
+    from datetime import timedelta
+    from unittest.mock import MagicMock
+
+    from taskforge.database.models import get_utc_now
+    from taskforge.queue.outbox import publish_pending_outbox_events
+
+    mock_broker = MagicMock()
+    future_time = get_utc_now() + timedelta(hours=2)
+
+    with SessionLocal() as db:
+        service = TaskService(db)
+        req = TaskCreateRequest(
+            task_name="Future Scheduled Task",
+            task_type="noop",
+            payload={"future": True},
+            idempotency_key=f"future-{uuid.uuid4()}",
+            scheduled_at=future_time,
+        )
+        task, _ = service.submit_task(req)
+
+        # 1. Verify OutboxEvent payload has scheduled_at
+        outbox = db.scalars(
+            select(OutboxEvent).where(OutboxEvent.aggregate_id == task.id)
+        ).first()
+        assert outbox is not None
+        assert outbox.status == "PENDING"
+        assert outbox.payload.get("scheduled_at") is not None
+
+        # 2. Run publish_pending_outbox_events: since scheduled_at is 2h in the future,
+        # our task must NOT be enqueued to broker and must stay PENDING
+        _ = publish_pending_outbox_events(db, mock_broker, event_id=outbox.id)
+        db.refresh(outbox)
+        assert outbox.status == "PENDING"
+        enqueued_ids = [
+            c.kwargs.get("task_id")
+            for c in mock_broker.enqueue.call_args_list
+            if "task_id" in c.kwargs
+        ]
+        assert task.id not in enqueued_ids
+
+        # 3. Now simulate reaching the scheduled instant by updating scheduled_at to past
+        outbox.payload["scheduled_at"] = (get_utc_now() - timedelta(minutes=1)).isoformat()
+        from sqlalchemy.orm.attributes import flag_modified
+
+        flag_modified(outbox, "payload")
+        db.commit()
+
+        # 4. Outbox publisher now processes and publishes it to broker
+        mock_broker.reset_mock()
+        _ = publish_pending_outbox_events(db, mock_broker, event_id=outbox.id)
+        db.refresh(outbox)
+        assert outbox.status == "PUBLISHED"
+        enqueued_ids_after = [
+            c.kwargs.get("task_id")
+            for c in mock_broker.enqueue.call_args_list
+            if "task_id" in c.kwargs
+        ]
+        assert task.id in enqueued_ids_after
+
+
+def test_idempotency_re_raises_unrelated_database_errors():
+    """Verify TaskRepository strictly verifies SQLSTATE 23505 and exact known constraint names,
+    re-raising all unrelated IntegrityError exceptions or PostgreSQL errors with unverified constraint names.
+    """
+    from unittest.mock import MagicMock
+
     from sqlalchemy.exc import IntegrityError
 
     from taskforge.database.repositories.task_repository import TaskRepository
@@ -462,12 +549,37 @@ def test_idempotency_re_raises_unrelated_database_errors():
     with SessionLocal() as db:
         repo = TaskRepository(db)
 
-        # Craft an artificial IntegrityError that does NOT originate from idempotency_key
+        # Case 1: Unrelated generic check constraint violation
         unrelated_exc = IntegrityError(
             statement="INSERT INTO tasks ...",
             params={},
             orig=Exception("check constraint tasks_priority_check violated"),
         )
         assert repo._is_idempotency_key_violation(unrelated_exc) is False
+
+        # Case 2: PostgreSQL SQLSTATE 23505 but on primary key (tasks_pkey), NOT idempotency_key
+        mock_orig_pk = MagicMock()
+        mock_orig_pk.sqlstate = "23505"
+        mock_orig_pk.diag.constraint_name = "tasks_pkey"
+        mock_orig_pk.diag.message_detail = "Key (id)=(...) already exists."
+        pk_exc = IntegrityError(statement="INSERT ...", params={}, orig=mock_orig_pk)
+        assert repo._is_idempotency_key_violation(pk_exc) is False
+
+        # Case 3: PostgreSQL SQLSTATE 23505 with unverified / missing constraint name
+        mock_orig_unknown = MagicMock()
+        mock_orig_unknown.sqlstate = "23505"
+        mock_orig_unknown.diag.constraint_name = ""
+        mock_orig_unknown.diag.message_detail = ""
+        unknown_exc = IntegrityError(statement="INSERT ...", params={}, orig=mock_orig_unknown)
+        assert repo._is_idempotency_key_violation(unknown_exc) is False
+
+        # Case 4: PostgreSQL SQLSTATE 23505 with exact known constraint name -> True
+        mock_orig_valid = MagicMock()
+        mock_orig_valid.sqlstate = "23505"
+        mock_orig_valid.diag.constraint_name = "tasks_idempotency_key_key"
+        mock_orig_valid.diag.message_detail = "Key (idempotency_key)=(...) already exists."
+        valid_exc = IntegrityError(statement="INSERT ...", params={}, orig=mock_orig_valid)
+        assert repo._is_idempotency_key_violation(valid_exc) is True
+
 
 
