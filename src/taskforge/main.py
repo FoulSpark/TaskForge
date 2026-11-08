@@ -4,9 +4,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from redis.exceptions import RedisError
 
 from taskforge.api.errors import register_error_handlers
 from taskforge.api.middleware import CorrelationIdMiddleware
@@ -166,11 +166,13 @@ async def serve_dashboard(request: Request):
         if index_path.exists():
             return FileResponse(index_path, media_type="text/html")
 
-    return JSONResponse(content={
-        "application": settings.app_name,
-        "version": "0.1.0",
-        "message": "TaskForge API is running.",
-    })
+    return JSONResponse(
+        content={
+            "application": settings.app_name,
+            "version": "0.1.0",
+            "message": "TaskForge API is running.",
+        }
+    )
 
 
 @app.get("/ui", tags=["UI"], response_class=HTMLResponse)

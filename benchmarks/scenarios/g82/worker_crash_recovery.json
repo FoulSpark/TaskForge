@@ -1,0 +1,11 @@
+{
+  "gate": "8.2.3",
+  "scenario": "worker_crash_before_lease_acquisition",
+  "defect_demonstrated": "pop_and_vanish",
+  "task_id": "f04308d7-1955-4c3d-a402-68a4863b810d",
+  "broker_queue_depth_after_pop": 0,
+  "db_task_status": "QUEUED",
+  "db_lease_token": null,
+  "recovered_by_lease_reaper": false,
+  "analysis": "ZPOPMAX immediately removes the item from Redis. A crash before lease acquisition strands the task in QUEUED state with no broker presence and no recoverable lease."
+}

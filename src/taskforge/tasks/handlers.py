@@ -1,6 +1,6 @@
 import random
 import time
-from typing import Any, Dict
+from typing import Any
 
 from taskforge.core.logging import get_logger
 from taskforge.tasks.registry import register_handler
@@ -9,7 +9,7 @@ logger = get_logger(__name__)
 
 
 @register_handler("json_transform")
-def handle_json_transform(payload: Dict[str, Any]) -> Dict[str, Any]:
+def handle_json_transform(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Lightweight JSON transformation:
     Filters, aggregates, computes summaries on input records.
@@ -31,7 +31,7 @@ def handle_json_transform(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @register_handler("compute_prime")
-def handle_compute_prime(payload: Dict[str, Any]) -> Dict[str, Any]:
+def handle_compute_prime(payload: dict[str, Any]) -> dict[str, Any]:
     """
     CPU-intensive mathematical operation:
     Computes prime numbers up to n using sieve of Eratosthenes or checks primality.
@@ -55,7 +55,7 @@ def handle_compute_prime(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @register_handler("io_simulation")
-def handle_io_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
+def handle_io_simulation(payload: dict[str, Any]) -> dict[str, Any]:
     """
     I/O simulation:
     Simulates external network/disk request with delay and jitter.
@@ -74,7 +74,7 @@ def handle_io_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @register_handler("db_process")
-def handle_db_process(payload: Dict[str, Any]) -> Dict[str, Any]:
+def handle_db_process(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Database processing:
     Simulates batch query processing, aggregation, and index lookups.
@@ -89,7 +89,7 @@ def handle_db_process(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @register_handler("long_running")
-def handle_long_running(payload: Dict[str, Any]) -> Dict[str, Any]:
+def handle_long_running(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Long-running task:
     Simulates multi-stage pipeline with step intervals.
@@ -110,7 +110,7 @@ def handle_long_running(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @register_handler("failure_simulation")
-def handle_failure_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
+def handle_failure_simulation(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Fault injection handler:
     Deliberately throws an exception to test retry logic, exponential backoff, and DLQ.
@@ -119,7 +119,9 @@ def handle_failure_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
     current_attempt = payload.get("_current_attempt", 1)
 
     if current_attempt < fail_until_attempt:
-        error_msg = payload.get("error_message", f"Simulated transient error on attempt {current_attempt}")
+        error_msg = payload.get(
+            "error_message", f"Simulated transient error on attempt {current_attempt}"
+        )
         raise RuntimeError(error_msg)
 
     return {
@@ -129,7 +131,7 @@ def handle_failure_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @register_handler("timeout_simulation")
-def handle_timeout_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
+def handle_timeout_simulation(payload: dict[str, Any]) -> dict[str, Any]:
     """
     Timeout fault injection handler:
     Sleeps longer than timeout to test deadline enforcement.
@@ -138,3 +140,52 @@ def handle_timeout_simulation(payload: Dict[str, Any]) -> Dict[str, Any]:
     time.sleep(sleep_seconds)
     return {"status": "finished_after_sleep", "slept": sleep_seconds}
 
+
+@register_handler("noop")
+def handle_noop(payload: dict[str, Any]) -> dict[str, Any]:
+    """Zero-overhead deterministic handler for baseline profiling."""
+    return {"status": "ok", "payload": payload}
+
+
+@register_handler("cpu_bound")
+def handle_cpu_bound(payload: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic CPU-intensive prime sieve computation."""
+    limit = int(payload.get("n", 10_000))
+    sieve = [True] * (limit + 1)
+    sieve[0] = sieve[1] = False
+    for p in range(2, int(limit**0.5) + 1):
+        if sieve[p]:
+            for i in range(p * p, limit + 1, p):
+                sieve[i] = False
+    primes = [p for p in range(2, limit + 1) if sieve[p]]
+    return {
+        "limit": limit,
+        "primes_count": len(primes),
+        "largest_prime": primes[-1] if primes else None,
+    }
+
+
+@register_handler("io_bound")
+def handle_io_bound(payload: dict[str, Any]) -> dict[str, Any]:
+    """Simulated I/O handler with deterministic delay and byte size."""
+    delay = float(payload.get("delay_seconds", 0.05))
+    time.sleep(delay)
+    return {
+        "bytes_read": payload.get("bytes_read", 1024),
+        "status": "simulated_io_complete",
+    }
+
+
+@register_handler("failing")
+def handle_failing(payload: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic failure handler for retry and DLQ validation."""
+    error_msg = payload.get("error_message", "Deliberate deterministic handler failure")
+    raise RuntimeError(error_msg)
+
+
+@register_handler("sleep")
+def handle_sleep(payload: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic sleep handler for lease renewal and timeout drills."""
+    duration = float(payload.get("duration", 1.0))
+    time.sleep(duration)
+    return {"slept_seconds": duration, "status": "sleep_complete"}

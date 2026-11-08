@@ -1,18 +1,15 @@
-import time
+import os
+import tempfile
 import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from taskforge.database.session import Base, get_db
-import os
-import tempfile
 from taskforge.main import app
 from taskforge.queue.broker import MemoryBroker, set_global_broker
-from taskforge.queue.outbox import publish_pending_outbox_events
-from taskforge.workers.dispatcher import WorkerDispatcher
 from taskforge.workers.execution_engine import execute_task
 
 TEST_DB_FILE = os.path.join(tempfile.gettempdir(), f"taskforge_test_rel_{uuid.uuid4().hex}.db")
@@ -95,14 +92,17 @@ def test_p3_02_and_p3_05_max_retries_and_dead_letter(setup_test_env):
     Retry count never exceeds configured max (e.g. 2), then enters DEAD_LETTER state,
     and remains fully inspectable with error messages and attempt records.
     """
-    broker = setup_test_env
+    _ = setup_test_env
     with TestClient(app) as client:
         res = client.post(
             "/api/v1/tasks",
             json={
                 "task_name": "Always Fails",
                 "task_type": "failure_simulation",
-                "payload": {"fail_until_attempt": 999, "error_message": "Critical simulated failure"},
+                "payload": {
+                    "fail_until_attempt": 999,
+                    "error_message": "Critical simulated failure",
+                },
                 "max_retries": 2,
             },
         )

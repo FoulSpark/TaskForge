@@ -1,0 +1,63 @@
+{
+  "gate": "G8.4.2",
+  "benchmark": "G8.4-L1 Reproducibility (5 Trials)",
+  "tasks_per_trial": 1000,
+  "concurrent_producers": 100,
+  "trials_executed": 5,
+  "trials": [
+    {
+      "trial": 1,
+      "duration_seconds": 6.186,
+      "throughput_rps": 161.6,
+      "p50_ms": 89.14,
+      "p95_ms": 122.79,
+      "p99_ms": 141.99,
+      "outbox_parity": "100%"
+    },
+    {
+      "trial": 2,
+      "duration_seconds": 5.389,
+      "throughput_rps": 185.6,
+      "p50_ms": 77.61,
+      "p95_ms": 103.4,
+      "p99_ms": 154.29,
+      "outbox_parity": "100%"
+    },
+    {
+      "trial": 3,
+      "duration_seconds": 5.822,
+      "throughput_rps": 171.8,
+      "p50_ms": 83.11,
+      "p95_ms": 119.97,
+      "p99_ms": 138.16,
+      "outbox_parity": "100%"
+    },
+    {
+      "trial": 4,
+      "duration_seconds": 5.594,
+      "throughput_rps": 178.8,
+      "p50_ms": 80.68,
+      "p95_ms": 110.2,
+      "p99_ms": 140.47,
+      "outbox_parity": "100%"
+    },
+    {
+      "trial": 5,
+      "duration_seconds": 5.528,
+      "throughput_rps": 180.9,
+      "p50_ms": 79.14,
+      "p95_ms": 111.76,
+      "p99_ms": 134.27,
+      "outbox_parity": "100%"
+    }
+  ],
+  "aggregate_metrics": {
+    "min_throughput_rps": 161.6,
+    "max_throughput_rps": 185.6,
+    "avg_throughput_rps": 175.7,
+    "min_p95_ms": 103.4,
+    "max_p95_ms": 122.79,
+    "avg_p95_ms": 113.62
+  },
+  "verdict": "PASS"
+}

@@ -1,14 +1,14 @@
+import os
+import tempfile
 import time
 import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from taskforge.database.session import Base, get_db
-import os
-import tempfile
 from taskforge.main import app
 from taskforge.queue.broker import MemoryBroker, set_global_broker
 from taskforge.queue.outbox import publish_pending_outbox_events
@@ -64,7 +64,7 @@ def test_async_submission_and_outbox_flush(setup_test_env):
             },
         )
         assert res.status_code == 201
-        task_id = res.json()["id"]
+        assert res.json()["id"] is not None
 
         # Before outbox flush, broker has 0 items
         assert broker.get_queue_depth() == 0
@@ -125,7 +125,9 @@ def test_all_workload_handlers_execute_successfully(setup_test_env):
         # Verify all workloads succeeded and have results
         for tid in task_ids:
             task = client.get(f"/api/v1/tasks/{tid}").json()
-            assert task["status"] == "SUCCESS", f"Task {task['task_type']} ({tid}) status was {task['status']}"
+            assert task["status"] == "SUCCESS", (
+                f"Task {task['task_type']} ({tid}) status was {task['status']}"
+            )
             assert task["result"] is not None
             assert task["result"]["return_value"] is not None
             assert len(task["attempts"]) >= 1
@@ -179,7 +181,10 @@ def test_execution_isolation_one_failure_does_not_block_others(setup_test_env):
         while time.time() - start_wait < 5.0:
             fail_task = client.get(f"/api/v1/tasks/{fail_id}").json()
             good_task = client.get(f"/api/v1/tasks/{good_id}").json()
-            if fail_task["status"] in {"FAILED", "DEAD_LETTER"} and good_task["status"] == "SUCCESS":
+            if (
+                fail_task["status"] in {"FAILED", "DEAD_LETTER"}
+                and good_task["status"] == "SUCCESS"
+            ):
                 break
             time.sleep(0.05)
 

@@ -1,8 +1,8 @@
 import datetime
 import socket
 import threading
-import time
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import redis
 
 from taskforge.core.logging import get_logger
@@ -10,7 +10,7 @@ from taskforge.core.logging import get_logger
 logger = get_logger(__name__)
 
 # In-memory registry fallback for workers
-_WORKER_HEARTBEATS: Dict[str, Dict[str, Any]] = {}
+_WORKER_HEARTBEATS: dict[str, dict[str, Any]] = {}
 _lock = threading.Lock()
 
 
@@ -21,7 +21,7 @@ class WorkerHeartbeat:
         self,
         worker_id: str,
         concurrency: int = 4,
-        redis_client: Optional[redis.Redis] = None,
+        redis_client: redis.Redis | None = None,
         heartbeat_interval: float = 5.0,
     ):
         self.worker_id = worker_id
@@ -31,8 +31,8 @@ class WorkerHeartbeat:
         self.hostname = socket.gethostname()
         self.active_tasks: int = 0
         self._stop_event = threading.Event()
-        self._thread: Optional[threading.Thread] = None
-        self.started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        self._thread: threading.Thread | None = None
+        self.started_at = datetime.datetime.now(datetime.UTC).isoformat()
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -54,7 +54,7 @@ class WorkerHeartbeat:
         self.beat()
 
     def beat(self) -> None:
-        now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         info = {
             "worker_id": self.worker_id,
             "hostname": self.hostname,
@@ -70,6 +70,7 @@ class WorkerHeartbeat:
         if self.redis_client:
             try:
                 import json
+
                 key = f"taskforge:worker:{self.worker_id}"
                 self.redis_client.set(key, json.dumps(info), ex=int(self.heartbeat_interval * 3))
             except Exception:
@@ -81,12 +82,12 @@ class WorkerHeartbeat:
             self._stop_event.wait(self.heartbeat_interval)
 
 
-def get_active_workers() -> List[Dict[str, Any]]:
+def get_active_workers() -> list[dict[str, Any]]:
     """Return all currently active workers whose heartbeat is within TTL (15s)."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     active = []
     with _lock:
-        for wid, info in list(_WORKER_HEARTBEATS.items()):
+        for info in list(_WORKER_HEARTBEATS.values()):
             try:
                 last_beat = datetime.datetime.fromisoformat(info["last_heartbeat"])
                 if (now - last_beat).total_seconds() <= 15:
@@ -94,4 +95,3 @@ def get_active_workers() -> List[Dict[str, Any]]:
             except Exception:
                 active.append(info)
     return active
-

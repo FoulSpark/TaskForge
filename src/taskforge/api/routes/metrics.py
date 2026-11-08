@@ -1,4 +1,5 @@
 import time
+
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -39,9 +40,7 @@ def system_stats(db: Session = Depends(get_db)):
 
     # Calculate average attempt duration in ms
     avg_dur = (
-        db.scalar(
-            select(func.avg(TaskAttempt.duration_ms)).where(TaskAttempt.status == "SUCCESS")
-        )
+        db.scalar(select(func.avg(TaskAttempt.duration_ms)).where(TaskAttempt.status == "SUCCESS"))
         or 0.0
     )
 
@@ -74,4 +73,3 @@ def system_stats(db: Session = Depends(get_db)):
             "list": active_workers,
         },
     }
-

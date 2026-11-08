@@ -1,0 +1,20 @@
+{
+  "gate": "G8.4.2",
+  "profile": "G8.4-L2",
+  "simulated_producers": 500,
+  "total_tasks_enqueued": 5000,
+  "successful_submissions": 5000,
+  "failed_submissions": 0,
+  "total_duration_seconds": 30.602,
+  "throughput_rps": 163.4,
+  "percentiles": {
+    "p50_ms": 110.75,
+    "p90_ms": 139.43,
+    "p95_ms": 155.17,
+    "p99_ms": 188.73,
+    "max_ms": 250.71,
+    "min_ms": 55.9
+  },
+  "outbox_parity": "100%",
+  "verdict": "PASS"
+}

@@ -3,8 +3,9 @@
 Validates input sanitization, injection resistance, payload boundaries,
 and denial-of-service protections.
 """
-import pytest
+
 from fastapi.testclient import TestClient
+
 from taskforge.main import app
 
 
@@ -29,7 +30,7 @@ def test_sql_injection_in_task_fields_is_treated_as_literal():
             assert resp.status_code == 201
             task = resp.json()
             assert task["task_name"] == injection  # Safely stored as plain literal text
-            
+
             # Verify retrieval works safely
             get_resp = client.get(f"/api/v1/tasks/{task['id']}")
             assert get_resp.status_code == 200

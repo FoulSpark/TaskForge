@@ -1,6 +1,5 @@
 import threading
-import time
-from typing import Optional
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -60,11 +59,11 @@ def publish_pending_outbox_events(db: Session, broker: MessageBroker, limit: int
 class OutboxPublisherWorker:
     """Background daemon thread that continuously flushes the outbox table."""
 
-    def __init__(self, poll_interval: float = 0.5, broker: Optional[MessageBroker] = None):
+    def __init__(self, poll_interval: float = 0.5, broker: MessageBroker | None = None):
         self.poll_interval = poll_interval
         self.broker = broker or get_broker()
         self._stop_event = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -88,4 +87,3 @@ class OutboxPublisherWorker:
             except Exception as exc:
                 logger.error("outbox_publisher_cycle_error", error=str(exc))
             self._stop_event.wait(self.poll_interval)
-

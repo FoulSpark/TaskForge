@@ -10,6 +10,19 @@ from taskforge.core.state_machine import InvalidStateTransitionError
 logger = get_logger(__name__)
 
 
+class IdempotencyConflictError(Exception):
+    """Raised when an idempotency key is submitted with a conflicting payload or configuration."""
+
+    def __init__(
+        self,
+        key: str,
+        message: str = "Idempotency key collision with conflicting payload.",
+    ):
+        self.key = key
+        self.message = message
+        super().__init__(message)
+
+
 def get_correlation_id(request: Request) -> str:
     return getattr(request.state, "correlation_id", "unknown")
 
@@ -41,6 +54,29 @@ def register_error_handlers(app: FastAPI) -> None:
             ).model_dump(),
         )
 
+    @app.exception_handler(IdempotencyConflictError)
+    async def idempotency_conflict_handler(
+        request: Request, exc: IdempotencyConflictError
+    ) -> JSONResponse:
+        cid = get_correlation_id(request)
+        logger.warning(
+            "idempotency_payload_conflict",
+            idempotency_key=exc.key,
+            error=str(exc),
+            correlation_id=cid,
+        )
+        return JSONResponse(
+            status_code=409,
+            content=APIErrorResponse(
+                error=ErrorDetail(
+                    code="IDEMPOTENCY_CONFLICT",
+                    message=exc.message,
+                    details={"idempotency_key": exc.key},
+                    correlation_id=cid,
+                )
+            ).model_dump(),
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
@@ -60,9 +96,7 @@ def register_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(
-        request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         cid = get_correlation_id(request)
         return JSONResponse(
             status_code=exc.status_code,
@@ -70,6 +104,41 @@ def register_error_handlers(app: FastAPI) -> None:
                 error=ErrorDetail(
                     code=f"HTTP_{exc.status_code}",
                     message=str(exc.detail),
+                    correlation_id=cid,
+                )
+            ).model_dump(),
+        )
+
+    from psycopg import OperationalError as PsycopgOperationalError
+    from sqlalchemy.exc import OperationalError as SQLAOperationalError
+    from sqlalchemy.exc import TimeoutError as SQLATimeoutError
+
+    @app.exception_handler(SQLATimeoutError)
+    async def db_pool_timeout_handler(request: Request, exc: SQLATimeoutError) -> JSONResponse:
+        cid = get_correlation_id(request)
+        logger.error("database_pool_timeout", correlation_id=cid)
+        return JSONResponse(
+            status_code=503,
+            content=APIErrorResponse(
+                error=ErrorDetail(
+                    code="SERVICE_UNAVAILABLE",
+                    message="Database connection pool is temporarily saturated. Please retry shortly.",
+                    correlation_id=cid,
+                )
+            ).model_dump(),
+        )
+
+    @app.exception_handler(SQLAOperationalError)
+    @app.exception_handler(PsycopgOperationalError)
+    async def db_operational_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        cid = get_correlation_id(request)
+        logger.error("database_connection_failure", correlation_id=cid)
+        return JSONResponse(
+            status_code=503,
+            content=APIErrorResponse(
+                error=ErrorDetail(
+                    code="SERVICE_UNAVAILABLE",
+                    message="Database service is temporarily unavailable. Please retry shortly.",
                     correlation_id=cid,
                 )
             ).model_dump(),
@@ -89,4 +158,3 @@ def register_error_handlers(app: FastAPI) -> None:
                 )
             ).model_dump(),
         )
-

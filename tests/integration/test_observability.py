@@ -1,8 +1,8 @@
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-import pytest
 
 from taskforge.database.session import Base, get_db
 from taskforge.main import app
@@ -70,4 +70,3 @@ def test_chaos_batch_and_idempotency_storm_endpoints():
         assert storm_data["tasks_created"] == 1
         assert storm_data["duplicate_requests_absorbed"] == 19
         assert storm_data["verified"] is True
-

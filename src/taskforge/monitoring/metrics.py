@@ -6,6 +6,8 @@ from prometheus_client import (
     generate_latest,
 )
 
+__all__ = ["CONTENT_TYPE_LATEST", "get_metrics_content"]
+
 # Task metrics
 TASKS_SUBMITTED = Counter(
     "taskforge_tasks_submitted_total",
@@ -85,4 +87,3 @@ DB_POOL_CHECKEDOUT = Gauge(
 def get_metrics_content() -> bytes:
     """Generate Prometheus scrape format output."""
     return generate_latest()
-

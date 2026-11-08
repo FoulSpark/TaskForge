@@ -1,0 +1,55 @@
+{
+  "gate": "8.3.2",
+  "description": "Abrupt Worker Subprocess Crash Drills Verification (CP-01 to CP-06)",
+  "records": {
+    "CP-02": {
+      "crash_point": "CP-02",
+      "scenario": "Post-dequeue, Pre-lease OS crash",
+      "subprocess_exit_code": 42,
+      "reclaimed_count": 1,
+      "final_status": "SUCCESS",
+      "recovery": "Visibility timeout reclaim"
+    },
+    "CP-03": {
+      "crash_point": "CP-03",
+      "scenario": "Post-lease, Pre-handler OS crash",
+      "subprocess_exit_code": 43,
+      "reaped_to_status": "SUCCESS",
+      "final_status": "SUCCESS",
+      "recovery": "Production Dual Redis visibility + PostgreSQL lease reaper"
+    },
+    "CP-06": {
+      "crash_point": "CP-06",
+      "scenario": "Post-result, Pre-ack OS crash",
+      "subprocess_exit_code": 46,
+      "duplicate_side_effects": 0,
+      "final_status": "SUCCESS",
+      "recovery": "Idempotent redelivery acknowledgement with delivery-token fencing"
+    },
+    "CP-01": {
+      "crash_point": "CP-01",
+      "scenario": "Worker killed before claiming (idle pre-dequeue)",
+      "subprocess_exit_code": 41,
+      "final_status": "SUCCESS",
+      "recovery": "Task remained in ready queue untouched"
+    },
+    "CP-04": {
+      "crash_point": "CP-04",
+      "scenario": "Mid-handler execution OS crash",
+      "subprocess_exit_code": 44,
+      "reaped_to_status": "SUCCESS",
+      "final_status": "SUCCESS",
+      "recovery": "Production Dual visibility + lease reaper recovery"
+    },
+    "CP-05": {
+      "crash_point": "CP-05",
+      "scenario": "Post-handler, Pre-result OS crash",
+      "subprocess_exit_code": 45,
+      "duplicate_results": 0,
+      "final_status": "SUCCESS",
+      "recovery": "Lease reaper + replacement execution"
+    }
+  },
+  "stranded_tasks": 0,
+  "verdict": "PASS"
+}

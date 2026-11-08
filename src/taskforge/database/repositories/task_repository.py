@@ -1,7 +1,9 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional, Tuple
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import desc, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from taskforge.core.state_machine import (
@@ -20,11 +22,62 @@ from taskforge.database.models import (
 )
 
 
+class CreateTaskResult(tuple):
+    """Result of create_task returning (task, created).
+
+    Supports unpacking (task, is_created = repo.create_task(...)),
+    named property access (.task, .created),
+    and transparent attribute delegation to the task instance for backward compatibility.
+    """
+
+    def __new__(cls, task: Task, created: bool):
+        return super().__new__(cls, (task, created))
+
+    @property
+    def task(self) -> Task:
+        return self[0]
+
+    @property
+    def created(self) -> bool:
+        return self[1]
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self[0], name)
+
+
 class TaskRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, task_id: str) -> Optional[Task]:
+    @staticmethod
+    def _is_idempotency_key_violation(exc: IntegrityError) -> bool:
+        """Inspects underlying database exception to determine if it is strictly
+        a unique constraint violation on tasks.idempotency_key (SQLSTATE 23505).
+        """
+        orig = getattr(exc, "orig", None)
+        if orig is None:
+            return False
+
+        # PostgreSQL with psycopg 3 or psycopg2: SQLSTATE 23505 (unique_violation)
+        sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+        if sqlstate == "23505":
+            diag = getattr(orig, "diag", None)
+            if diag:
+                cname = getattr(diag, "constraint_name", None) or ""
+                mdetail = getattr(diag, "message_detail", None) or ""
+                if "idempotency_key" in cname or "idempotency_key" in mdetail:
+                    return True
+            if "idempotency_key" in str(orig):
+                return True
+
+        # SQLite dialect support for in-memory testing
+        orig_str = str(orig).lower()
+        if "unique constraint failed" in orig_str and "idempotency_key" in orig_str:
+            return True
+
+        return False
+
+    def get_by_id(self, task_id: str) -> Task | None:
         stmt = (
             select(Task)
             .where(Task.id == task_id)
@@ -36,7 +89,7 @@ class TaskRepository:
         )
         return self.db.scalars(stmt).first()
 
-    def get_by_idempotency_key(self, idempotency_key: str) -> Optional[Task]:
+    def get_by_idempotency_key(self, idempotency_key: str) -> Task | None:
         if not idempotency_key:
             return None
         stmt = (
@@ -56,23 +109,25 @@ class TaskRepository:
         task_type: str,
         payload: dict[str, Any],
         priority: int = TaskPriority.MEDIUM.value,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
         timeout_seconds: int = 60,
         max_retries: int = 3,
-        scheduled_at: Optional[datetime] = None,
-    ) -> Task:
-        # Check idempotency first
+        scheduled_at: datetime | None = None,
+    ) -> CreateTaskResult:
+        # Check idempotency first (optimistic fast path)
         if idempotency_key:
             existing = self.get_by_idempotency_key(idempotency_key)
             if existing:
-                return existing
+                return CreateTaskResult(existing, False)
 
         now = get_utc_now()
+        task_id = str(uuid.uuid4())
         task = Task(
+            id=task_id,
             task_name=task_name,
             task_type=task_type,
             payload=payload,
-            status=TaskStatus.PENDING.value,
+            status=TaskStatus.QUEUED.value,
             priority=priority,
             idempotency_key=idempotency_key,
             timeout_seconds=timeout_seconds,
@@ -82,65 +137,63 @@ class TaskRepository:
             created_at=now,
             updated_at=now,
         )
-        self.db.add(task)
-        self.db.flush()
 
-        # Record initial event
-        event = TaskEvent(
-            task_id=task.id,
-            event_type="TASK_CREATED",
-            from_state=None,
-            to_state=TaskStatus.PENDING.value,
-            metadata_json={"task_name": task_name, "priority": priority},
-            created_at=now,
-        )
-        self.db.add(event)
+        try:
+            self.db.add(task)
 
-        # Create transactional outbox entry
-        outbox = OutboxEvent(
-            aggregate_type="task",
-            aggregate_id=task.id,
-            event_type="TASK_SUBMITTED",
-            payload={
-                "task_id": task.id,
-                "task_name": task_name,
-                "task_type": task_type,
-                "payload": payload,
-                "priority": priority,
-                "timeout_seconds": timeout_seconds,
-                "max_retries": max_retries,
-            },
-            status="PENDING",
-            created_at=now,
-        )
-        self.db.add(outbox)
+            # Record initial event
+            event = TaskEvent(
+                task_id=task_id,
+                event_type="TASK_CREATED",
+                from_state=None,
+                to_state=TaskStatus.QUEUED.value,
+                metadata_json={"task_name": task_name, "priority": priority},
+                created_at=now,
+            )
+            self.db.add(event)
 
-        # Automatically transition to QUEUED once staged in outbox
-        validate_transition(task.status, TaskStatus.QUEUED)
-        task.status = TaskStatus.QUEUED.value
-        task.updated_at = now
+            # Create transactional outbox entry in the same transaction
+            outbox = OutboxEvent(
+                aggregate_type="task",
+                aggregate_id=task_id,
+                event_type="TASK_SUBMITTED",
+                payload={
+                    "task_id": task_id,
+                    "task_name": task_name,
+                    "task_type": task_type,
+                    "payload": payload,
+                    "priority": priority,
+                    "timeout_seconds": timeout_seconds,
+                    "max_retries": max_retries,
+                },
+                status="PENDING",
+                created_at=now,
+            )
+            self.db.add(outbox)
 
-        queued_event = TaskEvent(
-            task_id=task.id,
-            event_type="STATUS_CHANGED",
-            from_state=TaskStatus.PENDING.value,
-            to_state=TaskStatus.QUEUED.value,
-            metadata_json={"reason": "enqueued_to_outbox"},
-            created_at=now,
-        )
-        self.db.add(queued_event)
-
-        self.db.commit()
-        return self.get_by_id(task.id)  # type: ignore
+            self.db.commit()
+            created_task = self.get_by_id(task.id)
+            return CreateTaskResult(created_task, True)  # type: ignore
+        except IntegrityError as exc:
+            self.db.rollback()
+            # Inspect underlying error to ensure it is specifically the uniqueness violation on idempotency_key
+            if idempotency_key and self._is_idempotency_key_violation(exc):
+                existing = self.get_by_idempotency_key(idempotency_key)
+                if existing:
+                    return CreateTaskResult(existing, False)
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
 
     def list_tasks(
         self,
-        status: Optional[str] = None,
-        task_type: Optional[str] = None,
-        priority: Optional[int] = None,
+        status: str | None = None,
+        task_type: str | None = None,
+        priority: int | None = None,
         limit: int = 20,
         offset: int = 0,
-    ) -> Tuple[List[Task], int]:
+    ) -> tuple[list[Task], int]:
         stmt = select(Task)
         count_stmt = select(func.count(Task.id))
 
@@ -173,24 +226,51 @@ class TaskRepository:
         self,
         task_id: str,
         new_status: TaskStatus | str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
+        lease_token: str | None = None,
+        force: bool = False,
     ) -> Task:
-        task = self.get_by_id(task_id)
+        stmt = select(Task).where(Task.id == task_id).with_for_update()
+        task = self.db.scalars(stmt).first()
         if not task:
             raise ValueError(f"Task with id {task_id} not found")
+
+        # Fencing: if task has an active lease, caller MUST supply a matching lease token
+        if not force:
+            if task.lease_token is not None:
+                if not lease_token or task.lease_token != lease_token:
+                    raise PermissionError(
+                        f"Fencing violation: task is currently leased under '{task.lease_token}'; "
+                        f"mutation requires matching lease_token, but received '{lease_token}'"
+                    )
+            elif lease_token is not None:
+                raise PermissionError(
+                    f"Fencing violation: caller provided lease token '{lease_token}', but task has no active lease"
+                )
 
         curr_status = TaskStatus(task.status)
         nxt_status = TaskStatus(new_status)
 
-        validate_transition(curr_status, nxt_status)
+        if not force:
+            validate_transition(curr_status, nxt_status)
 
         now = get_utc_now()
         task.status = nxt_status.value
         task.updated_at = now
 
+        if force:
+            # Force overrides revoke active lease
+            task.lease_token = None
+            task.lease_expires_at = None
+
         if nxt_status == TaskStatus.RUNNING and not task.started_at:
             task.started_at = now
-        elif nxt_status in {TaskStatus.SUCCESS, TaskStatus.DEAD_LETTER, TaskStatus.CANCELLED, TaskStatus.FAILED}:
+        elif nxt_status in {
+            TaskStatus.SUCCESS,
+            TaskStatus.DEAD_LETTER,
+            TaskStatus.CANCELLED,
+            TaskStatus.FAILED,
+        }:
             task.completed_at = now
 
         event = TaskEvent(
@@ -208,6 +288,7 @@ class TaskRepository:
         # Invalidate read cache
         try:
             from taskforge.core.cache import get_cache
+
             get_cache().invalidate(task_id)
         except Exception:
             pass
@@ -228,13 +309,13 @@ class TaskRepository:
         self,
         task_id: str,
         attempt_number: int,
-        worker_id: Optional[str],
+        worker_id: str | None,
         status: str,
-        error_message: Optional[str] = None,
-        error_traceback: Optional[str] = None,
-        duration_ms: Optional[float] = None,
-        started_at: Optional[datetime] = None,
-        completed_at: Optional[datetime] = None,
+        error_message: str | None = None,
+        error_traceback: str | None = None,
+        duration_ms: float | None = None,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
     ) -> TaskAttempt:
         now = get_utc_now()
         attempt = TaskAttempt(
@@ -255,9 +336,27 @@ class TaskRepository:
     def record_result(
         self,
         task_id: str,
-        return_value: Optional[dict[str, Any]],
-        execution_metadata: Optional[dict[str, Any]] = None,
+        return_value: dict[str, Any] | None,
+        execution_metadata: dict[str, Any] | None = None,
+        lease_token: str | None = None,
     ) -> TaskResult:
+        stmt = select(Task).where(Task.id == task_id).with_for_update()
+        task = self.db.scalars(stmt).first()
+        if not task:
+            raise ValueError(f"Task with id {task_id} not found")
+
+        # Strict fencing: if task has active lease, caller must provide matching token
+        if task.lease_token is not None:
+            if not lease_token or task.lease_token != lease_token:
+                raise PermissionError(
+                    f"Fencing violation: task is currently leased under '{task.lease_token}'; "
+                    f"cannot record result with lease_token '{lease_token}'"
+                )
+        elif lease_token is not None:
+            raise PermissionError(
+                f"Fencing violation: caller provided lease token '{lease_token}', but task has no active lease"
+            )
+
         now = get_utc_now()
         result = TaskResult(
             task_id=task_id,
@@ -269,38 +368,274 @@ class TaskRepository:
         self.db.commit()
         return result
 
+    def complete_task_success(
+        self,
+        task_id: str,
+        lease_token: str,
+        return_value: dict[str, Any] | None,
+        execution_metadata: dict[str, Any] | None = None,
+        attempt_id: int | None = None,
+        duration_ms: float | None = None,
+    ) -> Task:
+        """Atomically commit TaskResult, transition Task to SUCCESS,
+        update TaskAttempt to SUCCESS, release lease, and record event in one transaction under strict lease fencing.
+        """
+        stmt = select(Task).where(Task.id == task_id).with_for_update()
+        task = self.db.scalars(stmt).first()
+        if not task:
+            raise ValueError(f"Task with id {task_id} not found")
+
+        if not lease_token or task.lease_token != lease_token:
+            raise PermissionError(
+                f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
+            )
+
+        curr_status = TaskStatus(task.status)
+        validate_transition(curr_status, TaskStatus.SUCCESS)
+
+        # Pre-validate attempt ownership and status before applying any mutations
+        attempt = None
+        if attempt_id is not None:
+            attempt_stmt = select(TaskAttempt).where(
+                TaskAttempt.id == attempt_id,
+                TaskAttempt.task_id == task_id,
+            )
+            attempt = self.db.scalars(attempt_stmt).first()
+            if not attempt:
+                raise ValueError(
+                    f"Attempt ownership violation: TaskAttempt '{attempt_id}' does not belong to task '{task_id}'."
+                )
+            if attempt.status not in ("RUNNING", "PENDING"):
+                raise ValueError(
+                    f"Attempt status violation: cannot complete TaskAttempt '{attempt_id}' in terminal status '{attempt.status}'."
+                )
+
+        try:
+            now = get_utc_now()
+            task.status = TaskStatus.SUCCESS.value
+            task.completed_at = now
+            task.updated_at = now
+            task.lease_token = None
+            task.lease_expires_at = None
+
+            # 1. Persist result
+            result = TaskResult(
+                task_id=task_id,
+                return_value=return_value,
+                execution_metadata=execution_metadata or {},
+                created_at=now,
+            )
+            self.db.add(result)
+
+            # 2. Update attempt if provided
+            if attempt:
+                attempt.status = "SUCCESS"
+                attempt.completed_at = now
+                attempt.duration_ms = duration_ms
+
+            # 3. Record status change event
+            event = TaskEvent(
+                task_id=task.id,
+                event_type="STATUS_CHANGED",
+                from_state=curr_status.value,
+                to_state=TaskStatus.SUCCESS.value,
+                metadata_json={"duration_ms": duration_ms, **(execution_metadata or {})},
+                created_at=now,
+            )
+            self.db.add(event)
+
+            self.db.commit()
+            self.db.refresh(task)
+        except Exception:
+            self.db.rollback()
+            raise
+
+        try:
+            from taskforge.core.cache import get_cache
+
+            get_cache().invalidate(task_id)
+        except Exception:
+            pass
+
+        return task
+
+    def complete_task_failure(
+        self,
+        task_id: str,
+        lease_token: str,
+        error_message: str,
+        error_traceback: str | None = None,
+        is_timeout: bool = False,
+        attempt_id: int | None = None,
+        duration_ms: float | None = None,
+    ) -> tuple[Task, bool]:
+        """Atomically record attempt failure, evaluate retries under lock,
+        transition Task to RETRY_WAIT or DEAD_LETTER, release lease, and record event
+        in one transaction under strict lease fencing.
+        Returns (task, is_retryable).
+        """
+        stmt = select(Task).where(Task.id == task_id).with_for_update()
+        task = self.db.scalars(stmt).first()
+        if not task:
+            raise ValueError(f"Task with id {task_id} not found")
+
+        if not lease_token or task.lease_token != lease_token:
+            raise PermissionError(
+                f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
+            )
+
+        curr_status = TaskStatus(task.status)
+
+        # Pre-validate attempt ownership and status before applying any mutations
+        attempt = None
+        if attempt_id is not None:
+            attempt_stmt = select(TaskAttempt).where(
+                TaskAttempt.id == attempt_id,
+                TaskAttempt.task_id == task_id,
+            )
+            attempt = self.db.scalars(attempt_stmt).first()
+            if not attempt:
+                raise ValueError(
+                    f"Attempt ownership violation: TaskAttempt '{attempt_id}' does not belong to task '{task_id}'."
+                )
+            if attempt.status not in ("RUNNING", "PENDING"):
+                raise ValueError(
+                    f"Attempt status violation: cannot fail TaskAttempt '{attempt_id}' in terminal status '{attempt.status}'."
+                )
+
+        try:
+            now = get_utc_now()
+            if attempt:
+                attempt.status = "TIMED_OUT" if is_timeout else "FAILED"
+                attempt.error_message = error_message
+                attempt.error_traceback = error_traceback
+                attempt.completed_at = now
+                attempt.duration_ms = duration_ms
+
+            # 2. Evaluate retry policy under lock
+            if task.retry_count < task.max_retries:
+                task.retry_count += 1
+                nxt_status = TaskStatus.RETRY_WAIT
+                is_retryable = True
+                reason = f"attempt_{task.retry_count}_failed"
+
+                validate_transition(curr_status, nxt_status)
+                task.status = nxt_status.value
+
+                event = TaskEvent(
+                    task_id=task.id,
+                    event_type="STATUS_CHANGED",
+                    from_state=curr_status.value,
+                    to_state=nxt_status.value,
+                    metadata_json={
+                        "error": error_message,
+                        "retry_count": task.retry_count,
+                        "reason": reason,
+                        "is_timeout": is_timeout,
+                    },
+                    created_at=now,
+                )
+                self.db.add(event)
+            else:
+                # Multi-step state machine transition: RUNNING -> FAILED -> DEAD_LETTER
+                validate_transition(curr_status, TaskStatus.FAILED)
+                validate_transition(TaskStatus.FAILED, TaskStatus.DEAD_LETTER)
+                task.status = TaskStatus.DEAD_LETTER.value
+                is_retryable = False
+                reason = "max_retries_exceeded"
+                task.completed_at = now
+
+                event_fail = TaskEvent(
+                    task_id=task.id,
+                    event_type="STATUS_CHANGED",
+                    from_state=curr_status.value,
+                    to_state=TaskStatus.FAILED.value,
+                    metadata_json={"error": error_message, "retries_exhausted": True},
+                    created_at=now,
+                )
+                self.db.add(event_fail)
+
+                event_dlq = TaskEvent(
+                    task_id=task.id,
+                    event_type="STATUS_CHANGED",
+                    from_state=TaskStatus.FAILED.value,
+                    to_state=TaskStatus.DEAD_LETTER.value,
+                    metadata_json={"reason": reason, "final_error": error_message},
+                    created_at=now,
+                )
+                self.db.add(event_dlq)
+
+            task.updated_at = now
+            task.lease_token = None
+            task.lease_expires_at = None
+
+            self.db.commit()
+            self.db.refresh(task)
+        except Exception:
+            self.db.rollback()
+            raise
+
+        try:
+            from taskforge.core.cache import get_cache
+
+            get_cache().invalidate(task_id)
+        except Exception:
+            pass
+
+        return task, is_retryable
+
     def acquire_lease(
-        self, task_id: str, worker_id: str, lease_duration_seconds: int = 30
+        self,
+        task_id: str,
+        worker_id: str,
+        lease_duration_seconds: int = 30,
+        lease_token: str | None = None,
     ) -> bool:
         stmt = select(Task).where(Task.id == task_id).with_for_update()
         task = self.db.scalars(stmt).first()
         if not task:
             return False
 
+        # Task State Guard: Enforce eligible states during lease acquisition under row lock.
+        # Terminal tasks (SUCCESS, DEAD_LETTER, CANCELLED) or other non-executable states cannot acquire lease.
+        CLAIMABLE_STATUSES = {
+            TaskStatus.PENDING.value,
+            TaskStatus.QUEUED.value,
+            TaskStatus.RETRY_WAIT.value,
+            TaskStatus.RUNNING.value,
+        }
+        if task.status not in CLAIMABLE_STATUSES:
+            return False
+
         now = get_utc_now()
         if task.lease_expires_at is not None:
             exp = task.lease_expires_at
             if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if exp >= now and task.lease_token != worker_id:
+                exp = exp.replace(tzinfo=UTC)
+            # Active lease exists -> reject all callers, even if same worker identity!
+            if exp >= now:
                 return False
 
+        fresh_token = lease_token or f"lease-{uuid.uuid4().hex}"
         expires_at = now + timedelta(seconds=lease_duration_seconds)
-        task.lease_token = worker_id
+        task.lease_token = fresh_token
         task.lease_expires_at = expires_at
         task.updated_at = now
         self.db.commit()
         return True
 
     def renew_lease(
-        self, task_id: str, worker_id: str, lease_duration_seconds: int = 30
+        self,
+        task_id: str,
+        lease_token: str,
+        lease_duration_seconds: int = 30,
     ) -> bool:
         now = get_utc_now()
         expires_at = now + timedelta(seconds=lease_duration_seconds)
         stmt = (
             select(Task)
             .where(Task.id == task_id)
-            .where(Task.lease_token == worker_id)
+            .where(Task.lease_token == lease_token)
             .with_for_update()
         )
         task = self.db.scalars(stmt).first()
@@ -312,8 +647,13 @@ class TaskRepository:
         self.db.commit()
         return True
 
-    def release_lease(self, task_id: str, worker_id: str) -> bool:
-        stmt = select(Task).where(Task.id == task_id).where(Task.lease_token == worker_id)
+    def release_lease(self, task_id: str, lease_token: str) -> bool:
+        stmt = (
+            select(Task)
+            .where(Task.id == task_id)
+            .where(Task.lease_token == lease_token)
+            .with_for_update()
+        )
         task = self.db.scalars(stmt).first()
         if not task:
             return False
@@ -324,17 +664,26 @@ class TaskRepository:
         self.db.commit()
         return True
 
-    def recover_expired_leases(self) -> List[Task]:
+    def recover_expired_leases(self) -> list[Task]:
         """Find RUNNING tasks whose lease has expired and transition them to RETRY_WAIT or QUEUED."""
         now = get_utc_now()
         stmt = (
             select(Task)
             .where(Task.status == TaskStatus.RUNNING.value)
             .where(Task.lease_expires_at < now)
+            .with_for_update(skip_locked=True)
         )
         expired_tasks = list(self.db.scalars(stmt).all())
         recovered = []
         for task in expired_tasks:
+            # Re-check under row lock
+            if task.lease_expires_at is not None:
+                exp = task.lease_expires_at
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=UTC)
+                if exp >= now:
+                    continue
+
             task.retry_count += 1
             if task.retry_count <= task.max_retries:
                 task.status = TaskStatus.RETRY_WAIT.value

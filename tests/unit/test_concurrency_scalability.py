@@ -1,5 +1,3 @@
-import time
-import pytest
 from taskforge.core.cache import TaskCache
 from taskforge.core.rate_limiter import InMemoryRateLimiter
 from taskforge.queue.broker import MemoryBroker
@@ -64,4 +62,3 @@ def test_task_cache_set_get_and_invalidate():
     cache.invalidate("task-123")
     miss = cache.get("task-123")
     assert miss is None
-

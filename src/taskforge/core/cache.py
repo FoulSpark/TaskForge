@@ -1,7 +1,8 @@
 import json
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any
+
 import redis
 
 from taskforge.core.logging import get_logger
@@ -12,13 +13,13 @@ logger = get_logger(__name__)
 class TaskCache:
     """Read-through and invalidation cache for tasks."""
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None, default_ttl: int = 30):
+    def __init__(self, redis_client: redis.Redis | None = None, default_ttl: int = 30):
         self.redis_client = redis_client
         self.default_ttl = default_ttl
-        self._memory_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
+        self._memory_cache: dict[str, tuple[dict[str, Any], float]] = {}
         self._lock = threading.Lock()
 
-    def get(self, task_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, task_id: str) -> dict[str, Any] | None:
         key = f"taskforge:cache:task:{task_id}"
         if self.redis_client:
             try:
@@ -36,7 +37,7 @@ class TaskCache:
                 del self._memory_cache[key]
         return None
 
-    def set(self, task_id: str, data: Dict[str, Any], ttl: Optional[int] = None) -> None:
+    def set(self, task_id: str, data: dict[str, Any], ttl: int | None = None) -> None:
         effective_ttl = ttl or self.default_ttl
         key = f"taskforge:cache:task:{task_id}"
 
@@ -61,14 +62,13 @@ class TaskCache:
             self._memory_cache.pop(key, None)
 
 
-_global_cache: Optional[TaskCache] = None
+_global_cache: TaskCache | None = None
 _cache_lock = threading.Lock()
 
 
-def get_cache(redis_client: Optional[redis.Redis] = None) -> TaskCache:
+def get_cache(redis_client: redis.Redis | None = None) -> TaskCache:
     global _global_cache
     with _cache_lock:
         if _global_cache is None:
             _global_cache = TaskCache(redis_client=redis_client)
         return _global_cache
-

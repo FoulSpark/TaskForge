@@ -1,0 +1,42 @@
+{
+  "gate": "8.2.2",
+  "description": "Atomic Claims Under Concurrent Consumers",
+  "configuration": {
+    "consumers": 20,
+    "total_tasks": 2000,
+    "queue_name": "taskforge:g82:test:d1f57c9fb9ba4b35871e840dcb26b9d3:tasks"
+  },
+  "results": {
+    "submitted_count": 2000,
+    "unique_claimed_count": 2000,
+    "duplicate_claim_count": 0,
+    "unaccounted_task_count": 0,
+    "completed_count": 2000,
+    "failed_count": 0,
+    "elapsed_seconds": 0.8813,
+    "drain_rate_tasks_per_sec": 2269.37,
+    "final_queue_depth": 0,
+    "consumer_distribution": {
+      "consumer-18": 96,
+      "consumer-07": 101,
+      "consumer-10": 97,
+      "consumer-12": 98,
+      "consumer-16": 89,
+      "consumer-09": 90,
+      "consumer-05": 109,
+      "consumer-04": 101,
+      "consumer-08": 94,
+      "consumer-14": 90,
+      "consumer-19": 106,
+      "consumer-03": 106,
+      "consumer-13": 93,
+      "consumer-00": 102,
+      "consumer-11": 99,
+      "consumer-01": 108,
+      "consumer-06": 96,
+      "consumer-17": 114,
+      "consumer-15": 101,
+      "consumer-02": 110
+    }
+  }
+}

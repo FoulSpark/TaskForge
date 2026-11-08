@@ -1,9 +1,8 @@
 import pytest
+
 from taskforge.core.state_machine import (
-    ALLOWED_TRANSITIONS,
     TERMINAL_STATES,
     InvalidStateTransitionError,
-    TaskPriority,
     TaskStatus,
     can_cancel_task,
     is_terminal_state,
@@ -69,4 +68,3 @@ def test_cancellable_states():
     assert can_cancel_task(TaskStatus.SUCCESS) is False
     assert can_cancel_task(TaskStatus.DEAD_LETTER) is False
     assert can_cancel_task(TaskStatus.CANCELLED) is False
-

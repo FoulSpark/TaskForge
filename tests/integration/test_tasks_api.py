@@ -1,11 +1,11 @@
 import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from taskforge.api.schemas import TaskResponse
 from taskforge.database.session import Base, get_db
 from taskforge.main import app
 
@@ -133,6 +133,91 @@ def test_idempotent_task_submission():
         task_id_2 = res2.json()["id"]
 
         assert task_id_1 == task_id_2
+
+
+def test_concurrent_idempotency_storm_single_logical_task():
+    """Finding 5 & G8.4.3: High-concurrency idempotency storm.
+    100 concurrent producers submit identical idempotency_key simultaneously.
+    Assert:
+    - 0 unhandled exceptions or deadlocks.
+    - Exactly 1 returns is_created=True; 99 return is_created=False.
+    - All 100 return the exact same task ID.
+    - Exactly 1 task row in database.
+    - Exactly 1 outbox event in database.
+    """
+    import concurrent.futures
+
+    from taskforge.api.schemas import TaskCreateRequest
+    from taskforge.database.models import OutboxEvent, Task
+    from taskforge.database.session import SessionLocal
+    from taskforge.tasks.service import TaskService
+
+    key = f"storm-{uuid.uuid4()}"
+    req = TaskCreateRequest(
+        task_name="Idempotency Storm Task",
+        task_type="noop",
+        payload={"data": "storm-val"},
+        idempotency_key=key,
+    )
+
+    def submit_worker():
+        with SessionLocal() as db:
+            service = TaskService(db)
+            task, is_created = service.submit_task(req)
+            return task.id, is_created
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(submit_worker) for _ in range(100)]
+        results = [f.result() for f in futures]
+
+    task_ids = [tid for tid, _ in results]
+    created_flags = [c for _, c in results]
+
+    assert created_flags.count(True) == 1, f"Expected 1 created task, got {created_flags.count(True)}"
+    assert created_flags.count(False) == 99
+
+    unique_task_ids = set(task_ids)
+    assert len(unique_task_ids) == 1
+    primary_task_id = unique_task_ids.pop()
+
+    # Authoritative PostgreSQL consistency audit
+    with SessionLocal() as db:
+        tasks_in_db = db.query(Task).filter(Task.idempotency_key == key).all()
+        assert len(tasks_in_db) == 1
+        assert tasks_in_db[0].id == primary_task_id
+
+        outbox_events = db.query(OutboxEvent).filter(OutboxEvent.aggregate_id == primary_task_id).all()
+        assert len(outbox_events) == 1
+        assert outbox_events[0].event_type == "TASK_SUBMITTED"
+
+
+def test_idempotency_conflicting_payload_returns_409_conflict():
+    """Finding 5: Verify reusing an idempotency key with a conflicting payload
+    returns HTTP 409 Conflict (IDEMPOTENCY_CONFLICT).
+    """
+    with TestClient(app) as client:
+        key = f"conflict-{uuid.uuid4()}"
+        initial_payload = {
+            "task_name": "Original Task",
+            "task_type": "noop",
+            "payload": {"amount": 100},
+            "idempotency_key": key,
+        }
+        res1 = client.post("/api/v1/tasks", json=initial_payload)
+        assert res1.status_code == 201
+
+        # Submit same idempotency key with conflicting payload
+        conflicting_payload = {
+            "task_name": "Original Task",
+            "task_type": "noop",
+            "payload": {"amount": 999},  # Conflicting payload
+            "idempotency_key": key,
+        }
+        res2 = client.post("/api/v1/tasks", json=conflicting_payload)
+        assert res2.status_code == 409
+        err = res2.json()["error"]
+        assert err["code"] == "IDEMPOTENCY_CONFLICT"
+        assert "collision with conflicting" in err["message"].lower()
 
 
 def test_pagination_and_filtering():

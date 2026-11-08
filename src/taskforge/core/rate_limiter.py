@@ -1,7 +1,7 @@
 import os
-import time
 import threading
-from typing import Dict, List, Tuple
+import time
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
@@ -16,10 +16,10 @@ class InMemoryRateLimiter:
     def __init__(self, requests_per_minute: int = 300):
         self.requests_per_minute = requests_per_minute
         self.window_seconds = 60.0
-        self._clients: Dict[str, List[float]] = {}
+        self._clients: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
-    def is_allowed(self, client_key: str) -> Tuple[bool, int, float]:
+    def is_allowed(self, client_key: str) -> tuple[bool, int, float]:
         """
         Check if request is allowed.
         Returns (is_allowed, remaining_requests, retry_after_seconds).

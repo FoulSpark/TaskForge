@@ -1,0 +1,13 @@
+{
+  "gate": "8.3.3",
+  "description": "Heartbeat Loss, Lease Expiration & Worker Failover Verification",
+  "task_id": "6a69a9dd-a768-4591-927a-95eceabb4849",
+  "heartbeat_interval_seconds": 1.0,
+  "lease_expiration_seconds": 2.0,
+  "failure_detection_latency_ms": 11.74,
+  "recovery_latency_ms": 47.15,
+  "recovered_task_count": 1,
+  "stale_worker_mutation_count": 0,
+  "replacement_worker_status": "SUCCESS",
+  "verdict": "PASS"
+}

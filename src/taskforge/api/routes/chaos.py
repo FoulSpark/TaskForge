@@ -1,9 +1,9 @@
 import uuid
-from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from taskforge.api.schemas import TaskCreateRequest, TaskResponse
+from taskforge.api.schemas import TaskCreateRequest
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import get_db
 from taskforge.queue.broker import get_broker
@@ -18,7 +18,13 @@ def submit_batch(
     db: Session = Depends(get_db),
 ):
     service = TaskService(db)
-    workload_types = ["json_transform", "compute_prime", "io_simulation", "db_process", "long_running"]
+    workload_types = [
+        "json_transform",
+        "compute_prime",
+        "io_simulation",
+        "db_process",
+        "long_running",
+    ]
     created_ids = []
 
     for i in range(count):
@@ -36,7 +42,7 @@ def submit_batch(
             payload = {"steps": 3, "step_duration": 0.02}
 
         req = TaskCreateRequest(
-            task_name=f"Batch {w_type.capitalize()} #{i+1}",
+            task_name=f"Batch {w_type.capitalize()} #{i + 1}",
             task_type=w_type,
             payload=payload,
             priority=(i % 4) + 1,
@@ -55,7 +61,9 @@ def submit_batch(
 
 @router.post("/fail-task", summary="Submit a task that fails to test retries and DLQ")
 def fail_task(
-    fail_until_attempt: int = Query(999, description="Attempt number after which task succeeds, or 999 to exhaust all retries"),
+    fail_until_attempt: int = Query(
+        999, description="Attempt number after which task succeeds, or 999 to exhaust all retries"
+    ),
     max_retries: int = Query(3, ge=0, le=5),
     db: Session = Depends(get_db),
 ):
@@ -74,7 +82,9 @@ def fail_task(
         "task_id": task.id,
         "max_retries": max_retries,
         "fail_until_attempt": fail_until_attempt,
-        "expected_outcome": "RETRY_WAIT then DEAD_LETTER" if fail_until_attempt > max_retries else "SUCCESS after retries",
+        "expected_outcome": "RETRY_WAIT then DEAD_LETTER"
+        if fail_until_attempt > max_retries
+        else "SUCCESS after retries",
     }
 
 
@@ -101,7 +111,9 @@ def timeout_task(
     }
 
 
-@router.post("/idempotency-storm", summary="Execute 100 duplicate submissions to prove deduplication")
+@router.post(
+    "/idempotency-storm", summary="Execute 100 duplicate submissions to prove deduplication"
+)
 def idempotency_storm(
     count: int = Query(100, ge=10, le=200),
     db: Session = Depends(get_db),
@@ -113,11 +125,12 @@ def idempotency_storm(
     created_count = 0
     dedup_count = 0
 
-    for i in range(count):
+    storm_payload = {"key": storm_key, "test": "idempotency_storm"}
+    for _ in range(count):
         req = TaskCreateRequest(
-            task_name=f"Storm Submission #{i+1}",
+            task_name="Idempotency Storm Task",
             task_type="json_transform",
-            payload={"key": storm_key, "submission": i + 1},
+            payload=storm_payload,
             idempotency_key=storm_key,
         )
         task, is_created = service.submit_task(req)
@@ -150,4 +163,3 @@ def recover_stale_leases(db: Session = Depends(get_db)):
         "recovered_count": len(recovered),
         "recovered_tasks": [{"id": t.id, "status": t.status} for t in recovered],
     }
-

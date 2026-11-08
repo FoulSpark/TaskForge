@@ -1,0 +1,18 @@
+{
+  "gate": "8.2.5_same_worker_lease",
+  "task_id": "f5dada12-2587-4e23-873b-ba5a9b58d0f9",
+  "shared_worker_id": "taskforge-worker-main",
+  "thread_outcomes": [
+    [
+      1,
+      true
+    ],
+    [
+      2,
+      false
+    ]
+  ],
+  "successful_acquisition_count": 1,
+  "same_worker_reentry_defect_resolved": true,
+  "analysis": "acquire_lease now generates unique lease tokens and rejects unexpired leases unconditionally, preventing concurrent acquisition across threads sharing worker_id."
+}

@@ -1,0 +1,13 @@
+{
+  "gate": "G8.4.3",
+  "test": "test_key_reuse_matrix_100_keys_10_repetitions",
+  "total_requests": 1000,
+  "unique_keys": 100,
+  "unique_tasks_created": 100,
+  "total_deduplicated": 900,
+  "elapsed_seconds": 6.215,
+  "throughput_rps": 160.9,
+  "duplicate_tasks_in_db": 0,
+  "outbox_events_count": 100,
+  "verdict": "PASS"
+}

@@ -1,0 +1,10 @@
+{
+  "gate": "8.2.3",
+  "scenario": "in_flight_visibility_recovery_verified",
+  "task_id": "ac5d8717-0d22-4a97-92c9-0d235c36c1fb",
+  "reclaimed_count": 1,
+  "post_reclaim_queue_depth": 1,
+  "execution_status": "SUCCESS",
+  "final_in_flight_depth": 0,
+  "defect_resolved": "pop_and_vanish"
+}

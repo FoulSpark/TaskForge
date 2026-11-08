@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from taskforge.workers.heartbeat import get_active_workers
 
 router = APIRouter(prefix="/workers", tags=["Workers"])
@@ -11,4 +12,3 @@ def list_workers():
         "active_workers_count": len(workers),
         "workers": workers,
     }
-

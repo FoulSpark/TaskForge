@@ -1,8 +1,7 @@
-from enum import Enum
-from typing import Set
+from enum import Enum, StrEnum
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "PENDING"
     QUEUED = "QUEUED"
     RUNNING = "RUNNING"
@@ -20,20 +19,20 @@ class TaskPriority(int, Enum):
     CRITICAL = 4
 
 
-TERMINAL_STATES: Set[TaskStatus] = {
+TERMINAL_STATES: set[TaskStatus] = {
     TaskStatus.SUCCESS,
     TaskStatus.DEAD_LETTER,
     TaskStatus.CANCELLED,
 }
 
-CANCELLABLE_STATES: Set[TaskStatus] = {
+CANCELLABLE_STATES: set[TaskStatus] = {
     TaskStatus.PENDING,
     TaskStatus.QUEUED,
     TaskStatus.RUNNING,
     TaskStatus.RETRY_WAIT,
 }
 
-ALLOWED_TRANSITIONS: dict[TaskStatus, Set[TaskStatus]] = {
+ALLOWED_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
     TaskStatus.PENDING: {TaskStatus.QUEUED, TaskStatus.CANCELLED},
     TaskStatus.QUEUED: {TaskStatus.RUNNING, TaskStatus.CANCELLED},
     TaskStatus.RUNNING: {
@@ -80,4 +79,3 @@ def is_terminal_state(status: TaskStatus | str) -> bool:
 def can_cancel_task(status: TaskStatus | str) -> bool:
     """Check if task is in a state that can be cancelled."""
     return TaskStatus(status) in CANCELLABLE_STATES
-

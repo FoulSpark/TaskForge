@@ -1,0 +1,47 @@
+{
+  "gate": "8.3.5",
+  "description": "Heterogeneous Workload Deterministic Correctness & Latency Profiles",
+  "handlers_tested": [
+    "noop",
+    "cpu_bound",
+    "io_bound",
+    "failing",
+    "sleep"
+  ],
+  "profiles": {
+    "noop": {
+      "iterations": 10,
+      "p50_ms": 113.72,
+      "mean_ms": 115.54,
+      "max_ms": 159.04,
+      "deterministic_verification": "PASS"
+    },
+    "cpu_bound": {
+      "iterations": 5,
+      "primes_count": 1229,
+      "largest_prime": 9973,
+      "p50_ms": 101.39,
+      "mean_ms": 104.28,
+      "deterministic_verification": "PASS"
+    },
+    "io_bound": {
+      "iterations": 5,
+      "bytes_read": 2048,
+      "p50_ms": 166.31,
+      "mean_ms": 166.43,
+      "deterministic_verification": "PASS"
+    },
+    "failing": {
+      "max_retries": 2,
+      "attempts_recorded": 3,
+      "final_status": "DEAD_LETTER",
+      "dlq_boundary_verified": "PASS"
+    },
+    "sleep": {
+      "duration_sec": 0.2,
+      "elapsed_ms": 330.62,
+      "deterministic_verification": "PASS"
+    }
+  },
+  "overall_status": "PASS"
+}

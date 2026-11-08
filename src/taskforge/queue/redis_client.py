@@ -1,4 +1,3 @@
-
 from redis import Redis
 
 from taskforge.core.config import get_settings

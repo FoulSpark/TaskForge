@@ -1,0 +1,16 @@
+{
+  "gate": "8.3.4",
+  "description": "Multi-Worker Concurrency Under Mid-Run Worker Termination",
+  "total_tasks_enqueued": 1000,
+  "concurrent_dispatchers": 4,
+  "total_execution_slots": 16,
+  "enqueue_duration_sec": 1.416,
+  "drain_duration_sec": 45.324,
+  "throughput_tasks_per_sec": 22.1,
+  "completed_success_count": 1000,
+  "duplicate_results": 0,
+  "permanently_stranded_tasks": 0,
+  "final_ready_queue_depth": 0,
+  "final_in_flight_depth": 0,
+  "verdict": "PASS"
+}
