@@ -17,7 +17,7 @@ from datetime import timedelta
 
 import pytest
 import redis
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from taskforge.core.state_machine import TaskPriority, TaskStatus
 from taskforge.database.models import (
@@ -685,3 +685,157 @@ def test_g832_t09_stale_worker_attempt_creation_fenced_rejection(db_session):
     )
     assert att_b.attempt_number == 2
     assert att_b.worker_id == "worker-b"
+
+
+def test_g832_t10_record_attempt_missing_lease_token_fails_closed(db_session):
+    """T10: record_attempt() strictly requires non-empty lease_token (fail-closed).
+    Calling without lease_token raises PermissionError and creates 0 attempt records.
+    """
+    repo = TaskRepository(db_session)
+    t = repo.create_task("t10-unleased-task", "noop", {}, TaskPriority.MEDIUM.value)
+    task_id = t.id
+
+    # 1. Calling record_attempt without lease_token on unleased task
+    with pytest.raises(PermissionError, match="lease_token must be provided"):
+        repo.record_attempt(task_id=task_id, status="RUNNING")
+
+    # 2. Acquire a valid lease on the task
+    token = "lease-token-t10"
+    assert repo.acquire_lease(task_id, "worker-t10", lease_duration_seconds=30, lease_token=token) is True
+
+    # 3. Calling record_attempt without lease_token on leased task still fails closed
+    with pytest.raises(PermissionError, match="lease_token must be provided"):
+        repo.record_attempt(task_id=task_id, status="RUNNING")
+
+    # 4. Invariant: 0 attempts recorded
+    count = db_session.scalar(select(func.count(TaskAttempt.id)).where(TaskAttempt.task_id == task_id))
+    assert count == 0
+
+
+def test_g832_t11_record_attempt_missing_lease_expiry_fails_closed(db_session):
+    """T11: record_attempt() strictly requires non-null lease_expires_at.
+    If a task has lease_token but null lease_expires_at, record_attempt() fails closed.
+    """
+    repo = TaskRepository(db_session)
+    t = repo.create_task("t11-null-expiry-task", "noop", {}, TaskPriority.MEDIUM.value)
+    task_id = t.id
+
+    # Simulate corrupt/partial lease state where lease_token is present but lease_expires_at is null
+    t.lease_token = "lease-token-corrupt"
+    t.lease_expires_at = None
+    db_session.commit()
+
+    with pytest.raises(PermissionError, match="active task lease has no expiration timestamp"):
+        repo.record_attempt(
+            task_id=task_id,
+            status="RUNNING",
+            lease_token="lease-token-corrupt",
+        )
+
+    # Invariant: 0 attempts recorded
+    count = db_session.scalar(select(func.count(TaskAttempt.id)).where(TaskAttempt.task_id == task_id))
+    assert count == 0
+
+
+def test_g832_t12_record_attempt_arbitrary_attempt_number_bypass_rejected(db_session):
+    """T12: Monotonic attempt allocation enforcement.
+    Callers cannot bypass monotonic allocation by supplying arbitrary or out-of-order attempt numbers.
+    """
+    repo = TaskRepository(db_session)
+    t = repo.create_task("t12-monotonic-attempt-task", "noop", {}, TaskPriority.HIGH.value)
+    task_id = t.id
+
+    token = "lease-token-t12"
+    assert repo.acquire_lease(task_id, "worker-t12", lease_duration_seconds=30, lease_token=token) is True
+    repo.update_status(task_id, TaskStatus.RUNNING, {"worker": "worker-t12"}, lease_token=token)
+
+    # 1. Caller attempts to supply arbitrary attempt_number=99 -> strictly rejected
+    with pytest.raises(ValueError, match="Attempt numbering violation: caller supplied attempt_number 99, but next monotonic attempt number is 1"):
+        repo.record_attempt(
+            task_id=task_id,
+            attempt_number=99,
+            worker_id="worker-t12",
+            status="RUNNING",
+            lease_token=token,
+        )
+
+    # 2. Allocating with attempt_number=None succeeds and assigns 1
+    att1 = repo.record_attempt(
+        task_id=task_id,
+        attempt_number=None,
+        worker_id="worker-t12",
+        status="RUNNING",
+        lease_token=token,
+    )
+    assert att1.attempt_number == 1
+
+    # 3. Caller attempts to supply attempt_number=5 for the second attempt -> strictly rejected
+    with pytest.raises(ValueError, match="Attempt numbering violation: caller supplied attempt_number 5, but next monotonic attempt number is 2"):
+        repo.record_attempt(
+            task_id=task_id,
+            attempt_number=5,
+            worker_id="worker-t12",
+            status="RUNNING",
+            lease_token=token,
+        )
+
+    # 4. Caller supplying exact valid next monotonic attempt number 2 succeeds
+    att2 = repo.record_attempt(
+        task_id=task_id,
+        attempt_number=2,
+        worker_id="worker-t12",
+        status="RUNNING",
+        lease_token=token,
+    )
+    assert att2.attempt_number == 2
+
+    # Invariant: exactly 2 attempts exist with monotonic numbering [1, 2]
+    attempts = list(
+        db_session.scalars(
+            select(TaskAttempt).where(TaskAttempt.task_id == task_id).order_by(TaskAttempt.attempt_number)
+        ).all()
+    )
+    assert [a.attempt_number for a in attempts] == [1, 2]
+
+
+def test_g832_t13_exact_delivery_token_ack_fencing(redis_conn, test_queue):
+    """T13: Broker ACK requires exact delivery_token matching via Redis Lua script.
+    Mismatched, empty, or stale delivery tokens are rejected, preserving in-flight delivery.
+    """
+    broker = RedisBroker(redis_conn, queue_name=test_queue, visibility_timeout_seconds=30)
+    task_id = f"ack-fenced-task-{uuid.uuid4().hex[:8]}"
+
+    broker.enqueue(task_id, priority=2, payload={"command": "validate"})
+    assert broker.get_queue_depth() == 1
+
+    msg = broker.dequeue(timeout_seconds=1.0)
+    assert msg is not None
+    assert msg["task_id"] == task_id
+    valid_token = msg["delivery_token"]
+    assert valid_token.startswith("del-")
+
+    # In-flight set now holds the message envelope
+    assert redis_conn.zcard(f"{test_queue}:in_flight") == 1
+
+    # 1. ACK with empty delivery token -> rejected
+    assert broker.ack(task_id, message={}) is False
+    assert broker.ack(task_id, delivery_token="") is False
+    assert broker.ack(task_id, delivery_token=None) is False
+    assert redis_conn.zcard(f"{test_queue}:in_flight") == 1
+
+    # 2. ACK with mismatched delivery token -> rejected by Lua script
+    bogus_token = f"del-{uuid.uuid4().hex}"
+    assert broker.ack(task_id, delivery_token=bogus_token) is False
+    assert redis_conn.zcard(f"{test_queue}:in_flight") == 1
+
+    # 3. ACK with wrong task_id and valid token -> rejected
+    assert broker.ack("wrong-task-id", delivery_token=valid_token) is False
+    assert redis_conn.zcard(f"{test_queue}:in_flight") == 1
+
+    # 4. ACK with matching task_id and matching delivery_token -> succeeds
+    assert broker.ack(task_id, delivery_token=valid_token) is True
+    assert redis_conn.zcard(f"{test_queue}:in_flight") == 0
+
+    # 5. Duplicate/replay ACK with same token -> returns False (idempotent removal)
+    assert broker.ack(task_id, delivery_token=valid_token) is False
+

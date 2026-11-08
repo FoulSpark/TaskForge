@@ -349,26 +349,32 @@ class TaskRepository:
         duration_ms: float | None = None,
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
+        _privileged_bypass: bool = False,
     ) -> TaskAttempt:
-        """Record task attempt under strict lease fencing and serialized attempt allocation.
+        """Record task attempt under strict fail-closed lease fencing and monotonic attempt allocation.
         Validates lease ownership against active task row lock.
-        Calculates monotonic, non-reusing attempt number atomically if not provided.
+        Calculates monotonic, non-reusing attempt number atomically and rejects arbitrary bypasses.
         """
         stmt = select(Task).where(Task.id == task_id).with_for_update()
         task = self.db.scalars(stmt).first()
         if not task:
             raise ValueError(f"Task with id {task_id} not found")
 
-        # Fencing validation: if task has an active lease or lease_token is provided, enforce exact match
-        if task.lease_token is not None or lease_token is not None:
-            if not lease_token or task.lease_token != lease_token:
+        # Strict fail-closed lease fencing (unless _privileged_bypass=True):
+        if not _privileged_bypass:
+            if not lease_token:
+                raise PermissionError(
+                    "Fencing violation: lease_token must be provided to record execution attempt"
+                )
+            if not task.lease_token or task.lease_token != lease_token:
                 raise PermissionError(
                     f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
                 )
-
-        now = get_utc_now()
-        # Verify lease has not expired at this instant
-        if task.lease_expires_at is not None:
+            if not task.lease_expires_at:
+                raise PermissionError(
+                    "Fencing violation: active task lease has no expiration timestamp"
+                )
+            now = get_utc_now()
             exp = task.lease_expires_at
             if exp.tzinfo is None:
                 exp = exp.replace(tzinfo=UTC)
@@ -376,18 +382,25 @@ class TaskRepository:
                 raise PermissionError(
                     f"Fencing violation: lease expired at {exp.isoformat()} (current time {now.isoformat()})"
                 )
+        else:
+            now = get_utc_now()
 
-        # Allocate monotonic, non-reusing attempt number under task row lock if not specified
-        if attempt_number is None:
-            max_attempt = (
-                self.db.scalars(
-                    select(func.max(TaskAttempt.attempt_number)).where(
-                        TaskAttempt.task_id == task_id
-                    )
-                ).first()
-                or 0
-            )
-            attempt_number = max(task.retry_count + 1, max_attempt + 1)
+        # Allocate monotonic, non-reusing attempt number under task row lock
+        max_attempt = (
+            self.db.scalars(
+                select(func.max(TaskAttempt.attempt_number)).where(
+                    TaskAttempt.task_id == task_id
+                )
+            ).first()
+            or 0
+        )
+        next_permitted = max(task.retry_count + 1, max_attempt + 1)
+        if attempt_number is not None and not _privileged_bypass:
+            if attempt_number != next_permitted:
+                raise ValueError(
+                    f"Attempt numbering violation: caller supplied attempt_number {attempt_number}, but next monotonic attempt number is {next_permitted}"
+                )
+        attempt_number = next_permitted
 
         attempt = TaskAttempt(
             task_id=task_id,
