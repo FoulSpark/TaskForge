@@ -672,7 +672,7 @@ def test_g832_t09_stale_worker_attempt_creation_fenced_rejection(db_session):
     assert repo.acquire_lease(task_id, "worker-b", lease_duration_seconds=30, lease_token=fresh_token) is True
 
     # Worker A attempts record_attempt with stale token -> strictly rejected
-    with pytest.raises(PermissionError, match="Fencing violation: lease token 'lease-worker-a-stale' does not match"):
+    with pytest.raises(PermissionError, match="Fencing violation: supplied lease token does not match active task lease"):
         repo.record_attempt(
             task_id=task_id,
             worker_id="worker-a",
@@ -972,13 +972,22 @@ def test_g832_t15_migration_historical_backfill_and_starvation_prevention(db_ses
             db.refresh(fe)
             assert fe.status == "PENDING"
     finally:
-        # Ensure database is left at head and test records cleaned up
-        cleanup_db = SessionLocal()
-        cleanup_db.execute(text("DELETE FROM outbox_events WHERE id = ANY(:ids) OR id = :immed_id"), {
-            "ids": future_event_ids,
-            "immed_id": immed_id,
-        })
-        cleanup_db.commit()
-        cleanup_db.close()
+        # Best-effort upgrade-to-head recovery in teardown to guarantee head schema even on test failure
+        try:
+            command.upgrade(cfg, "head")
+        except Exception:
+            pass
+
+        # Cleanup test records
+        try:
+            cleanup_db = SessionLocal()
+            cleanup_db.execute(text("DELETE FROM outbox_events WHERE id = ANY(:ids) OR id = :immed_id"), {
+                "ids": future_event_ids,
+                "immed_id": immed_id,
+            })
+            cleanup_db.commit()
+            cleanup_db.close()
+        except Exception:
+            pass
 
 

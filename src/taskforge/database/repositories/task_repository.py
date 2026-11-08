@@ -272,12 +272,11 @@ class TaskRepository:
             if task.lease_token is not None:
                 if not lease_token or task.lease_token != lease_token:
                     raise PermissionError(
-                        f"Fencing violation: task is currently leased under '{task.lease_token}'; "
-                        f"mutation requires matching lease_token, but received '{lease_token}'"
+                        "Fencing violation: supplied lease token does not match active task lease"
                     )
             elif lease_token is not None:
                 raise PermissionError(
-                    f"Fencing violation: caller provided lease token '{lease_token}', but task has no active lease"
+                    "Fencing violation: caller provided lease token, but task has no active lease"
                 )
 
         curr_status = TaskStatus(task.status)
@@ -367,7 +366,7 @@ class TaskRepository:
             )
         if not task.lease_token or task.lease_token != lease_token:
             raise PermissionError(
-                f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
+                "Fencing violation: supplied lease token does not match active task lease"
             )
         if not task.lease_expires_at:
             raise PermissionError(
@@ -377,7 +376,7 @@ class TaskRepository:
         exp = task.lease_expires_at
         if exp.tzinfo is None:
             exp = exp.replace(tzinfo=UTC)
-        if exp < now:
+        if exp <= now:
             raise PermissionError(
                 f"Fencing violation: lease expired at {exp.isoformat()} (current time {now.isoformat()})"
             )
@@ -431,12 +430,11 @@ class TaskRepository:
         if task.lease_token is not None:
             if not lease_token or task.lease_token != lease_token:
                 raise PermissionError(
-                    f"Fencing violation: task is currently leased under '{task.lease_token}'; "
-                    f"cannot record result with lease_token '{lease_token}'"
+                    "Fencing violation: supplied lease token does not match active task lease"
                 )
         elif lease_token is not None:
             raise PermissionError(
-                f"Fencing violation: caller provided lease token '{lease_token}', but task has no active lease"
+                "Fencing violation: caller provided lease token, but task has no active lease"
             )
 
         now = get_utc_now()
@@ -469,7 +467,7 @@ class TaskRepository:
 
         if not lease_token or task.lease_token != lease_token:
             raise PermissionError(
-                f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
+                "Fencing violation: supplied lease token does not match active task lease"
             )
 
         curr_status = TaskStatus(task.status)
@@ -564,7 +562,7 @@ class TaskRepository:
 
         if not lease_token or task.lease_token != lease_token:
             raise PermissionError(
-                f"Fencing violation: lease token '{lease_token}' does not match active task lease '{task.lease_token}'"
+                "Fencing violation: supplied lease token does not match active task lease"
             )
 
         curr_status = TaskStatus(task.status)
