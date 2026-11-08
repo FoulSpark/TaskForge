@@ -5,15 +5,15 @@
   "total_tasks_enqueued": 5000,
   "successful_submissions": 5000,
   "failed_submissions": 0,
-  "total_duration_seconds": 30.602,
-  "throughput_rps": 163.4,
+  "total_duration_seconds": 28.578,
+  "throughput_rps": 175.0,
   "percentiles": {
-    "p50_ms": 110.75,
-    "p90_ms": 139.43,
-    "p95_ms": 155.17,
-    "p99_ms": 188.73,
-    "max_ms": 250.71,
-    "min_ms": 55.9
+    "p50_ms": 103.41,
+    "p90_ms": 128.06,
+    "p95_ms": 140.6,
+    "p99_ms": 178.12,
+    "max_ms": 264.09,
+    "min_ms": 54.05
   },
   "outbox_parity": "100%",
   "verdict": "PASS"

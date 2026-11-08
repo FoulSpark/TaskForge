@@ -5,8 +5,8 @@
   "unique_keys": 100,
   "unique_tasks_created": 100,
   "total_deduplicated": 900,
-  "elapsed_seconds": 6.215,
-  "throughput_rps": 160.9,
+  "elapsed_seconds": 5.438,
+  "throughput_rps": 183.9,
   "duplicate_tasks_in_db": 0,
   "outbox_events_count": 100,
   "verdict": "PASS"
