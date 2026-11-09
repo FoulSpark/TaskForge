@@ -99,6 +99,11 @@ def _read_subprocess_output(proc: subprocess.Popen, timeout: float = 5.0) -> dic
             if proc.poll() is not None:
                 break
 
+    # If the process failed to emit READY before deadline, terminate process to unblock reader
+    if "ready" not in output and proc.poll() is None:
+        proc.kill()
+        proc.wait(timeout=1.0)
+
     t.join(timeout=1.0)
     return output
 
@@ -537,11 +542,13 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
             "in_flight_after_ack": 0,
         },
         "side_effects": {
-            "handler_invocations_total": 2,
-            "handler_body_executions": total_handler_body_executions,
+            "delivery_attempts": 2,
+            "original_worker_body_executions": original_worker_body_executions,
+            "redelivery_body_executions": redelivery_body_executions,
+            "total_handler_body_executions": total_handler_body_executions,
             "side_effect_commits": results_count,
             "duplicate_side_effects": redelivery_body_executions,
-            "observable_evidence": "CS-02 subprocess emitted EXECUTED:1 IPC marker before commit; mock_get_handler.call_count == 0 on redelivery",
+            "observable_evidence": "CS-02 subprocess executed handler and emitted EXECUTED:1 IPC marker before result persistence; mock_get_handler.call_count == 0 on redelivery",
             "note": (
                 "TaskForge provides at-least-once delivery. The terminal-state fence "
                 "in execute_task() prevents the handler body from running on duplicate "
@@ -1049,22 +1056,22 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
                     )
                     db.commit()
                 else:
-                    # Observe actual database row state under current session
+                    # Observe actual database row state under current session: verify unexpired lease and active RUNNING status
                     t_row = (
                         db.execute(
                             text("""
-                        SELECT lease_token, lease_expires_at, status FROM tasks WHERE id = :tid
+                        SELECT lease_token, lease_expires_at, status,
+                               (lease_token IS NOT NULL AND lease_expires_at > clock_timestamp()) AS is_active_unexpired
+                        FROM tasks WHERE id = :tid
                     """),
                             {"tid": c_task_id},
                         )
                         .mappings()
                         .first()
                     )
-                    if (
-                        t_row
-                        and t_row["lease_token"] is not None
-                        and t_row["lease_expires_at"] is not None
-                    ):
+                    observed_tok = t_row["lease_token"] if t_row else None
+                    observed_tok_fp = _fp(observed_tok) if observed_tok else None
+                    if t_row and t_row["is_active_unexpired"]:
                         observed_reason = "active_unexpired_lease_held_by_competitor"
                     else:
                         observed_reason = f"unclaimable_status_{t_row['status'] if t_row else 'none'}"
@@ -1077,6 +1084,7 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
                         "attempt_start_epoch": round(t_start_wall, 4),
                         "duration_ms": round((t_end - t_start) * 1000, 2),
                         "observed_database_rejection_reason": observed_reason,
+                        "observed_competitor_token_fp": observed_tok_fp if not res else None,
                     })
 
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -1084,6 +1092,16 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
 
         assert len(winner_tokens) == 1, f"Expected 1 winner in round {round_idx}, got {winner_tokens}"
         winning_tok = winner_tokens[0]
+
+        # Verify that all 3 rejected workers observed the unexpired lease and exact token fingerprint of the winner
+        for r in acquisition_results:
+            if r["round"] == round_idx and not r["acquired"]:
+                assert r["observed_database_rejection_reason"] == "active_unexpired_lease_held_by_competitor", (
+                    f"Worker {r['worker_idx']} failed to observe active unexpired competitor lease: {r['observed_database_rejection_reason']}"
+                )
+                assert r["observed_competitor_token_fp"] == _fp(winning_tok), (
+                    f"Worker {r['worker_idx']} observed mismatching token {r['observed_competitor_token_fp']} != {_fp(winning_tok)}"
+                )
 
         # Hold active ownership across a small window, then release cleanly after competitors finished
         time.sleep(0.015)
@@ -1235,7 +1253,7 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
                 "successful_acquisitions": successful_acquisitions,
                 "rejected_acquisitions": rejected_acquisitions,
                 "max_concurrent_valid_leases_measured": max_overlapping_valid_leases,
-                "concurrency_measurement_method": "sweep_line_over_database_task_events_clock_timestamp",
+                "concurrency_measurement_method": "sweep_line_over_test_instrumented_database_lifecycle_observations_with_postgresql_clock_timestamp",
                 "database_ownership_intervals": db_ownership_intervals,
                 "contending_workers": acquisition_results,
             },

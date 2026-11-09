@@ -1,7 +1,7 @@
 # TaskForge Phase 8: Final Integrated Reliability Campaign Runbook
 
 **Document Version:** 1.0.0  
-**Target Release Candidate:** Commit `ddc8820` (building on baseline `9ab6f91`)  
+**Target Release Candidate:** Commit `2329047` (building on baseline `9ab6f91`)  
 **Target Freeze Tag:** `v0.8.0-phase8-freeze`  
 **Execution Environment:** Windows 11 AMD64 / Python 3.12.10 (`.venv`) / PostgreSQL 16 / Redis 7
 
