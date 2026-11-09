@@ -263,6 +263,14 @@ def execute_task(
                 error=str(perm_err),
             )
             return ExecutionDisposition.OWNERSHIP_REJECTED
+        except Exception as handler_err:
+            logger.error(
+                "failure_recording_failed",
+                task_id=task_id,
+                worker_id=worker_id,
+                error=str(handler_err),
+            )
+            return ExecutionDisposition.UNEXPECTED_FAILURE
 
         return ExecutionDisposition.UNEXPECTED_FAILURE
 

@@ -5,10 +5,13 @@ at a specific crash point passed via CLI argument.
 """
 
 import argparse
+import hashlib
 import os
+import sys
 import time
 
 from taskforge.core.state_machine import TaskStatus
+from taskforge.database.models import OutboxEvent
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
 from taskforge.queue.broker import RedisBroker
@@ -95,6 +98,84 @@ def run_crash_drill(crash_point: str, queue_name: str, task_id: str, visibility_
             execute_task(task_id, "crash-worker-cp06")
             # Crash without calling broker.ack()!
             os._exit(46)
+
+    elif crash_point == "CS-01":
+        # Scenario 1: Worker killed via external SIGKILL (proc.kill()) during active execution
+        msg = broker.dequeue(timeout_seconds=2.0)
+        if msg:
+            worker_id = f"worker-sigkill-{os.getpid()}"
+            lease = LeaseManager(task_id, worker_id, lease_duration=2)
+            if lease.acquire():
+                with SessionLocal() as db:
+                    repo = TaskRepository(db)
+                    repo.update_status(
+                        task_id,
+                        TaskStatus.RUNNING,
+                        {"worker": worker_id},
+                        lease_token=lease.lease_token,
+                    )
+                    repo.record_attempt(
+                        task_id=task_id,
+                        attempt_number=1,
+                        worker_id=worker_id,
+                        status="RUNNING",
+                        lease_token=lease.lease_token,
+                    )
+                fp = hashlib.sha256(lease.lease_token.encode()).hexdigest()[:12]
+                dt = msg.get("delivery_token", "")
+                sys.stdout.write(f"PID:{os.getpid()}\nDELIVERY:{dt}\nFINGERPRINT:{fp}\nREADY:WAITING_FOR_SIGKILL\n")
+                sys.stdout.flush()
+                # Await external SIGKILL termination
+                while True:
+                    time.sleep(0.1)
+
+    elif crash_point == "CS-02":
+        # Scenario 2: Worker killed via external SIGKILL after persisting TaskResult, before broker.ack()
+        msg = broker.dequeue(timeout_seconds=2.0)
+        if msg:
+            worker_id = f"worker-sigkill-postresult-{os.getpid()}"
+            lease = LeaseManager(task_id, worker_id, lease_duration=2)
+            if lease.acquire():
+                with SessionLocal() as db:
+                    repo = TaskRepository(db)
+                    repo.update_status(
+                        task_id,
+                        TaskStatus.RUNNING,
+                        {"worker": worker_id},
+                        lease_token=lease.lease_token,
+                    )
+                    attempt = repo.record_attempt(
+                        task_id=task_id,
+                        attempt_number=1,
+                        worker_id=worker_id,
+                        status="RUNNING",
+                        lease_token=lease.lease_token,
+                    )
+                    repo.complete_task_success(
+                        task_id=task_id,
+                        lease_token=lease.lease_token,
+                        return_value={"status": "computed_successfully", "pid": os.getpid()},
+                        attempt_id=attempt.id,
+                    )
+                fp = hashlib.sha256(lease.lease_token.encode()).hexdigest()[:12]
+                dt = msg.get("delivery_token", "")
+                sys.stdout.write(f"PID:{os.getpid()}\nDELIVERY:{dt}\nFINGERPRINT:{fp}\nREADY:WAITING_FOR_SIGKILL_POST_RESULT\n")
+                sys.stdout.flush()
+                # Await external SIGKILL before calling broker.ack()
+                while True:
+                    time.sleep(0.1)
+
+    elif crash_point == "CS-03":
+        # Scenario 3: Outbox publisher killed via SIGKILL after Redis enqueue but before Outbox commit
+        with SessionLocal() as db:
+            evt = db.query(OutboxEvent).filter_by(aggregate_id=task_id, status="PENDING").first()
+            if evt:
+                broker.enqueue(task_id, priority=2, payload=evt.payload)
+                sys.stdout.write(f"PID:{os.getpid()}\nEVENT_ID:{evt.id}\nREADY:WAITING_FOR_SIGKILL_POST_ENQUEUE\n")
+                sys.stdout.flush()
+                # Await external termination before committing event.status = 'PUBLISHED'
+                while True:
+                    time.sleep(0.1)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,83 @@
+{
+  "milestone": "G8.3_cross_system_failure_validation",
+  "description": "Cross-System Failure Validation Matrix (S1 - S7)",
+  "generated_at": "2026-11-09T09:37:09.199168+00:00",
+  "scenarios": {
+    "S3": {
+      "scenario_id": "S3",
+      "description": "Outbox publisher SIGKILL post-enqueue with duplicate delivery lease fencing",
+      "task_id": "a782c021-9eb5-4efa-8c75-6c73a4c7441a",
+      "worker_pid": 20704,
+      "termination_signal": "SIGKILL",
+      "duplicate_deliveries_handled": 2,
+      "final_task_result_count": 1,
+      "invariants_passed": true
+    },
+    "S5": {
+      "scenario_id": "S5",
+      "description": "Redis outage preserves durable OutboxEvent until connection restored",
+      "task_id": "87c86089-fc87-4768-b658-c86231ac6424",
+      "outbox_event_id": "e5589f50-315b-44f9-95bb-6b3a53951210",
+      "failed_attempts": 1,
+      "final_status": "PUBLISHED",
+      "invariants_passed": true
+    },
+    "S6": {
+      "scenario_id": "S6",
+      "description": "Supervisor abrupt termination and replacement recovery",
+      "task_count": 5,
+      "drained_success_count": 5,
+      "stranded_tasks": 0,
+      "invariants_passed": true
+    },
+    "S7": {
+      "scenario_id": "S7",
+      "description": "Concurrent recovery actors under FOR UPDATE SKIP LOCKED",
+      "task_count": 10,
+      "concurrent_recovery_workers": 4,
+      "duplicate_recovery_count": 0,
+      "max_concurrent_valid_leases": 0,
+      "invariants_passed": true
+    },
+    "S1": {
+      "scenario_id": "S1",
+      "description": "Worker SIGKILL during execution with lease expiry and recovery",
+      "task_id": "2d54cad6-4302-49e1-9a8f-26e60f675725",
+      "delivery_token": "del-4f4abb0690444275b7d1a781693c0511",
+      "worker_pid": 24184,
+      "termination_signal": "SIGKILL",
+      "lease_token_fingerprint": "def4408683b6",
+      "recovery_latency_ms": 2236.63,
+      "postgres_before": {
+        "status": "RUNNING",
+        "attempts": 1
+      },
+      "postgres_after": {
+        "status": "SUCCESS",
+        "attempts": 2
+      },
+      "invariants_passed": true
+    },
+    "S4": {
+      "scenario_id": "S4",
+      "description": "PostgreSQL outage fails closed and withholds broker ACK",
+      "task_id": "cd708b97-82c6-4172-94aa-f5a8d460c523",
+      "delivery_token": "del-064e4903f12e46c4b4752c02a8da0762",
+      "in_flight_preserved": true,
+      "invariants_passed": true
+    },
+    "S2": {
+      "scenario_id": "S2",
+      "description": "Worker SIGKILL post-result persistence with duplicate redelivery fencing",
+      "task_id": "fad3d922-3d40-4172-ad33-220b5c840aac",
+      "delivery_token": "del-af95e5d352ba41d985e6568bae145b9e",
+      "worker_pid": 11396,
+      "termination_signal": "SIGKILL",
+      "lease_token_fingerprint": "9171ad0978f2",
+      "duplicate_results": 0,
+      "invariants_passed": true
+    }
+  },
+  "all_invariants_satisfied": true,
+  "verdict": "PASS"
+}
