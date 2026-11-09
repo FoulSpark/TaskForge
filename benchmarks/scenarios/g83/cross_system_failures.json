@@ -1,81 +1,275 @@
 {
   "milestone": "G8.3_cross_system_failure_validation",
   "description": "Cross-System Failure Validation Matrix (S1 - S7)",
-  "generated_at": "2026-11-09T09:37:09.199168+00:00",
+  "schema_version": "2",
+  "generated_at": "2026-11-09T10:10:55.488912+00:00",
   "scenarios": {
     "S3": {
       "scenario_id": "S3",
-      "description": "Outbox publisher SIGKILL post-enqueue with duplicate delivery lease fencing",
-      "task_id": "a782c021-9eb5-4efa-8c75-6c73a4c7441a",
-      "worker_pid": 20704,
-      "termination_signal": "SIGKILL",
-      "duplicate_deliveries_handled": 2,
-      "final_task_result_count": 1,
-      "invariants_passed": true
+      "description": "Outbox publisher abrupt termination (TerminateProcess) post-enqueue; duplicate delivery fenced",
+      "generated_at": "2026-11-09T10:10:51.963868+00:00",
+      "platform": {
+        "os": "nt",
+        "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
+      },
+      "invariants_passed": true,
+      "task_id": "dc2aa116-1201-4847-a7a3-138e63331aba",
+      "worker_pid": 21976,
+      "parent_pid": 23156,
+      "relational": {
+        "result_rows": 1
+      },
+      "redis": {
+        "deliveries_after_kill": 1,
+        "deliveries_after_publisher_sweep": 2,
+        "disposition_delivery_1": "completed",
+        "disposition_delivery_2": "terminal_duplicate"
+      },
+      "side_effects": {
+        "handler_invocations_total": 2,
+        "handler_body_executions": 1,
+        "side_effect_commits": 1,
+        "duplicate_side_effects": 0,
+        "note": "TaskForge guarantees at-least-once delivery. The terminal-state fence prevents handler body re-execution on the duplicate delivery (disp2 = TERMINAL_DUPLICATE). External idempotency for effects not gated by the task result row (e.g. emails, webhooks) must be enforced by the handler itself."
+      },
+      "audited_invariants": [
+        "result_rows_eq_1",
+        "first_delivery_completed",
+        "second_delivery_terminal_duplicate",
+        "outbox_event_remains_pending_after_publisher_crash"
+      ]
     },
     "S5": {
       "scenario_id": "S5",
-      "description": "Redis outage preserves durable OutboxEvent until connection restored",
-      "task_id": "87c86089-fc87-4768-b658-c86231ac6424",
-      "outbox_event_id": "e5589f50-315b-44f9-95bb-6b3a53951210",
-      "failed_attempts": 1,
-      "final_status": "PUBLISHED",
-      "invariants_passed": true
+      "description": "Redis outage during outbox publication; durable PostgreSQL intent preserved until recovery",
+      "generated_at": "2026-11-09T10:10:52.088305+00:00",
+      "platform": {
+        "os": "nt",
+        "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
+      },
+      "invariants_passed": true,
+      "task_id": "fd4afdb5-bd30-4d7e-bea0-2f4080d82769",
+      "outbox_event_id": "3fa97250-b875-4466-bceb-c028bf193dc2",
+      "fault_injection": "redis.ConnectionError mock on broker.enqueue",
+      "outbox": {
+        "status_after_failed_publish": "PENDING",
+        "retry_count_after_failed_publish": 1,
+        "status_after_recovery": "PUBLISHED"
+      },
+      "redis": {
+        "queue_depth_after_recovery": 1
+      },
+      "audited_invariants": [
+        "outbox_event_remains_pending_after_redis_outage",
+        "retry_count_incremented",
+        "event_published_after_redis_recovery",
+        "no_lost_outbox_intent"
+      ]
     },
     "S6": {
       "scenario_id": "S6",
-      "description": "Supervisor abrupt termination and replacement recovery",
+      "description": "Supervisor abrupt termination (stop grace=0); replacement supervisor drains all tasks",
+      "generated_at": "2026-11-09T10:10:54.808562+00:00",
+      "platform": {
+        "os": "nt",
+        "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
+      },
+      "invariants_passed": true,
+      "task_ids": [
+        "4cc641a0-99d3-4e36-98c1-8046a24ae4f4",
+        "01a32a24-5d55-4388-9c27-e0b75b13abe1",
+        "3ab9f3a4-872d-4dfe-b238-6b8cedd5e60e",
+        "fbb888fa-f20a-4aee-9d22-961f2ce51780",
+        "484063d0-6ed2-4f89-a0a8-4a2e7b2f6bf9"
+      ],
       "task_count": 5,
-      "drained_success_count": 5,
-      "stranded_tasks": 0,
-      "invariants_passed": true
+      "supervisor_1": {
+        "worker_id": "sup-01",
+        "concurrency": 2,
+        "grace_period_seconds": 0.0
+      },
+      "supervisor_2": {
+        "worker_id": "sup-02-replacement",
+        "concurrency": 4
+      },
+      "recovery": {
+        "visibility_timeout_seconds": 2,
+        "drained_success_count": 5,
+        "stranded_tasks": 0,
+        "task_final_statuses": {
+          "4cc641a0-99d3-4e36-98c1-8046a24ae4f4": "SUCCESS",
+          "01a32a24-5d55-4388-9c27-e0b75b13abe1": "SUCCESS",
+          "3ab9f3a4-872d-4dfe-b238-6b8cedd5e60e": "SUCCESS",
+          "fbb888fa-f20a-4aee-9d22-961f2ce51780": "SUCCESS",
+          "484063d0-6ed2-4f89-a0a8-4a2e7b2f6bf9": "SUCCESS"
+        }
+      },
+      "redis": {
+        "ready_depth_after_drain": 0,
+        "in_flight_after_drain": 0
+      },
+      "audited_invariants": [
+        "all_tasks_reach_success_status",
+        "ready_queue_depth_zero_after_drain",
+        "in_flight_depth_zero_after_drain"
+      ]
     },
     "S7": {
       "scenario_id": "S7",
-      "description": "Concurrent recovery actors under FOR UPDATE SKIP LOCKED",
+      "description": "Concurrent recovery actors under FOR UPDATE SKIP LOCKED; actual lease contention exercised",
+      "generated_at": "2026-11-09T10:10:55.481748+00:00",
+      "platform": {
+        "os": "nt",
+        "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
+      },
+      "invariants_passed": true,
       "task_count": 10,
       "concurrent_recovery_workers": 4,
-      "duplicate_recovery_count": 0,
-      "max_concurrent_valid_leases": 0,
-      "invariants_passed": true
+      "contention_evidence": {
+        "total_successful_acquisitions": 10,
+        "rejected_acquisition_slots": 30,
+        "duplicate_acquisitions": 0,
+        "workers_that_acquired_at_least_one_task": 1,
+        "max_concurrent_valid_leases_per_task": 1,
+        "contention_mechanism": "PostgreSQL SELECT FOR UPDATE SKIP LOCKED prevents concurrent ownership",
+        "per_worker_results": [
+          {
+            "worker_idx": 0,
+            "recovered_count": 0,
+            "reclaimed_count": 10
+          },
+          {
+            "worker_idx": 2,
+            "recovered_count": 0,
+            "reclaimed_count": 0
+          },
+          {
+            "worker_idx": 3,
+            "recovered_count": 0,
+            "reclaimed_count": 0
+          },
+          {
+            "worker_idx": 1,
+            "recovered_count": 10,
+            "reclaimed_count": 0
+          }
+        ]
+      },
+      "relational": {
+        "all_tasks_in_retry_wait": true,
+        "all_lease_tokens_cleared": true
+      },
+      "audited_invariants": [
+        "total_recovered_eq_10",
+        "no_duplicate_recovery_across_concurrent_workers",
+        "max_concurrent_valid_leases_per_task_eq_1",
+        "all_tasks_in_retry_wait_after_recovery",
+        "all_lease_tokens_cleared_after_recovery"
+      ]
     },
     "S1": {
       "scenario_id": "S1",
-      "description": "Worker SIGKILL during execution with lease expiry and recovery",
-      "task_id": "2d54cad6-4302-49e1-9a8f-26e60f675725",
-      "delivery_token": "del-4f4abb0690444275b7d1a781693c0511",
-      "worker_pid": 24184,
-      "termination_signal": "SIGKILL",
-      "lease_token_fingerprint": "def4408683b6",
-      "recovery_latency_ms": 2236.63,
-      "postgres_before": {
-        "status": "RUNNING",
-        "attempts": 1
+      "description": "Worker abrupt termination (TerminateProcess) during execution with lease expiry and recovery",
+      "generated_at": "2026-11-09T10:10:47.156108+00:00",
+      "platform": {
+        "os": "nt",
+        "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
-      "postgres_after": {
-        "status": "SUCCESS",
-        "attempts": 2
+      "invariants_passed": true,
+      "task_id": "1235e623-8d9f-4c34-b29a-955f4dccb264",
+      "worker_pid": 14016,
+      "parent_pid": 23156,
+      "delivery_token_fingerprint": "716e0c3b3d28",
+      "lease_token_fingerprint": "5fca7961425f",
+      "recovery_latency_ms": 2210.68,
+      "relational": {
+        "before": {
+          "status": "RUNNING",
+          "attempt_count": 1,
+          "result_rows": 0
+        },
+        "after": {
+          "status": "SUCCESS",
+          "attempt_count": 2,
+          "result_rows": 1
+        }
       },
-      "invariants_passed": true
+      "redis": {
+        "in_flight_after_kill": 1,
+        "ready_after_reclaim": 1,
+        "in_flight_after_completion": 0
+      },
+      "audited_invariants": [
+        "lease_expired_before_recovery",
+        "postgres_recovery_precedes_redis_reclaim",
+        "replacement_attempt_number_is_monotonically_2",
+        "task_status_is_success_after_replacement"
+      ]
     },
     "S4": {
       "scenario_id": "S4",
-      "description": "PostgreSQL outage fails closed and withholds broker ACK",
-      "task_id": "cd708b97-82c6-4172-94aa-f5a8d460c523",
-      "delivery_token": "del-064e4903f12e46c4b4752c02a8da0762",
-      "in_flight_preserved": true,
-      "invariants_passed": true
+      "description": "PostgreSQL outage fails closed; broker ACK withheld without durable DB disposition",
+      "generated_at": "2026-11-09T10:10:52.049210+00:00",
+      "platform": {
+        "os": "nt",
+        "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
+      },
+      "invariants_passed": true,
+      "task_id": "64045be8-4f10-438d-aa31-c8ec92315a55",
+      "delivery_token_fingerprint": "29c51e102a20",
+      "fault_injection": "OperationalError mock on SessionLocal (simulates TCP connection refused)",
+      "relational": {
+        "status_during_outage": "unmodified (task untouched by faulted worker)",
+        "disposition_during_outage": "unexpected_failure",
+        "disposition_after_recovery": "completed",
+        "final_status": "SUCCESS"
+      },
+      "redis": {
+        "in_flight_during_outage": 1,
+        "in_flight_after_ack": 0
+      },
+      "audited_invariants": [
+        "unexpected_failure_disposition_on_db_outage",
+        "broker_ack_withheld_while_in_flight_depth_eq_1",
+        "task_completes_successfully_after_db_recovery"
+      ]
     },
     "S2": {
       "scenario_id": "S2",
-      "description": "Worker SIGKILL post-result persistence with duplicate redelivery fencing",
-      "task_id": "fad3d922-3d40-4172-ad33-220b5c840aac",
-      "delivery_token": "del-af95e5d352ba41d985e6568bae145b9e",
-      "worker_pid": 11396,
-      "termination_signal": "SIGKILL",
-      "lease_token_fingerprint": "9171ad0978f2",
-      "duplicate_results": 0,
-      "invariants_passed": true
+      "description": "Worker abrupt termination (TerminateProcess) post-result persistence with duplicate redelivery fencing",
+      "generated_at": "2026-11-09T10:10:50.614768+00:00",
+      "platform": {
+        "os": "nt",
+        "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
+      },
+      "invariants_passed": true,
+      "task_id": "2a5a15bd-8cbd-4dac-93ab-4ba17464ad9c",
+      "worker_pid": 7724,
+      "parent_pid": 23156,
+      "delivery_token_fingerprint": "065a34ff4800",
+      "lease_token_fingerprint": "8123e1cbbd2c",
+      "relational": {
+        "result_rows": 1,
+        "duplicate_results": 0
+      },
+      "redis": {
+        "in_flight_after_kill": 1,
+        "ready_after_visibility_timeout": 1,
+        "in_flight_after_ack": 0
+      },
+      "side_effects": {
+        "handler_invocations_total": 2,
+        "handler_body_executions": 1,
+        "side_effect_commits": 1,
+        "duplicate_side_effects": 0,
+        "note": "TaskForge provides at-least-once delivery. The terminal-state fence in execute_task() prevents the handler body from running on duplicate redeliveries after a committed SUCCESS, limiting handler_body_executions to exactly 1 for tasks that reach terminal state before the crash window."
+      },
+      "audited_invariants": [
+        "result_rows_eq_1",
+        "terminal_duplicate_disposition_on_redelivery",
+        "broker_ack_withheld_until_terminal_state_confirmed",
+        "in_flight_depth_zero_after_ack"
+      ]
     }
   },
   "all_invariants_satisfied": true,

@@ -2,7 +2,7 @@
   "gate": "8.2.3",
   "scenario": "worker_crash_before_lease_acquisition",
   "defect_demonstrated": "pop_and_vanish",
-  "task_id": "793aac0b-319b-4aee-8546-dd88cd214b17",
+  "task_id": "95c03132-dee2-4c81-b12b-a9cdf7e506da",
   "broker_queue_depth_after_pop": 0,
   "db_task_status": "QUEUED",
   "db_lease_token": null,

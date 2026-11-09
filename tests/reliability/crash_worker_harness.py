@@ -123,9 +123,15 @@ def run_crash_drill(crash_point: str, queue_name: str, task_id: str, visibility_
                     )
                 fp = hashlib.sha256(lease.lease_token.encode()).hexdigest()[:12]
                 dt = msg.get("delivery_token", "")
-                sys.stdout.write(f"PID:{os.getpid()}\nDELIVERY:{dt}\nFINGERPRINT:{fp}\nREADY:WAITING_FOR_SIGKILL\n")
+                dt_fp = hashlib.sha256(dt.encode()).hexdigest()[:12] if dt else ""
+                sys.stdout.write(
+                    f"PID:{os.getpid()}\n"
+                    f"DELIVERY_FP:{dt_fp}\n"
+                    f"FINGERPRINT:{fp}\n"
+                    f"READY:WAITING_FOR_SIGKILL\n"
+                )
                 sys.stdout.flush()
-                # Await external SIGKILL termination
+                # Await external TerminateProcess (Windows Popen.kill()) termination
                 while True:
                     time.sleep(0.1)
 
@@ -159,9 +165,15 @@ def run_crash_drill(crash_point: str, queue_name: str, task_id: str, visibility_
                     )
                 fp = hashlib.sha256(lease.lease_token.encode()).hexdigest()[:12]
                 dt = msg.get("delivery_token", "")
-                sys.stdout.write(f"PID:{os.getpid()}\nDELIVERY:{dt}\nFINGERPRINT:{fp}\nREADY:WAITING_FOR_SIGKILL_POST_RESULT\n")
+                dt_fp = hashlib.sha256(dt.encode()).hexdigest()[:12] if dt else ""
+                sys.stdout.write(
+                    f"PID:{os.getpid()}\n"
+                    f"DELIVERY_FP:{dt_fp}\n"
+                    f"FINGERPRINT:{fp}\n"
+                    f"READY:WAITING_FOR_SIGKILL_POST_RESULT\n"
+                )
                 sys.stdout.flush()
-                # Await external SIGKILL before calling broker.ack()
+                # Await external TerminateProcess (Windows Popen.kill()) before calling broker.ack()
                 while True:
                     time.sleep(0.1)
 

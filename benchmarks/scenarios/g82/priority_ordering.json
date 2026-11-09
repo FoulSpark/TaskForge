@@ -5,13 +5,13 @@
     "producers": 10,
     "tasks_per_producer": 100,
     "total_tasks": 1000,
-    "queue_name": "taskforge:g82:test:fbed25e798ac47a79cceb963b4cc2b7e:tasks"
+    "queue_name": "taskforge:g82:test:69edc682cd4243408790e21ecdc2f855:tasks"
   },
   "timings": {
-    "enqueue_duration_sec": 0.4369,
-    "dequeue_duration_sec": 1.1657,
-    "enqueue_rate_tasks_per_sec": 2289.05,
-    "dequeue_rate_tasks_per_sec": 857.82
+    "enqueue_duration_sec": 0.1762,
+    "dequeue_duration_sec": 0.3211,
+    "enqueue_rate_tasks_per_sec": 5673.77,
+    "dequeue_rate_tasks_per_sec": 3114.22
   },
   "results": {
     "total_enqueued": 1000,
@@ -22,29 +22,29 @@
     "fifo_tie_breaking_analysis": {
       "4": {
         "total_items": 250,
-        "fifo_matches": 175,
-        "fifo_violations": 75,
-        "fifo_accuracy_pct": 70.0
+        "fifo_matches": 209,
+        "fifo_violations": 41,
+        "fifo_accuracy_pct": 83.6
       },
       "3": {
         "total_items": 250,
-        "fifo_matches": 179,
-        "fifo_violations": 71,
-        "fifo_accuracy_pct": 71.6
+        "fifo_matches": 217,
+        "fifo_violations": 33,
+        "fifo_accuracy_pct": 86.8
       },
       "2": {
         "total_items": 250,
-        "fifo_matches": 164,
-        "fifo_violations": 86,
-        "fifo_accuracy_pct": 65.6
+        "fifo_matches": 225,
+        "fifo_violations": 25,
+        "fifo_accuracy_pct": 90.0
       },
       "1": {
         "total_items": 250,
-        "fifo_matches": 179,
-        "fifo_violations": 71,
-        "fifo_accuracy_pct": 71.6
+        "fifo_matches": 202,
+        "fifo_violations": 48,
+        "fifo_accuracy_pct": 80.8
       }
     },
-    "total_fifo_tie_break_violations": 303
+    "total_fifo_tie_break_violations": 147
   }
 }

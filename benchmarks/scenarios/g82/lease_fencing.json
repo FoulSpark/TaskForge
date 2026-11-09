@@ -1,7 +1,7 @@
 {
   "gate": "8.2.3_fencing",
   "test_name": "test_stale_worker_fenced_write_rejected",
-  "task_id": "c9d3baa6-2d9b-4c0e-ba44-8a5831dfe61d",
+  "task_id": "d91ece72-4f8f-416c-b68f-4efbf6f0be1f",
   "token_a": "lease-token-A-111",
   "token_b": "lease-token-B-222",
   "stale_worker_renew_rejected": true,
