@@ -1,0 +1,36 @@
+{
+  "milestone": "G9.0_baseline_provenance",
+  "provenance": {
+    "git_release_tag": "v0.8.0-phase8-freeze",
+    "git_commit_hash": "da27047f56fe2eec75acdb8502f505542cf61202",
+    "frozen_source_baseline": "9ab6f91",
+    "source_tree_diffstat_against_baseline": 0,
+    "profiling_isolation_worktree": "../TaskForge-G90",
+    "generated_at": "2026-11-10T00:03:00+00:00"
+  },
+  "host": {
+    "os_platform": "Windows-11-10.0.26200-SP0",
+    "os_kernel_version": "10.0.26200",
+    "cpu_architecture": "AMD64",
+    "logical_cpus": 12,
+    "total_physical_ram_gb": 15.65,
+    "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]"
+  },
+  "middleware": {
+    "docker_engine_version": "29.9.2, build a82e528",
+    "postgresql": {
+      "image": "postgres:16-alpine",
+      "server_version": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+      "port": 5432,
+      "max_connections": 100
+    },
+    "redis": {
+      "image": "redis:7-alpine",
+      "server_version": "7.4.12",
+      "mode": "standalone",
+      "port": 6379,
+      "persistence": "appendonly yes"
+    }
+  }
+}
+

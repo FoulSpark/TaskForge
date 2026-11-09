@@ -1,0 +1,53 @@
+{
+  "milestone": "G9.0_workload_definitions",
+  "workloads": [
+    {
+      "workload_id": "W-01",
+      "name": "baseline_noop_profiling",
+      "description": "Zero-overhead deterministic handler for baseline framework latency and throughput profiling.",
+      "task_type": "noop",
+      "payload": {
+        "benchmark": "g90_noop",
+        "sample": true
+      },
+      "concurrency": 10,
+      "warmup_tasks": 50,
+      "measured_tasks": 500,
+      "priority": 2,
+      "max_retries": 3,
+      "timeout_seconds": 10
+    },
+    {
+      "workload_id": "W-02",
+      "name": "cpu_bound_prime_sieve",
+      "description": "Deterministic CPU-bound prime sieve (n=1000) measuring CPU overhead and serialization under computation.",
+      "task_type": "compute_prime",
+      "payload": {
+        "n": 1000
+      },
+      "concurrency": 4,
+      "warmup_tasks": 20,
+      "measured_tasks": 200,
+      "priority": 2,
+      "max_retries": 3,
+      "timeout_seconds": 10
+    },
+    {
+      "workload_id": "W-03",
+      "name": "io_simulation_delay",
+      "description": "Simulated external I/O delay (delay=5ms) measuring concurrent worker queuing and async completion.",
+      "task_type": "io_simulation",
+      "payload": {
+        "delay_seconds": 0.005,
+        "jitter": false
+      },
+      "concurrency": 10,
+      "warmup_tasks": 20,
+      "measured_tasks": 200,
+      "priority": 2,
+      "max_retries": 3,
+      "timeout_seconds": 10
+    }
+  ]
+}
+

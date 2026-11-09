@@ -1,0 +1,185 @@
+{
+  "milestone": "G9.0_baseline_performance",
+  "schema_version": "1",
+  "campaign_id": "cmp-g90-9bc8b3e4",
+  "git_tag": "v0.8.0-phase8-freeze",
+  "git_commit": "da27047f56fe2eec75acdb8502f505542cf61202",
+  "frozen_implementation_baseline": "9ab6f91",
+  "measured_at": "2026-11-09T19:21:30.801062+00:00",
+  "environment": {
+    "milestone": "G9.0_baseline_provenance",
+    "provenance": {
+      "git_release_tag": "v0.8.0-phase8-freeze",
+      "git_commit_hash": "da27047f56fe2eec75acdb8502f505542cf61202",
+      "frozen_source_baseline": "9ab6f91",
+      "source_tree_diffstat_against_baseline": 0,
+      "profiling_isolation_worktree": "../TaskForge-G90",
+      "generated_at": "2026-11-10T00:03:00+00:00"
+    },
+    "host": {
+      "os_platform": "Windows-11-10.0.26200-SP0",
+      "os_kernel_version": "10.0.26200",
+      "cpu_architecture": "AMD64",
+      "logical_cpus": 12,
+      "total_physical_ram_gb": 15.65,
+      "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]"
+    },
+    "middleware": {
+      "docker_engine_version": "29.9.2, build a82e528",
+      "postgresql": {
+        "image": "postgres:16-alpine",
+        "server_version": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+        "port": 5432,
+        "max_connections": 100
+      },
+      "redis": {
+        "image": "redis:7-alpine",
+        "server_version": "7.4.12",
+        "mode": "standalone",
+        "port": 6379,
+        "persistence": "appendonly yes"
+      }
+    }
+  },
+  "workloads": {
+    "W-01": {
+      "workload_id": "W-01",
+      "name": "baseline_noop_profiling",
+      "task_type": "noop",
+      "concurrency": 10,
+      "warmup_tasks": 50,
+      "measured_tasks": 500,
+      "submitted_tasks": 500,
+      "completed_tasks": 500,
+      "failed_tasks": 0,
+      "timed_out_tasks": 0,
+      "measurement_duration_seconds": 46.897,
+      "achieved_throughput_tasks_per_sec": 10.66,
+      "api_submission_latency": {
+        "p50_ms": 178.944,
+        "p95_ms": 368.086,
+        "p99_ms": 447.032,
+        "max_ms": 477.851,
+        "min_ms": 119.0,
+        "mean_ms": 205.383
+      },
+      "broker_dispatch_delay": {
+        "p50_ms": 22543.168,
+        "p95_ms": 35724.495,
+        "p99_ms": 36398.958,
+        "max_ms": 36466.192,
+        "min_ms": 50.697,
+        "mean_ms": 22848.979
+      },
+      "execution_overhead": {
+        "p50_ms": 123.28,
+        "p95_ms": 344.858,
+        "p99_ms": 441.418,
+        "max_ms": 468.0,
+        "min_ms": 98.66,
+        "mean_ms": 145.385
+      },
+      "end_to_end_latency": {
+        "p50_ms": 22823.52,
+        "p95_ms": 36216.736,
+        "p99_ms": 36939.522,
+        "max_ms": 37034.529,
+        "min_ms": 624.769,
+        "mean_ms": 23219.553
+      }
+    },
+    "W-02": {
+      "workload_id": "W-02",
+      "name": "cpu_bound_prime_sieve",
+      "task_type": "compute_prime",
+      "concurrency": 4,
+      "warmup_tasks": 20,
+      "measured_tasks": 200,
+      "submitted_tasks": 200,
+      "completed_tasks": 200,
+      "failed_tasks": 0,
+      "timed_out_tasks": 0,
+      "measurement_duration_seconds": 26.558,
+      "achieved_throughput_tasks_per_sec": 7.53,
+      "api_submission_latency": {
+        "p50_ms": 49.401,
+        "p95_ms": 109.497,
+        "p99_ms": 132.815,
+        "max_ms": 154.066,
+        "min_ms": 21.335,
+        "mean_ms": 59.068
+      },
+      "broker_dispatch_delay": {
+        "p50_ms": 14442.124,
+        "p95_ms": 21338.166,
+        "p99_ms": 23528.381,
+        "max_ms": 23529.567,
+        "min_ms": 0.0,
+        "mean_ms": 13195.116
+      },
+      "execution_overhead": {
+        "p50_ms": 45.085,
+        "p95_ms": 97.627,
+        "p99_ms": 128.774,
+        "max_ms": 133.25,
+        "min_ms": 37.32,
+        "mean_ms": 52.625
+      },
+      "end_to_end_latency": {
+        "p50_ms": 14540.198,
+        "p95_ms": 21425.365,
+        "p99_ms": 23623.361,
+        "max_ms": 23628.911,
+        "min_ms": 164.553,
+        "mean_ms": 13314.34
+      }
+    },
+    "W-03": {
+      "workload_id": "W-03",
+      "name": "io_simulation_delay",
+      "task_type": "io_simulation",
+      "concurrency": 10,
+      "warmup_tasks": 20,
+      "measured_tasks": 200,
+      "submitted_tasks": 200,
+      "completed_tasks": 200,
+      "failed_tasks": 0,
+      "timed_out_tasks": 0,
+      "measurement_duration_seconds": 18.244,
+      "achieved_throughput_tasks_per_sec": 10.96,
+      "api_submission_latency": {
+        "p50_ms": 150.435,
+        "p95_ms": 293.543,
+        "p99_ms": 334.433,
+        "max_ms": 362.772,
+        "min_ms": 80.728,
+        "mean_ms": 179.405
+      },
+      "broker_dispatch_delay": {
+        "p50_ms": 4993.115,
+        "p95_ms": 12321.161,
+        "p99_ms": 14403.143,
+        "max_ms": 14432.803,
+        "min_ms": 8.674,
+        "mean_ms": 6149.146
+      },
+      "execution_overhead": {
+        "p50_ms": 126.78,
+        "p95_ms": 296.879,
+        "p99_ms": 329.885,
+        "max_ms": 366.79,
+        "min_ms": 95.2,
+        "mean_ms": 149.289
+      },
+      "end_to_end_latency": {
+        "p50_ms": 5271.061,
+        "p95_ms": 12591.356,
+        "p99_ms": 14711.533,
+        "max_ms": 14721.53,
+        "min_ms": 513.066,
+        "mean_ms": 6496.21
+      }
+    }
+  },
+  "overall_verdict": "PASS"
+}
