@@ -136,9 +136,28 @@ def test_outbox_transactional_parity():
 
 
 def test_submission_event_cardinality_and_no_duplicates():
-    """Verify that no task in the database has duplicate submission events in outbox or task_events."""
+    """Verify that every task submitted via service has exactly one submission event in outbox (zero duplicates, zero missing)."""
+    import uuid
+
+    from taskforge.api.schemas import TaskCreateRequest
+    from taskforge.tasks.service import TaskService
+
+    submitted_ids = []
+    batch_prefix = f"cardinality-{uuid.uuid4().hex[:6]}"
     with SessionLocal() as db:
-        # Check duplicate TASK_SUBMITTED in outbox_events
+        service = TaskService(db)
+        for i in range(10):
+            req = TaskCreateRequest(
+                task_name=f"{batch_prefix}-{i}",
+                task_type="noop",
+                payload={"i": i},
+                priority=1,
+            )
+            t, _ = service.submit_task(req)
+            submitted_ids.append(t.id)
+
+    with SessionLocal() as db:
+        # 1. Global check: zero duplicate TASK_SUBMITTED across all outbox_events
         dup_outbox = db.execute(
             text(
                 "SELECT aggregate_id, COUNT(*) FROM outbox_events "
@@ -148,7 +167,30 @@ def test_submission_event_cardinality_and_no_duplicates():
         ).fetchall()
         assert len(dup_outbox) == 0, f"Found tasks with duplicate TASK_SUBMITTED events: {dup_outbox}"
 
-        # Check duplicate TASK_CREATED in task_events
+        # 2. Check zero missing TASK_SUBMITTED for all submitted tasks in this cohort
+        missing_cohort = db.execute(
+            text(
+                "SELECT t.id FROM tasks t "
+                "WHERE t.id = ANY(:tids) AND NOT EXISTS ("
+                "    SELECT 1 FROM outbox_events oe "
+                "    WHERE oe.aggregate_id = t.id AND oe.event_type = 'TASK_SUBMITTED'"
+                ")"
+            ),
+            {"tids": submitted_ids},
+        ).fetchall()
+        assert len(missing_cohort) == 0, f"Found submitted tasks with missing TASK_SUBMITTED events: {missing_cohort}"
+
+        # 3. Assert 1:1 parity between submitted cohort and outbox events
+        submitted_outbox_count = db.execute(
+            text(
+                "SELECT COUNT(DISTINCT aggregate_id) FROM outbox_events "
+                "WHERE aggregate_id = ANY(:tids) AND event_type = 'TASK_SUBMITTED'"
+            ),
+            {"tids": submitted_ids},
+        ).scalar()
+        assert submitted_outbox_count == len(submitted_ids) == 10
+
+        # 4. Check duplicate TASK_CREATED in task_events
         dup_created = db.execute(
             text(
                 "SELECT task_id, COUNT(*) FROM task_events "

@@ -15,6 +15,7 @@ Validates fault boundaries crossing PostgreSQL, Redis, Worker OS processes, and 
 import hashlib
 import json
 import os
+import queue
 import subprocess
 import sys
 import threading
@@ -28,8 +29,8 @@ from unittest.mock import patch
 
 import pytest
 import redis
-from pydantic import BaseModel
-from sqlalchemy import func, select
+from pydantic import BaseModel, model_validator
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError
 
 from taskforge.core.state_machine import TaskPriority, TaskStatus, is_terminal_state
@@ -52,6 +53,54 @@ from taskforge.workers.execution_engine import (
 TEST_KEY_PREFIX = "taskforge:cs:test:"
 EVIDENCE_PATH = Path("benchmarks/scenarios/g83/cross_system_failures.json")
 HARNESS_PATH = str(Path(__file__).parent / "crash_worker_harness.py")
+CAMPAIGN_ID = os.environ.get("TASKFORGE_CAMPAIGN_ID", f"cmp-{uuid.uuid4().hex[:8]}")
+
+
+def _read_subprocess_output(proc: subprocess.Popen, timeout: float = 5.0) -> dict[str, str]:
+    """
+    Bounded non-blocking line reader using a background thread and bounded queue timeout.
+    Guarantees execution never hangs indefinitely on child processes.
+    """
+    q: queue.Queue[str] = queue.Queue()
+
+    def _reader():
+        try:
+            if proc.stdout:
+                while True:
+                    line = proc.stdout.readline()
+                    if not line:
+                        break
+                    q.put(line)
+                    if line.startswith("READY:"):
+                        break
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_reader, daemon=True)
+    t.start()
+
+    output = {}
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            line = q.get(timeout=max(0.05, deadline - time.time())).strip()
+            if line.startswith("PID:"):
+                output["pid"] = line.split(":", 1)[1]
+            elif line.startswith("DELIVERY_FP:"):
+                output["delivery_fp"] = line.split(":", 1)[1]
+            elif line.startswith("FINGERPRINT:"):
+                output["fingerprint"] = line.split(":", 1)[1]
+            elif line.startswith("EXECUTED:"):
+                output["executed"] = line.split(":", 1)[1]
+            elif line.startswith("READY:"):
+                output["ready"] = line
+                break
+        except queue.Empty:
+            if proc.poll() is not None:
+                break
+
+    t.join(timeout=1.0)
+    return output
 
 
 @pytest.fixture(scope="module")
@@ -82,13 +131,14 @@ def _fp(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:12] if raw else ""
 
 
-class PlatformSchema(BaseModel):
+class PlatformSchema(BaseModel, extra="forbid"):
     os: str
     termination_mechanism: str
 
 
-class CommonScenarioSchema(BaseModel):
-    scenario_id: str
+class CommonScenarioSchema(BaseModel, extra="forbid"):
+    campaign_id: str
+    scenario_id: Literal["S1", "S2", "S3", "S4", "S5", "S6", "S7"]
     description: str
     generated_at: str
     platform: PlatformSchema
@@ -96,8 +146,9 @@ class CommonScenarioSchema(BaseModel):
     test_nature: Literal[
         "real_process_termination",
         "mocked_dependency_failure",
+        "zero_grace_shutdown_recovery",
         "real_concurrent_actors",
-    ] = "real_process_termination"
+    ]
     audited_invariants: list[str]
 
     # Optional / scenario-specific conditional fields
@@ -122,23 +173,42 @@ class CommonScenarioSchema(BaseModel):
     concurrent_recovery_workers: int | None = None
 
 
-class MatrixEvidenceSchema(BaseModel):
+class MatrixEvidenceSchema(BaseModel, extra="forbid"):
     milestone: str
     description: str
     schema_version: Literal["2"]
+    campaign_id: str
     generated_at: str
-    scenarios: dict[str, CommonScenarioSchema]
+    scenarios: dict[Literal["S1", "S2", "S3", "S4", "S5", "S6", "S7"], CommonScenarioSchema]
     all_invariants_satisfied: bool
     verdict: Literal["PASS", "FAIL"]
 
+    @model_validator(mode="after")
+    def validate_matrix_consistency(self):
+        expected_keys = {"S1", "S2", "S3", "S4", "S5", "S6", "S7"}
+        if set(self.scenarios.keys()) != expected_keys:
+            raise ValueError(f"Matrix must contain exactly {expected_keys}, found {set(self.scenarios.keys())}")
+        for k, v in self.scenarios.items():
+            if k != v.scenario_id:
+                raise ValueError(f"Key {k} does not match scenario_id {v.scenario_id}")
+            if v.campaign_id != self.campaign_id:
+                raise ValueError(f"Scenario {k} campaign {v.campaign_id} != matrix campaign {self.campaign_id}")
+        all_pass = all(s.invariants_passed for s in self.scenarios.values())
+        if self.all_invariants_satisfied != all_pass:
+            raise ValueError("all_invariants_satisfied is inconsistent with scenario invariant outcomes")
+        if (self.verdict == "PASS") != all_pass:
+            raise ValueError("verdict is inconsistent with all_invariants_satisfied")
+        return self
+
 
 def _common_envelope(
-    scenario_id: str,
+    scenario_id: Literal["S1", "S2", "S3", "S4", "S5", "S6", "S7"],
     description: str,
     invariants_passed: bool,
     test_nature: Literal[
         "real_process_termination",
         "mocked_dependency_failure",
+        "zero_grace_shutdown_recovery",
         "real_concurrent_actors",
     ] = "real_process_termination",
 ) -> dict:
@@ -147,6 +217,7 @@ def _common_envelope(
     Scenario-specific evidence is merged on top of this. Machine-validated via Pydantic.
     """
     return {
+        "campaign_id": CAMPAIGN_ID,
         "scenario_id": scenario_id,
         "description": description,
         "generated_at": datetime.now(UTC).isoformat(),
@@ -160,7 +231,7 @@ def _common_envelope(
 
 
 def save_evidence(record: dict):
-    """Persist structured evidence to benchmarks/scenarios/g83/cross_system_failures.json with Pydantic machine validation."""
+    """Persist structured evidence to benchmarks/scenarios/g83/cross_system_failures.json with Pydantic machine validation and atomic write."""
     # Machine-validate individual scenario schema
     CommonScenarioSchema.model_validate(record)
 
@@ -170,25 +241,53 @@ def save_evidence(record: dict):
         try:
             with open(EVIDENCE_PATH, encoding="utf-8") as f:
                 existing = json.load(f)
-        except Exception:
-            existing = {}
+        except Exception as e:
+            raise RuntimeError(f"Corrupt or malformed evidence artifact on disk: {e}") from e
+
+    # Strict campaign isolation: if existing artifact has a different campaign_id, purge and start fresh
+    if existing.get("campaign_id") != CAMPAIGN_ID:
+        existing = {
+            "milestone": "G8.3_cross_system_failure_validation",
+            "description": "Cross-System Failure Validation Matrix (S1 - S7)",
+            "schema_version": "2",
+            "campaign_id": CAMPAIGN_ID,
+            "generated_at": datetime.now(UTC).isoformat(),
+            "scenarios": {},
+            "all_invariants_satisfied": False,
+            "verdict": "FAIL",
+        }
+
     records = existing.get("scenarios", {})
     records[record["scenario_id"]] = record
-    all_pass = all(r.get("invariants_passed", False) for r in records.values())
+
+    # Validate that all records carry the exact same campaign_id
+    for s_id, s_data in records.items():
+        if s_data.get("campaign_id") != CAMPAIGN_ID:
+            raise ValueError(f"Stale scenario detected: {s_id} has campaign {s_data.get('campaign_id')} != {CAMPAIGN_ID}")
+
+    expected_scenarios = {"S1", "S2", "S3", "S4", "S5", "S6", "S7"}
+    has_all_scenarios = set(records.keys()) == expected_scenarios
+    all_pass = has_all_scenarios and all(r.get("invariants_passed", False) for r in records.values())
+
     payload = {
         "milestone": "G8.3_cross_system_failure_validation",
         "description": "Cross-System Failure Validation Matrix (S1 - S7)",
         "schema_version": "2",
+        "campaign_id": CAMPAIGN_ID,
         "generated_at": datetime.now(UTC).isoformat(),
         "scenarios": records,
-        "all_invariants_satisfied": all_pass and len(records) == 7,
-        "verdict": "PASS" if all_pass and len(records) == 7 else "FAIL",
+        "all_invariants_satisfied": all_pass,
+        "verdict": "PASS" if all_pass else "FAIL",
     }
-    if len(records) == 7:
+
+    if has_all_scenarios:
         MatrixEvidenceSchema.model_validate(payload)
 
-    with open(EVIDENCE_PATH, "w", encoding="utf-8") as f:
+    # Atomic write to temporary file and replace
+    tmp_path = EVIDENCE_PATH.with_suffix(".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
+    tmp_path.replace(EVIDENCE_PATH)
 
 
 def test_s1_worker_sigkill_during_execution_lease_recovery(redis_conn, test_queue, db_session):
@@ -223,25 +322,10 @@ def test_s1_worker_sigkill_during_execution_lease_recovery(redis_conn, test_queu
         text=True,
     )
 
-    worker_pid = None
-    delivery_token_fp = None
-    lease_fp = None
-
-    # Wait for child to output execution state
-    start_wait = time.time()
-    while time.time() - start_wait < 5.0:
-        line = proc.stdout.readline()
-        if not line:
-            break
-        line = line.strip()
-        if line.startswith("PID:"):
-            worker_pid = int(line.split(":")[1])
-        elif line.startswith("DELIVERY_FP:"):
-            delivery_token_fp = line.split(":", 1)[1]
-        elif line.startswith("FINGERPRINT:"):
-            lease_fp = line.split(":")[1]
-        elif line == "READY:WAITING_FOR_SIGKILL":
-            break
+    out_map = _read_subprocess_output(proc, timeout=5.0)
+    worker_pid = int(out_map["pid"]) if "pid" in out_map else None
+    delivery_token_fp = out_map.get("delivery_fp")
+    lease_fp = out_map.get("fingerprint")
 
     assert worker_pid is not None, "Worker process failed to report PID"
     assert proc.poll() is None, "Worker exited prematurely"
@@ -256,6 +340,10 @@ def test_s1_worker_sigkill_during_execution_lease_recovery(redis_conn, test_queu
     # 1. Terminate actual worker process via SIGKILL
     proc.kill()
     proc.wait(timeout=3.0)
+    if proc.stdout:
+        proc.stdout.close()
+    if proc.stderr:
+        proc.stderr.close()
     assert proc.poll() is not None, "Process was not killed"
 
     # Wait for the 2.0s lease and visibility timeout to expire
@@ -357,27 +445,15 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
         text=True,
     )
 
-    worker_pid = None
-    delivery_token_fp = None
-    lease_fp = None
+    out_map = _read_subprocess_output(proc, timeout=5.0)
+    worker_pid = int(out_map["pid"]) if "pid" in out_map else None
+    delivery_token_fp = out_map.get("delivery_fp")
+    lease_fp = out_map.get("fingerprint")
+    original_executed_marker = out_map.get("executed")
 
-    start_wait = time.time()
-    while time.time() - start_wait < 5.0:
-        line = proc.stdout.readline()
-        if not line:
-            break
-        line = line.strip()
-        if line.startswith("PID:"):
-            worker_pid = int(line.split(":")[1])
-        elif line.startswith("DELIVERY_FP:"):
-            delivery_token_fp = line.split(":", 1)[1]
-        elif line.startswith("FINGERPRINT:"):
-            lease_fp = line.split(":")[1]
-        elif line == "READY:WAITING_FOR_SIGKILL_POST_RESULT":
-            break
-
-    assert worker_pid is not None
-    assert proc.poll() is None
+    assert worker_pid is not None, "Worker process failed to report PID"
+    assert original_executed_marker == "1", "Worker subprocess failed to emit EXECUTED:1 marker"
+    assert proc.poll() is None, "Worker exited prematurely"
 
     # Verify task result was already committed in DB before crash
     db_session.expire_all()
@@ -388,6 +464,10 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
     # Kill worker before broker.ack()
     proc.kill()
     proc.wait(timeout=3.0)
+    if proc.stdout:
+        proc.stdout.close()
+    if proc.stderr:
+        proc.stderr.close()
 
     # In-flight delivery still exists in Redis
     assert redis_conn.zcard(f"{test_queue}:in_flight") == 1
@@ -415,9 +495,9 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
         redelivery_handler_body_calls = mock_get_handler.call_count
         assert redelivery_handler_body_calls == 0
 
-    handler_invocations_total = 2
-    handler_body_executions = 1 + redelivery_handler_body_calls
-    side_effect_commits_expected = 1
+    original_worker_body_executions = 1  # Verified via subprocess IPC marker EXECUTED:1
+    redelivery_body_executions = redelivery_handler_body_calls  # Verified via parent spy == 0
+    total_handler_body_executions = original_worker_body_executions + redelivery_body_executions
 
     with SessionLocal() as db:
         rep = TaskRepository(db)
@@ -457,11 +537,11 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
             "in_flight_after_ack": 0,
         },
         "side_effects": {
-            "handler_invocations_total": handler_invocations_total,
-            "handler_body_executions": handler_body_executions,
-            "side_effect_commits": side_effect_commits_expected,
-            "duplicate_side_effects": redelivery_handler_body_calls,
-            "observable_evidence": "mock_get_handler.call_count == 0 (verified handler body was fenced from running)",
+            "handler_invocations_total": 2,
+            "handler_body_executions": total_handler_body_executions,
+            "side_effect_commits": results_count,
+            "duplicate_side_effects": redelivery_body_executions,
+            "observable_evidence": "CS-02 subprocess emitted EXECUTED:1 IPC marker before commit; mock_get_handler.call_count == 0 on redelivery",
             "note": (
                 "TaskForge provides at-least-once delivery. The terminal-state fence "
                 "in execute_task() prevents the handler body from running on duplicate "
@@ -541,22 +621,16 @@ def test_s3_outbox_publisher_sigkill_duplicate_delivery_fencing(redis_conn, test
         text=True,
     )
 
-    worker_pid = None
-    start_wait = time.time()
-    while time.time() - start_wait < 5.0:
-        line = proc.stdout.readline()
-        if not line:
-            break
-        line = line.strip()
-        if line.startswith("PID:"):
-            worker_pid = int(line.split(":")[1])
-        elif line == "READY:WAITING_FOR_SIGKILL_POST_ENQUEUE":
-            break
-
+    out_map = _read_subprocess_output(proc, timeout=5.0)
+    worker_pid = int(out_map["pid"]) if "pid" in out_map else None
     assert worker_pid is not None
     # Hard kill outbox publisher before DB commit
     proc.kill()
     proc.wait(timeout=3.0)
+    if proc.stdout:
+        proc.stdout.close()
+    if proc.stderr:
+        proc.stderr.close()
 
     # Redis has delivery 1
     assert broker.get_queue_depth() == 1
@@ -566,7 +640,9 @@ def test_s3_outbox_publisher_sigkill_duplicate_delivery_fencing(redis_conn, test
     evt_still_pending = db_session.get(OutboxEvent, evt_id)
     assert evt_still_pending.status == "PENDING"
 
-    # Make event immediately available and run real publisher sweep (which re-publishes to Redis)
+    # Make task and outbox event immediately available and run real publisher sweep
+    t_obj = repo.get_by_id(task_id)
+    t_obj.scheduled_at = get_utc_now()
     evt_still_pending.available_at = get_utc_now()
     db_session.commit()
 
@@ -718,7 +794,7 @@ def test_s5_redis_outage_outbox_preserves_pending_event(redis_conn, test_queue, 
     - Simulated Redis network partition / outage occurs during publish sweep.
     - Outbox publisher logs error and leaves event as PENDING (zero lost intent).
     - When Redis is restored, subsequent sweep publishes event cleanly.
-    - Invariants: no lost outbox intent, exactly-once event publication.
+    - Invariants: no lost outbox intent, at-least-once outbox publication with duplicate-safe processing.
     """
     repo = TaskRepository(db_session)
     t = repo.create_task("cs05-redis-outage", "noop", {}, TaskPriority.HIGH.value)
@@ -807,10 +883,14 @@ def test_s6_supervisor_restart_recovers_and_drains_tasks(redis_conn, test_queue,
     )
     supervisor_1.start()
 
-    # Wait for at least 1 task to be claimed into in-flight
-    time.sleep(0.15)
+    # Wait and explicitly assert that tasks were claimed into in-flight queue before shutdown
+    in_flight_before_stop = redis_conn.zcard(f"{test_queue}:in_flight")
+    deadline = time.time() + 2.0
+    while in_flight_before_stop == 0 and time.time() < deadline:
+        time.sleep(0.05)
+        in_flight_before_stop = redis_conn.zcard(f"{test_queue}:in_flight")
 
-    # Abruptly terminate Supervisor 1 (simulating supervisor node failure)
+    # Stop Supervisor 1 with zero grace period
     supervisor_1.stop(grace_period_seconds=0.0)
 
     # Wait for visibility timeout to elapse
@@ -846,8 +926,9 @@ def test_s6_supervisor_restart_recovers_and_drains_tasks(redis_conn, test_queue,
 
     envelope = _common_envelope(
         "S6",
-        "Supervisor abrupt termination (stop grace=0); replacement supervisor drains all tasks",
+        "Zero-grace supervisor shutdown and replacement recovery; replacement supervisor drains all tasks",
         True,
+        test_nature="zero_grace_shutdown_recovery",
     )
     envelope.update({
         "task_ids": task_ids,
@@ -920,62 +1001,159 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
     # we snapshot lease_token counts. At most one valid lease token should exist per task at
     # any point because SKIP LOCKED prevents two sessions from holding the same row.
 
-    # Phase 1: Real concurrent lease acquisition contention on a single shared task.
-    # 4 concurrent threads attempt to acquire a lease on the exact same task simultaneously.
-    # A threading.Barrier forces overlapping execution windows so all threads call acquire_lease()
-    # at the exact same millisecond. Exactly 1 thread must succeed; 3 must be explicitly rejected (return False).
+    # Phase 1: Real concurrent lease acquisition contention across 3 successive barrier races.
+    # In each round, 4 concurrent threads attempt to acquire a lease on the exact same task simultaneously.
+    # Database-side audit records (LEASE_ACQUIRED, LEASE_RELEASED) are committed inside PostgreSQL
+    # with clock_timestamp() values, establishing true transaction boundaries.
     contention_task = repo.create_task("cs07-contention-direct", "noop", {}, TaskPriority.HIGH.value)
     c_task_id = contention_task.id
-    barrier = threading.Barrier(4)
-    acquisition_results: list[dict] = []
-    valid_ownership_intervals: list[tuple[float, float, str]] = []
-    results_lock = threading.Lock()
-    intervals_lock = threading.Lock()
 
-    def attempt_concurrent_acquire(worker_idx: int):
-        token = f"token-w{worker_idx}-{uuid.uuid4().hex[:6]}"
-        barrier.wait()  # Force overlapping execution windows
-        t_start = time.perf_counter()
+    acquisition_results: list[dict] = []
+    results_lock = threading.Lock()
+
+    def run_contention_round(round_idx: int):
+        barrier = threading.Barrier(4)
+        winner_tokens: list[str] = []
+        winner_lock = threading.Lock()
+
+        def attempt_acquire(worker_idx: int):
+            worker_id = f"worker-r{round_idx}-w{worker_idx}"
+            token = f"token-r{round_idx}-w{worker_idx}-{uuid.uuid4().hex[:6]}"
+            barrier.wait()  # Synchronize arrival at barrier
+            t_start_wall = time.time()
+            t_start = time.perf_counter()
+
+            with SessionLocal() as db:
+                rep = TaskRepository(db)
+                res = rep.acquire_lease(c_task_id, worker_id, lease_duration_seconds=30, lease_token=token)
+                t_end = time.perf_counter()
+
+                observed_reason = None
+                if res:
+                    with winner_lock:
+                        winner_tokens.append(token)
+                    # Write committed LEASE_ACQUIRED database event with clock_timestamp()
+                    db.execute(
+                        text("""
+                        INSERT INTO task_events (task_id, event_type, from_state, to_state, metadata_json, created_at)
+                        VALUES (:tid, 'LEASE_ACQUIRED', 'QUEUED', 'RUNNING', :metadata_json, clock_timestamp())
+                    """),
+                        {
+                            "tid": c_task_id,
+                            "metadata_json": json.dumps({
+                                "token_fp": _fp(token),
+                                "worker": worker_id,
+                                "round": round_idx,
+                            }),
+                        },
+                    )
+                    db.commit()
+                else:
+                    # Observe actual database row state under current session
+                    t_row = (
+                        db.execute(
+                            text("""
+                        SELECT lease_token, lease_expires_at, status FROM tasks WHERE id = :tid
+                    """),
+                            {"tid": c_task_id},
+                        )
+                        .mappings()
+                        .first()
+                    )
+                    if (
+                        t_row
+                        and t_row["lease_token"] is not None
+                        and t_row["lease_expires_at"] is not None
+                    ):
+                        observed_reason = "active_unexpired_lease_held_by_competitor"
+                    else:
+                        observed_reason = f"unclaimable_status_{t_row['status'] if t_row else 'none'}"
+
+                with results_lock:
+                    acquisition_results.append({
+                        "round": round_idx,
+                        "worker_idx": worker_idx,
+                        "acquired": res,
+                        "attempt_start_epoch": round(t_start_wall, 4),
+                        "duration_ms": round((t_end - t_start) * 1000, 2),
+                        "observed_database_rejection_reason": observed_reason,
+                    })
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(attempt_acquire, range(4)))
+
+        assert len(winner_tokens) == 1, f"Expected 1 winner in round {round_idx}, got {winner_tokens}"
+        winning_tok = winner_tokens[0]
+
+        # Hold active ownership across a small window, then release cleanly after competitors finished
+        time.sleep(0.015)
         with SessionLocal() as db:
             rep = TaskRepository(db)
-            res = rep.acquire_lease(c_task_id, f"worker-{worker_idx}", lease_duration_seconds=30, lease_token=token)
-            t_acq = time.perf_counter()
-            if res:
-                # Hold the valid lease across a measurable active window, then release
-                time.sleep(0.02)
-                rep.release_lease(c_task_id, token)
-                t_rel = time.perf_counter()
-                with intervals_lock:
-                    valid_ownership_intervals.append((t_acq, t_rel, token))
-            else:
-                t_rel = t_acq
+            rep.release_lease(c_task_id, winning_tok)
+            db.execute(
+                text("""
+                INSERT INTO task_events (task_id, event_type, from_state, to_state, metadata_json, created_at)
+                VALUES (:tid, 'LEASE_RELEASED', 'RUNNING', 'QUEUED', :metadata_json, clock_timestamp())
+            """),
+                {
+                    "tid": c_task_id,
+                    "metadata_json": json.dumps({
+                        "token_fp": _fp(winning_tok),
+                        "round": round_idx,
+                    }),
+                },
+            )
+            db.commit()
 
-            with results_lock:
-                acquisition_results.append({
-                    "worker_idx": worker_idx,
-                    "acquired": res,
-                    "attempt_start_epoch": round(time.time(), 4),
-                    "duration_ms": round((t_acq - t_start) * 1000, 2),
-                    "rejection_reason": "active_lease_exists_under_row_lock" if not res else None,
-                })
-
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        list(pool.map(attempt_concurrent_acquire, range(4)))
+    # Execute 3 consecutive rounds of 4-worker races
+    for r in range(3):
+        run_contention_round(r)
+        time.sleep(0.01)
 
     successful_acquisitions = sum(1 for r in acquisition_results if r["acquired"] is True)
     rejected_acquisitions = sum(1 for r in acquisition_results if r["acquired"] is False)
-    assert successful_acquisitions == 1, f"Expected 1 success, got {successful_acquisitions}"
-    assert rejected_acquisitions == 3, f"Expected 3 rejections, got {rejected_acquisitions}"
+    assert successful_acquisitions == 3, f"Expected 3 successes across 3 rounds, got {successful_acquisitions}"
+    assert rejected_acquisitions == 9, f"Expected 9 rejections across 3 rounds, got {rejected_acquisitions}"
 
-    # Calculate maximum overlapping valid ownership intervals across time via sweep-line algorithm:
-    # Each valid lease defines an active ownership interval [t_acq, t_rel].
-    # Competing transactions are serialized by PostgreSQL SELECT FOR UPDATE row locks.
-    # If mutual exclusion were violated, two intervals would overlap, yielding concurrency >= 2.
+    # Query all committed LEASE_ACQUIRED and LEASE_RELEASED database events with PostgreSQL clock_timestamp()
+    with SessionLocal() as db:
+        events = db.execute(text("""
+            SELECT event_type, metadata_json, created_at
+            FROM task_events
+            WHERE task_id = :tid AND event_type IN ('LEASE_ACQUIRED', 'LEASE_RELEASED')
+            ORDER BY created_at ASC
+        """), {"tid": c_task_id}).mappings().all()
+
+    # Reconstruct exact database-side ownership intervals [t_acquired, t_released]
+    acquired_by_token: dict[str, datetime] = {}
+    db_ownership_intervals: list[dict] = []
+    for ev in events:
+        evt_type = ev["event_type"]
+        details = json.loads(ev["metadata_json"]) if isinstance(ev["metadata_json"], str) else ev["metadata_json"]
+        token_fp = details["token_fp"]
+        ts = ev["created_at"]
+        if evt_type == "LEASE_ACQUIRED":
+            acquired_by_token[token_fp] = ts
+        elif evt_type == "LEASE_RELEASED":
+            assert token_fp in acquired_by_token, f"Release without prior acquisition for token {token_fp}"
+            acq_ts = acquired_by_token.pop(token_fp)
+            db_ownership_intervals.append({
+                "token_fp": token_fp,
+                "acquired_at": acq_ts.isoformat(),
+                "released_at": ts.isoformat(),
+                "duration_ms": round((ts - acq_ts).total_seconds() * 1000, 2),
+                "acquired_epoch": acq_ts.timestamp(),
+                "released_epoch": ts.timestamp(),
+            })
+
+    assert len(db_ownership_intervals) == 3, f"Expected 3 complete database ownership intervals, got {len(db_ownership_intervals)}"
+    assert len(acquired_by_token) == 0, f"Orphaned active acquisitions found: {acquired_by_token}"
+
+    # Calculate maximum overlapping valid ownership intervals across PostgreSQL timestamps via sweep-line
     sweep_events: list[tuple[float, int]] = []
-    for o_start, o_end, _ in valid_ownership_intervals:
-        sweep_events.append((o_start, 1))
-        sweep_events.append((o_end, -1))
-    # Sort events by timestamp; releases (-1) before acquisitions (+1) on ties
+    for iv in db_ownership_intervals:
+        sweep_events.append((iv["acquired_epoch"], 1))
+        sweep_events.append((iv["released_epoch"], -1))
     sweep_events.sort(key=lambda x: (x[0], x[1]))
 
     current_concurrent = 0
@@ -986,7 +1164,7 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
             max_overlapping_valid_leases = current_concurrent
 
     assert max_overlapping_valid_leases == 1, (
-        f"Expected max concurrent ownership intervals == 1, observed {max_overlapping_valid_leases}"
+        f"Expected max concurrent database ownership intervals == 1, observed {max_overlapping_valid_leases}"
     )
 
     # Phase 2: Concurrent recovery actors racing for 10 expired tasks under FOR UPDATE SKIP LOCKED
@@ -1033,8 +1211,9 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
 
     duplicate_count = len(target_recovered) - len(set(target_recovered))
     invariants_passed = (
-        successful_acquisitions == 1
-        and rejected_acquisitions == 3
+        successful_acquisitions == 3
+        and rejected_acquisitions == 9
+        and max_overlapping_valid_leases == 1
         and len(set(target_recovered)) == 10
         and duplicate_count == 0
     )
@@ -1051,20 +1230,13 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
         "contention_evidence": {
             "single_task_contention": {
                 "task_id": c_task_id,
+                "rounds_executed": 3,
                 "attempted_acquisitions": len(acquisition_results),
                 "successful_acquisitions": successful_acquisitions,
                 "rejected_acquisitions": rejected_acquisitions,
                 "max_concurrent_valid_leases_measured": max_overlapping_valid_leases,
-                "concurrency_measurement_method": "sweep_line_over_recorded_lease_ownership_intervals",
-                "valid_ownership_intervals": [
-                    {
-                        "start_offset_ms": round(s * 1000, 2),
-                        "end_offset_ms": round(e * 1000, 2),
-                        "duration_ms": round((e - s) * 1000, 2),
-                        "token_fingerprint": _fp(tok),
-                    }
-                    for s, e, tok in valid_ownership_intervals
-                ],
+                "concurrency_measurement_method": "sweep_line_over_database_task_events_clock_timestamp",
+                "database_ownership_intervals": db_ownership_intervals,
                 "contending_workers": acquisition_results,
             },
             "skip_locked_recovery_race": {

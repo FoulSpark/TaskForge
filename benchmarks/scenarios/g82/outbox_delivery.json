@@ -1,7 +1,7 @@
 {
   "gate": "8.2.4",
   "description": "Outbox at-least-once delivery with duplicate delivery safety",
-  "task_id": "9fe64a74-b3d9-46c2-ba2c-f0f221953989",
+  "task_id": "6c19a12b-ff3f-4b10-95ec-8ea48e9216fc",
   "outbox_status_before_recovery": "PENDING",
   "outbox_status_after_recovery": "PUBLISHED",
   "first_delivery_result": "SUCCESS",

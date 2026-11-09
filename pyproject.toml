@@ -37,6 +37,10 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
+filterwarnings = [
+    "error",
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100

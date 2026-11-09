@@ -5,7 +5,7 @@
   "max_overflow": 5,
   "burst_workers": 20,
   "checkedout_after_burst": 0,
-  "post_burst_latency_ms": 1.94,
+  "post_burst_latency_ms": 2.3,
   "leaked_connections": 0,
   "recovery_status": "HEALTHY",
   "verdict": "PASS"

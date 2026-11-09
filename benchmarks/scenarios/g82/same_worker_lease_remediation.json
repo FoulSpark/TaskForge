@@ -1,15 +1,15 @@
 {
   "gate": "8.2.5_same_worker_lease",
-  "task_id": "b37c78e8-99f0-4906-aec7-c8999aea2019",
+  "task_id": "2d3ddb2b-cf45-43d5-8bfb-42dcfbfd4235",
   "shared_worker_id": "taskforge-worker-main",
   "thread_outcomes": [
     [
       2,
-      false
+      true
     ],
     [
       1,
-      true
+      false
     ]
   ],
   "successful_acquisition_count": 1,

@@ -157,6 +157,9 @@ def run_crash_drill(crash_point: str, queue_name: str, task_id: str, visibility_
                         status="RUNNING",
                         lease_token=lease.lease_token,
                     )
+                    # Emit observable IPC marker verifying handler body execution before result commit
+                    sys.stdout.write("EXECUTED:1\n")
+                    sys.stdout.flush()
                     repo.complete_task_success(
                         task_id=task_id,
                         lease_token=lease.lease_token,

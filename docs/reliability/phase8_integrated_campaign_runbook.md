@@ -1,7 +1,7 @@
 # TaskForge Phase 8: Final Integrated Reliability Campaign Runbook
 
 **Document Version:** 1.0.0  
-**Target Release Candidate:** Commit `86adefe` (building on baseline `9ab6f91`)  
+**Target Release Candidate:** Commit `ddc8820` (building on baseline `9ab6f91`)  
 **Target Freeze Tag:** `v0.8.0-phase8-freeze`  
 **Execution Environment:** Windows 11 AMD64 / Python 3.12.10 (`.venv`) / PostgreSQL 16 / Redis 7
 
@@ -72,23 +72,25 @@ flowchart TD
 > Never run destructive migration experiments against primary development or test benchmark state. Use a dedicated disposable database (`taskforge_migration_drill`).
 
 ```powershell
-# Create disposable test database
-.venv\Scripts\python -c @"
+$origDbUrl = $env:DATABASE_URL
+try {
+    # 1. Create disposable test database
+    .venv\Scripts\python -c @"
 import psycopg
 conn = psycopg.connect('postgresql://taskforge:taskforge_dev@localhost:5432/postgres', autocommit=True)
-conn.execute('DROP DATABASE IF EXISTS taskforge_migration_drill')
+conn.execute('DROP DATABASE IF EXISTS taskforge_migration_drill WITH (FORCE)')
 conn.execute('CREATE DATABASE taskforge_migration_drill OWNER taskforge')
 print('Created disposable database taskforge_migration_drill')
 "@
 
-# Set temporary connection string
-$env:DATABASE_URL = "postgresql+psycopg://taskforge:taskforge_dev@localhost:5432/taskforge_migration_drill"
+    # 2. Set temporary connection string
+    $env:DATABASE_URL = "postgresql+psycopg://taskforge:taskforge_dev@localhost:5432/taskforge_migration_drill"
 
-# 1. Run Alembic upgrade to head
-.venv\Scripts\alembic upgrade head
+    # 3. Run Alembic upgrade to head
+    .venv\Scripts\alembic upgrade head
 
-# 2. Verify schema and table creation
-.venv\Scripts\python -c @"
+    # 4. Verify schema and table creation
+    .venv\Scripts\python -c @"
 from sqlalchemy import create_engine, inspect
 import os
 engine = create_engine(os.environ['DATABASE_URL'])
@@ -97,19 +99,24 @@ assert 'tasks' in tables and 'task_attempts' in tables and 'outbox_events' in ta
 print('Migration upgrade head verified. Tables:', sorted(tables))
 "@
 
-# 3. Downgrade by 1 revision and re-upgrade
-.venv\Scripts\alembic downgrade -1
-.venv\Scripts\alembic upgrade head
-Write-Host "Migration round-trip complete."
-
-# Cleanup disposable database
-$env:DATABASE_URL = "postgresql+psycopg://taskforge:taskforge_dev@localhost:5432/taskforge_test"
-.venv\Scripts\python -c @"
+    # 5. Downgrade by 1 revision and re-upgrade
+    .venv\Scripts\alembic downgrade -1
+    .venv\Scripts\alembic upgrade head
+    Write-Host "Migration round-trip complete."
+}
+finally {
+    # Unconditional cleanup of disposable database
+    $env:DATABASE_URL = if ($origDbUrl) { $origDbUrl } else { "postgresql+psycopg://taskforge:taskforge_dev@localhost:5432/taskforge_test" }
+    .venv\Scripts\python -c @"
 import psycopg
-conn = psycopg.connect('postgresql://taskforge:taskforge_dev@localhost:5432/postgres', autocommit=True)
-conn.execute('DROP DATABASE taskforge_migration_drill')
-print('Dropped disposable database taskforge_migration_drill')
+try:
+    conn = psycopg.connect('postgresql://taskforge:taskforge_dev@localhost:5432/postgres', autocommit=True)
+    conn.execute('DROP DATABASE IF EXISTS taskforge_migration_drill WITH (FORCE)')
+    print('Unconditionally dropped disposable database taskforge_migration_drill')
+except Exception as e:
+    print('Cleanup warning:', e)
 "@
+}
 ```
 
 **Pass/Fail Criteria:**
@@ -121,7 +128,7 @@ print('Dropped disposable database taskforge_migration_drill')
 
 ### Stage 2: Full Regression Verification (Dynamic Test Suite Derivation)
 
-Execute all unit, security, integration, and reliability test suites. Test counts are derived dynamically from the pytest collection rather than hardcoded, enforcing zero unhandled warnings and zero failures:
+Execute all unit, security, integration, and reliability test suites. Test counts are derived dynamically from the pytest collection rather than hardcoded, enforcing zero unhandled warnings, zero skips, zero xfails, and zero failures:
 
 ```powershell
 # Execute full test suite with dynamic collection derivation and strict warning handling
@@ -133,18 +140,25 @@ cmd = [
     'tests/unit/', 'tests/security/', 'tests/integration/', 'tests/reliability/',
     '-v', '--tb=short',
     '-W', 'error',
-    '-W', 'ignore:Using ``httpx`` with ``starlette.testclient`` is deprecated:DeprecationWarning'
+    '-W', 'ignore::starlette.exceptions.StarletteDeprecationWarning',
 ]
 
 print('Running full regression matrix...')
 res = subprocess.run(cmd, capture_output=True, text=True)
-print(res.stdout[-1200:])
+print(res.stdout[-1500:])
 
 if res.returncode != 0:
     print('REGRESSION SUITE FAILED!')
     sys.exit(res.returncode)
-else:
-    print('ALL COLLECTED TESTS PASSED CLEANLY WITH ZERO WARNING ERRORS.')
+
+# Parse output to enforce zero skipped and zero xfailed
+for line in res.stdout.splitlines():
+    if 'passed in' in line:
+        assert 'skipped' not in line, f'Skipped tests detected: {line}'
+        assert 'xfailed' not in line, f'Xfailed tests detected: {line}'
+        print(f'Test execution summary: {line.strip()}')
+
+print('ALL COLLECTED TESTS PASSED CLEANLY WITH ZERO WARNING ERRORS AND ZERO SKIPS/XFAILS.')
 "@
 
 # Verify formatting and linter standards
@@ -175,20 +189,25 @@ Execute the 7 real-process failure and simulated dependency boundary drills:
 | **S3** | Post-enqueue outbox `TerminateProcess` | Redelivery observed; `observable_side_effects` count = 1 | Result count = 1; redelivery fenced with `TERMINAL_DUPLICATE` |
 | **S4** | Simulated PostgreSQL `OperationalError` | Redis delivery NOT acknowledged during simulated DB outage | `UNEXPECTED_FAILURE` disposition; in-flight depth = 1 |
 | **S5** | Simulated Redis `ConnectionError` | Outbox event stays `PENDING` (`retry_count = 1`) | Published to Redis upon simulated recovery; queue depth = 1 |
-| **S6** | Supervisor abrupt termination (`grace=0`) | Drain time `< 3.0s`; replacement supervisor drains | All 5 tasks reach `SUCCESS`; ready & in-flight depth = 0 |
-| **S7** | `threading.Barrier(4)` concurrent race | 4 threads race: 1 success, 3 rejections (`active_lease_exists`); `max_overlapping_valid_leases == 1` via sweep-line | 10 tasks recovered by `SKIP LOCKED` with 0 duplicates |
+| **S6** | Supervisor abrupt termination (`grace=0`) | Drain time `< 3.0s`; in-flight verified `>= 1` before kill; replacement supervisor drains | All 5 tasks reach `SUCCESS`; ready & in-flight depth = 0 |
+| **S7** | `threading.Barrier(4)` concurrent race | 3 rounds of 4-thread race: 12 attempted acquisitions, 3 successes, 9 rejections (`active_unexpired_lease_held_by_competitor`); 3 non-overlapping PostgreSQL `clock_timestamp()` ownership intervals (`LEASE_ACQUIRED`/`LEASE_RELEASED`); `max_concurrent_valid_leases_measured == 1` via sweep-line | 10 tasks recovered by `SKIP LOCKED` with 0 duplicates |
 
 **Machine-Validation Check:**
 ```powershell
 .venv\Scripts\python -c @"
 import json
-with open('benchmarks/scenarios/g83/cross_system_failures.json') as f:
-    data = json.load(f)
-assert data['schema_version'] == '2'
-assert data['verdict'] == 'PASS'
-assert data['all_invariants_satisfied'] is True
-assert len(data['scenarios']) == 7
-print('G8.3 Evidence JSON schema version 2 strictly validated.')
+from tests.reliability.test_cross_system_failures import MatrixEvidenceSchema
+
+with open('benchmarks/scenarios/g83/cross_system_failures.json', encoding='utf-8') as f:
+    raw = json.load(f)
+
+# Pydantic model validation with extra='forbid' and campaign consistency
+validated = MatrixEvidenceSchema.model_validate(raw)
+assert validated.schema_version == '2'
+assert validated.verdict == 'PASS'
+assert validated.all_invariants_satisfied is True
+assert len(validated.scenarios) == 7
+print(f'G8.3 Evidence JSON schema version 2 strictly validated via Pydantic (campaign {validated.campaign_id}).')
 "@
 ```
 
@@ -230,7 +249,95 @@ Direct database audit asserting referential integrity across all relational enti
 3. `orphaned_events`: `SELECT COUNT(*) FROM task_events te WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = te.task_id)` == 0.
 4. `orphaned_outbox`: `SELECT COUNT(*) FROM outbox_events oe WHERE NOT EXISTS (SELECT 1 FROM tasks t WHERE t.id = oe.aggregate_id)` == 0.
 5. `duplicate_task_submitted`: `SELECT aggregate_id FROM outbox_events WHERE event_type = 'TASK_SUBMITTED' GROUP BY aggregate_id HAVING COUNT(*) > 1` == 0.
-6. `idempotency_key_uniqueness`: `SELECT idempotency_key FROM tasks WHERE idempotency_key IS NOT NULL GROUP BY idempotency_key HAVING COUNT(*) > 1` == 0.
+6. `missing_task_submitted`: `SELECT t.id FROM tasks t WHERE NOT EXISTS (SELECT 1 FROM outbox_events oe WHERE oe.aggregate_id = t.id AND oe.event_type = 'TASK_SUBMITTED')` == 0.
+7. `submission_parity`: `COUNT(tasks) == COUNT(DISTINCT aggregate_id) WHERE event_type = 'TASK_SUBMITTED'`.
+8. `idempotency_key_uniqueness`: `SELECT idempotency_key FROM tasks WHERE idempotency_key IS NOT NULL GROUP BY idempotency_key HAVING COUNT(*) > 1` == 0.
+
+---
+
+### Stage 6: Artifact Reconciliation, Schema Verification & Pre-Tag Audit
+
+Before applying the Phase 8 release tag, execute the automated pre-freeze verification script:
+
+```powershell
+.venv\Scripts\python -c @"
+import json, os, re, subprocess, sys
+from pathlib import Path
+
+os.environ['TASKFORGE_TESTING'] = '1'
+os.environ['APP_ENV'] = 'test'
+
+# 1. Verify all 4 required evidence files exist and are populated
+required_artifacts = [
+    Path('benchmarks/scenarios/g83/cross_system_failures.json'),
+    Path('benchmarks/scenarios/g84/g84_persistence_audit.json'),
+    Path('benchmarks/scenarios/g84/g84_idempotency_storm_metrics.json'),
+    Path('benchmarks/scenarios/g84/g84_pool_exhaustion_metrics.json'),
+]
+
+for p in required_artifacts:
+    assert p.exists(), f'Missing required artifact: {p}'
+    assert p.stat().st_size > 50, f'Artifact empty or truncated: {p}'
+
+print('[1/5] All 4 required benchmark and reliability artifacts exist and non-empty.')
+
+# 2. Pydantic Schema v2 validation of cross_system_failures.json
+from tests.reliability.test_cross_system_failures import MatrixEvidenceSchema
+
+cs_path = required_artifacts[0]
+with open(cs_path, encoding='utf-8') as f:
+    cs_data = json.load(f)
+
+validated = MatrixEvidenceSchema.model_validate(cs_data)
+assert validated.schema_version == '2', f'Invalid schema version: {validated.schema_version}'
+assert validated.verdict == 'PASS', f'Campaign verdict is not PASS: {validated.verdict}'
+assert validated.all_invariants_satisfied is True, 'Not all invariants satisfied'
+assert len(validated.scenarios) == 7, f'Expected 7 scenarios, got {len(validated.scenarios)}'
+
+campaign_id = validated.campaign_id
+assert campaign_id, 'Campaign ID missing from matrix'
+for s_id, s in validated.scenarios.items():
+    assert s.campaign_id == campaign_id, f'Scenario {s_id} campaign_id mismatch: {s.campaign_id} != {campaign_id}'
+    assert s.invariants_passed is True, f'Scenario {s_id} did not pass invariants'
+
+print(f'[2/5] Cross-system failure matrix schema v2 strictly validated via Pydantic (campaign {campaign_id}).')
+
+# 3. Persistence audit verification
+pa_path = required_artifacts[1]
+with open(pa_path, encoding='utf-8') as f:
+    pa_data = json.load(f)
+
+assert pa_data['referential_integrity'] == '100%', 'Referential integrity not 100%'
+assert pa_data['verdict'] == 'PASS', 'Persistence audit verdict not PASS'
+assert pa_data['orphaned_attempts'] == 0
+assert pa_data['orphaned_results'] == 0
+assert pa_data['orphaned_events'] == 0
+assert pa_data['orphaned_outbox'] == 0
+assert pa_data.get('missing_outbox_count', 0) == 0
+print('[3/5] Referential integrity audit strictly verified (0 orphaned rows, 100% integrity).')
+
+# 4. Raw credential and token fingerprint audit across all artifacts
+token_pattern = re.compile(r'token-[a-zA-Z0-9_-]{10,}')
+for p in required_artifacts:
+    text = p.read_text(encoding='utf-8')
+    assert 'taskforge_dev' not in text, f'Database password leak detected in {p}!'
+    assert not token_pattern.search(text), f'Plaintext raw token pattern detected in {p}!'
+
+print('[4/5] Zero credentials or raw plaintext tokens leaked across artifacts (all SHA-256 fingerprinted).')
+
+# 5. Git working tree hygiene
+status_out = subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip()
+untracked_unstaged = [line for line in status_out.splitlines() if not line.startswith('?? benchmarks/')]
+if untracked_unstaged:
+    print('WARNING: Git working tree contains unstaged modifications:')
+    for line in untracked_unstaged:
+        print(' ', line)
+else:
+    print('[5/5] Git working tree clean.')
+
+print('ALL STAGE 6 PRE-FREEZE CHECKS PASSED CLEANLY.')
+"@
+```
 
 ---
 
@@ -250,12 +357,12 @@ Upon successful completion of Stages 1–5, verify that all structured evidence 
 ## 5. Phase 8 Release Freeze Tagging Criteria
 
 All of the following conditions must be satisfied before creating the release tag:
-- [x] Frozen implementation baseline preserved at `9ab6f91`.
-- [x] Evidence quality and schema v2 committed at `86adefe`.
-- [x] All 161 regression tests pass cleanly on live infrastructure.
-- [x] Alembic migration drill passes round-trip upgrade/downgrade on a disposable database.
-- [x] Git working tree is completely clean (`git status` reports 0 modifications).
-- [x] Zero raw credentials or tokens exist in evidence JSON files.
+- [ ] Frozen implementation baseline preserved at `9ab6f91`.
+- [ ] Evidence quality and schema v2 committed on release candidate.
+- [ ] All regression tests pass cleanly on live infrastructure with zero skips, zero xfails, and zero unhandled warnings.
+- [ ] Alembic migration drill passes round-trip upgrade/downgrade on a disposable database with unconditional cleanup.
+- [ ] Git working tree is completely clean (`git status` reports 0 modifications).
+- [ ] Zero raw credentials or tokens exist in evidence JSON files.
 
 ### Tag Execution Command:
 ```powershell

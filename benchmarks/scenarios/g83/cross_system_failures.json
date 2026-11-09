@@ -2,24 +2,26 @@
   "milestone": "G8.3_cross_system_failure_validation",
   "description": "Cross-System Failure Validation Matrix (S1 - S7)",
   "schema_version": "2",
-  "generated_at": "2026-11-09T10:53:00.131681+00:00",
+  "campaign_id": "cmp-ecad9465",
+  "generated_at": "2026-11-09T11:41:12.034154+00:00",
   "scenarios": {
     "S1": {
+      "campaign_id": "cmp-ecad9465",
       "scenario_id": "S1",
       "description": "Worker abrupt termination (TerminateProcess) during execution with lease expiry and recovery",
-      "generated_at": "2026-11-09T10:52:52.102025+00:00",
+      "generated_at": "2026-11-09T11:41:04.412498+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "e3598ed0-2bf6-4cf8-aae8-cb1197c60a6c",
-      "worker_pid": 27116,
-      "parent_pid": 5612,
-      "delivery_token_fingerprint": "0b6c9f6021ce",
-      "lease_token_fingerprint": "23367bbd6779",
-      "recovery_latency_ms": 2211.18,
+      "task_id": "c39f7cf0-d5b3-4895-be31-a59b7be5cd6f",
+      "worker_pid": 24316,
+      "parent_pid": 10320,
+      "delivery_token_fingerprint": "9ccc61c6ca55",
+      "lease_token_fingerprint": "fe9e05eb4eb6",
+      "recovery_latency_ms": 2210.29,
       "relational": {
         "before": {
           "status": "RUNNING",
@@ -45,20 +47,21 @@
       ]
     },
     "S2": {
+      "campaign_id": "cmp-ecad9465",
       "scenario_id": "S2",
       "description": "Worker abrupt termination (TerminateProcess) post-result persistence with duplicate redelivery fencing",
-      "generated_at": "2026-11-09T10:52:55.479956+00:00",
+      "generated_at": "2026-11-09T11:41:07.639419+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "42a78a89-cda8-4c6d-98f9-012dd8e8905e",
-      "worker_pid": 9156,
-      "parent_pid": 5612,
-      "delivery_token_fingerprint": "a0571739a2f5",
-      "lease_token_fingerprint": "42f2924f509b",
+      "task_id": "ccde97ef-9025-464e-bbe4-9b8b2cb3fdba",
+      "worker_pid": 7976,
+      "parent_pid": 10320,
+      "delivery_token_fingerprint": "71019ebcd858",
+      "lease_token_fingerprint": "537b5a4d442e",
       "relational": {
         "result_rows": 1,
         "duplicate_results": 0
@@ -73,7 +76,7 @@
         "handler_body_executions": 1,
         "side_effect_commits": 1,
         "duplicate_side_effects": 0,
-        "observable_evidence": "mock_get_handler.call_count == 0 (verified handler body was fenced from running)",
+        "observable_evidence": "CS-02 subprocess emitted EXECUTED:1 IPC marker before commit; mock_get_handler.call_count == 0 on redelivery",
         "note": "TaskForge provides at-least-once delivery. The terminal-state fence in execute_task() prevents the handler body from running on duplicate redeliveries after a committed SUCCESS, limiting handler_body_executions to exactly 1 for tasks that reach terminal state before the crash window."
       },
       "audited_invariants": [
@@ -84,18 +87,19 @@
       ]
     },
     "S3": {
+      "campaign_id": "cmp-ecad9465",
       "scenario_id": "S3",
       "description": "Outbox publisher abrupt termination (TerminateProcess) post-enqueue; duplicate delivery fenced",
-      "generated_at": "2026-11-09T10:52:56.685401+00:00",
+      "generated_at": "2026-11-09T11:41:08.742111+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "48c0ca82-a548-4fa4-9877-983696641796",
-      "worker_pid": 19908,
-      "parent_pid": 5612,
+      "task_id": "58be78a6-58ff-45bc-bb43-71b6c25f920a",
+      "worker_pid": 10744,
+      "parent_pid": 10320,
       "relational": {
         "result_rows": 1
       },
@@ -121,17 +125,18 @@
       ]
     },
     "S4": {
+      "campaign_id": "cmp-ecad9465",
       "scenario_id": "S4",
       "description": "Simulated PostgreSQL dependency failure; broker ACK withheld without durable DB disposition",
-      "generated_at": "2026-11-09T10:52:56.774392+00:00",
+      "generated_at": "2026-11-09T11:41:08.820334+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "mocked_dependency_failure",
-      "task_id": "f65a2e54-beca-4472-a026-97a67495be86",
-      "delivery_token_fingerprint": "d71784082291",
+      "task_id": "69a1ad55-2332-46f8-9e67-c70300801ae1",
+      "delivery_token_fingerprint": "ad3b3734d116",
       "fault_injection": "OperationalError mock on SessionLocal (simulates TCP connection refused)",
       "relational": {
         "status_during_outage": "unmodified (task untouched by faulted worker)",
@@ -150,17 +155,18 @@
       ]
     },
     "S5": {
+      "campaign_id": "cmp-ecad9465",
       "scenario_id": "S5",
       "description": "Simulated Redis dependency failure during outbox publication; durable PostgreSQL intent preserved until recovery",
-      "generated_at": "2026-11-09T10:52:56.814538+00:00",
+      "generated_at": "2026-11-09T11:41:08.854334+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "mocked_dependency_failure",
-      "task_id": "02c78868-83c4-4ec3-8bdb-82c5c8e7ee77",
-      "outbox_event_id": "c0655c41-1a96-4963-9521-744196869794",
+      "task_id": "26296777-7e62-4517-8746-714130c424bd",
+      "outbox_event_id": "47283c06-d144-4b44-bdfe-675f97f2f161",
       "fault_injection": "redis.ConnectionError mock on broker.enqueue",
       "outbox": {
         "status_after_failed_publish": "PENDING",
@@ -178,21 +184,22 @@
       ]
     },
     "S6": {
+      "campaign_id": "cmp-ecad9465",
       "scenario_id": "S6",
-      "description": "Supervisor abrupt termination (stop grace=0); replacement supervisor drains all tasks",
-      "generated_at": "2026-11-09T10:52:59.519095+00:00",
+      "description": "Zero-grace supervisor shutdown and replacement recovery; replacement supervisor drains all tasks",
+      "generated_at": "2026-11-09T11:41:11.443226+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
-      "test_nature": "real_process_termination",
+      "test_nature": "zero_grace_shutdown_recovery",
       "task_ids": [
-        "6a176a2c-d2ca-4697-80c5-48aaeb1d77b4",
-        "1372c651-47f0-4221-a5c0-61264bb0522e",
-        "14bb8f98-f197-4e90-87c8-0396cefbe378",
-        "781881e2-f6ac-45ca-90fb-1b264cf43b88",
-        "3ee4b87c-4cdf-4db9-b2c1-3b98d91a35f6"
+        "3a3489b4-32a3-418b-8cef-c4aaa4af1699",
+        "dac4bd87-35d0-45b9-8cc0-2774eb5d8cd3",
+        "5063fec6-3274-417d-92cb-d811a7af0359",
+        "467d0829-dc89-4bd2-816b-9d66f065d1bf",
+        "fec6e86f-612a-4ec6-9ea9-51d7c0bf9be7"
       ],
       "task_count": 5,
       "supervisor_1": {
@@ -209,11 +216,11 @@
         "drained_success_count": 5,
         "stranded_tasks": 0,
         "task_final_statuses": {
-          "6a176a2c-d2ca-4697-80c5-48aaeb1d77b4": "SUCCESS",
-          "1372c651-47f0-4221-a5c0-61264bb0522e": "SUCCESS",
-          "14bb8f98-f197-4e90-87c8-0396cefbe378": "SUCCESS",
-          "781881e2-f6ac-45ca-90fb-1b264cf43b88": "SUCCESS",
-          "3ee4b87c-4cdf-4db9-b2c1-3b98d91a35f6": "SUCCESS"
+          "3a3489b4-32a3-418b-8cef-c4aaa4af1699": "SUCCESS",
+          "dac4bd87-35d0-45b9-8cc0-2774eb5d8cd3": "SUCCESS",
+          "5063fec6-3274-417d-92cb-d811a7af0359": "SUCCESS",
+          "467d0829-dc89-4bd2-816b-9d66f065d1bf": "SUCCESS",
+          "fec6e86f-612a-4ec6-9ea9-51d7c0bf9be7": "SUCCESS"
         }
       },
       "redis": {
@@ -227,9 +234,10 @@
       ]
     },
     "S7": {
+      "campaign_id": "cmp-ecad9465",
       "scenario_id": "S7",
       "description": "Concurrent recovery actors under FOR UPDATE SKIP LOCKED; actual lease contention exercised",
-      "generated_at": "2026-11-09T10:53:00.123372+00:00",
+      "generated_at": "2026-11-09T11:41:12.028038+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
@@ -240,48 +248,135 @@
       "concurrent_recovery_workers": 4,
       "contention_evidence": {
         "single_task_contention": {
-          "task_id": "4f28bb18-dbf0-4635-ac6f-1fe345ee47af",
-          "attempted_acquisitions": 4,
-          "successful_acquisitions": 1,
-          "rejected_acquisitions": 3,
+          "task_id": "8861b016-ae07-47e5-b35c-5c3cd0d288d8",
+          "rounds_executed": 3,
+          "attempted_acquisitions": 12,
+          "successful_acquisitions": 3,
+          "rejected_acquisitions": 9,
           "max_concurrent_valid_leases_measured": 1,
-          "concurrency_measurement_method": "sweep_line_over_recorded_lease_ownership_intervals",
-          "valid_ownership_intervals": [
+          "concurrency_measurement_method": "sweep_line_over_database_task_events_clock_timestamp",
+          "database_ownership_intervals": [
             {
-              "start_offset_ms": 1511976810.28,
-              "end_offset_ms": 1511976837.8,
-              "duration_ms": 27.52,
-              "token_fingerprint": "1331c493bda6"
+              "token_fp": "a1f397ac5f31",
+              "acquired_at": "2026-11-09T11:41:11.797134+00:00",
+              "released_at": "2026-11-09T11:41:11.824472+00:00",
+              "duration_ms": 27.34,
+              "acquired_epoch": 1794224471.797134,
+              "released_epoch": 1794224471.824472
+            },
+            {
+              "token_fp": "d8e86ddad0f9",
+              "acquired_at": "2026-11-09T11:41:11.843115+00:00",
+              "released_at": "2026-11-09T11:41:11.869597+00:00",
+              "duration_ms": 26.48,
+              "acquired_epoch": 1794224471.843115,
+              "released_epoch": 1794224471.869597
+            },
+            {
+              "token_fp": "af57948993ef",
+              "acquired_at": "2026-11-09T11:41:11.890930+00:00",
+              "released_at": "2026-11-09T11:41:11.919221+00:00",
+              "duration_ms": 28.29,
+              "acquired_epoch": 1794224471.89093,
+              "released_epoch": 1794224471.919221
             }
           ],
           "contending_workers": [
             {
-              "worker_idx": 1,
+              "round": 0,
+              "worker_idx": 3,
               "acquired": false,
-              "attempt_start_epoch": 1794221579.9754,
-              "duration_ms": 6.43,
-              "rejection_reason": "active_lease_exists_under_row_lock"
+              "attempt_start_epoch": 1794224471.7892,
+              "duration_ms": 5.95,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
             },
             {
+              "round": 0,
               "worker_idx": 0,
               "acquired": false,
-              "attempt_start_epoch": 1794221579.9764,
-              "duration_ms": 7.47,
-              "rejection_reason": "active_lease_exists_under_row_lock"
+              "attempt_start_epoch": 1794224471.7902,
+              "duration_ms": 7.74,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
             },
             {
+              "round": 0,
+              "worker_idx": 2,
+              "acquired": true,
+              "attempt_start_epoch": 1794224471.7902,
+              "duration_ms": 5.11,
+              "observed_database_rejection_reason": null
+            },
+            {
+              "round": 0,
+              "worker_idx": 1,
+              "acquired": false,
+              "attempt_start_epoch": 1794224471.7902,
+              "duration_ms": 12.65,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
+            },
+            {
+              "round": 1,
+              "worker_idx": 0,
+              "acquired": false,
+              "attempt_start_epoch": 1794224471.8376,
+              "duration_ms": 5.14,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
+            },
+            {
+              "round": 1,
+              "worker_idx": 1,
+              "acquired": true,
+              "attempt_start_epoch": 1794224471.8376,
+              "duration_ms": 4.59,
+              "observed_database_rejection_reason": null
+            },
+            {
+              "round": 1,
               "worker_idx": 2,
               "acquired": false,
-              "attempt_start_epoch": 1794221579.9824,
-              "duration_ms": 12.86,
-              "rejection_reason": "active_lease_exists_under_row_lock"
+              "attempt_start_epoch": 1794224471.8376,
+              "duration_ms": 7.44,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
             },
             {
+              "round": 1,
               "worker_idx": 3,
+              "acquired": false,
+              "attempt_start_epoch": 1794224471.8366,
+              "duration_ms": 9.39,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
+            },
+            {
+              "round": 2,
+              "worker_idx": 3,
+              "acquired": false,
+              "attempt_start_epoch": 1794224471.883,
+              "duration_ms": 6.7,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
+            },
+            {
+              "round": 2,
+              "worker_idx": 2,
+              "acquired": false,
+              "attempt_start_epoch": 1794224471.885,
+              "duration_ms": 6.56,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
+            },
+            {
+              "round": 2,
+              "worker_idx": 1,
+              "acquired": false,
+              "attempt_start_epoch": 1794224471.884,
+              "duration_ms": 8.29,
+              "observed_database_rejection_reason": "active_unexpired_lease_held_by_competitor"
+            },
+            {
+              "round": 2,
+              "worker_idx": 0,
               "acquired": true,
-              "attempt_start_epoch": 1794221580.0022,
-              "duration_ms": 6.66,
-              "rejection_reason": null
+              "attempt_start_epoch": 1794224471.884,
+              "duration_ms": 5.73,
+              "observed_database_rejection_reason": null
             }
           ]
         },
@@ -292,23 +387,23 @@
           "duplicate_recoveries": 0,
           "per_worker_results": [
             {
-              "worker_idx": 2,
+              "worker_idx": 3,
               "recovered_count": 0,
               "reclaimed_count": 10
             },
             {
-              "worker_idx": 1,
-              "recovered_count": 0,
-              "reclaimed_count": 0
-            },
-            {
               "worker_idx": 0,
-              "recovered_count": 0,
+              "recovered_count": 2,
               "reclaimed_count": 0
             },
             {
-              "worker_idx": 3,
-              "recovered_count": 10,
+              "worker_idx": 2,
+              "recovered_count": 6,
+              "reclaimed_count": 0
+            },
+            {
+              "worker_idx": 1,
+              "recovered_count": 2,
               "reclaimed_count": 0
             }
           ]
