@@ -45,15 +45,19 @@ sequenceDiagram
 * **Broker Dispatch Delay ($D_{\text{dispatch}}$):**
   $$D_{\text{dispatch}} = t_2 - t_1$$
   Elapsed time between successful task ingestion and the instant a worker acquires a valid lease and begins execution.
+  > [!NOTE]
+  > Dispatch delay measurements reflect composite queuing dynamics. In multi-task burst scenarios, median dispatch delays (e.g. ~22.5s in W-01) represent suspected composite bottlenecks—including in-flight worker queue backlog, outbox polling intervals, and broker delivery pacing—rather than a single isolated failure or bottleneck mechanism.
 * **Execution Overhead ($O_{\text{exec}}$):**
   $$O_{\text{exec}} = t_3 - t_2$$
   Elapsed time spent executing the registered handler logic.
+  > [!NOTE]
+  > Note on `duration_ms` in `task_attempts`: Database attempt records store `worker_attempt_duration` (the entire worker execution pipeline attempt including lease validation, context setup, handler invocation, result serialization, and transaction commit), rather than raw inner function execution alone. This pipeline framing explains why noop operations in a full transaction lifecycle may record ~123ms of pipeline attempt duration under high concurrency while lighter computational handlers (like small prime sieves) under lower contention record ~45ms.
 * **End-to-End Completion Latency ($L_{\text{e2e}}$):**
   $$L_{\text{e2e}} = t_4 - t_0$$
   Total wall-clock time from task creation to durable terminal state in PostgreSQL.
 * **Throughput ($T$):**
   $$T = \frac{N_{\text{completed}}}{\Delta t_{\text{total}}}$$
-  Where $N_{\text{completed}}$ is the number of successfully completed tasks within the measurement interval $\Delta t_{\text{total}}$.
+  Where $N_{\text{completed}}$ is the number of successfully completed tasks within the measurement interval $\Delta t_{\text{total}}$. The denominator $\Delta t_{\text{total}}$ is explicitly defined as the total wall-clock interval from the moment the first task HTTP submission begins ($t_{0,\text{first}}$) to the moment the last task reaches its durable terminal status in PostgreSQL ($t_{4,\text{last}}$).
 
 ---
 

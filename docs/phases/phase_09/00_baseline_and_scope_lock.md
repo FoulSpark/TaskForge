@@ -63,3 +63,18 @@ All measurements for Gate G9.0 are conducted on the following verified physical 
 5. **Rate Limiting Scope:** 100 req/sec is defined as a preliminary design target for Phase 9.1; actual production quotas will be calibrated based on G9.0 baseline throughput measurements.
 6. **Docker Compose Audit:** Rather than recreating container topology, Phase 9 leverages the existing verified multi-service `docker-compose.yml` (`api`, `worker`, `postgres`, `redis`, `prometheus`, `grafana`).
 
+---
+
+## 5. Baseline Performance Summary & Interpretation Guardrails
+
+The G9.0 baseline profiling campaign was executed across 900 tasks over three canonical workloads on `v0.8.0-phase8-freeze`:
+* **W-01 (Baseline Noop Profiling, 500 tasks, c=10):** Measures raw framework, DB transaction, and broker dispatch overhead.
+* **W-02 (CPU-Bound Prime Sieve, 200 tasks, c=4):** Measures CPU saturation and task scheduling under compute load.
+* **W-03 (I/O Wait Simulation, 200 tasks, c=10):** Measures worker concurrency under external I/O delays.
+
+### Interpretation Guardrails:
+1. **Dispatch Delay Causality:** In W-01, the median broker dispatch delay of ~22.5s reflects composite queuing dynamics (burst ingestion filling the outbox and Redis queue, combined with worker polling intervals) under burst concurrency. It is recorded as an empirical measurement of baseline queue drain behavior, not as a single proven defect or isolated root cause.
+2. **Worker Attempt Duration:** The `duration_ms` recorded in `task_attempts` measures the entire pipeline attempt lifecycle (`worker_attempt_duration` including lease verification, argument unpacking, execution, result persistence, and state transitions), rather than handler execution alone.
+3. **Throughput Denominator:** All throughput figures ($T = N_{\text{completed}} / \Delta t_{\text{total}}$) use the full end-to-end wall-clock time from the first task's initial HTTP submission to the final task's durable completion in PostgreSQL.
+
+

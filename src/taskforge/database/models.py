@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -38,6 +39,9 @@ class Task(Base):
     )
     idempotency_key: Mapped[str | None] = mapped_column(
         String(128), nullable=True, unique=True, index=True
+    )
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="default", index=True
     )
     timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
@@ -143,6 +147,10 @@ class TaskEvent(Base):
     from_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
     to_state: Mapped[str] = mapped_column(String(32), nullable=False)
     metadata_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="default", index=True
+    )
+    actor_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
     )
@@ -174,4 +182,21 @@ class OutboxEvent(Base):
     __table_args__ = (
         Index("ix_outbox_status_available", "status", "available_at"),
         Index("ix_outbox_status_created", "status", "created_at"),
+    )
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    key_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    hashed_secret: Mapped[str] = mapped_column(String(64), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=get_utc_now, nullable=False
     )

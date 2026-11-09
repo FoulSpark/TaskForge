@@ -107,29 +107,29 @@ class TaskRepository:
 
         return False
 
-    def get_by_id(self, task_id: str) -> Task | None:
-        stmt = (
-            select(Task)
-            .where(Task.id == task_id)
-            .options(
-                selectinload(Task.attempts),
-                selectinload(Task.result),
-                selectinload(Task.events),
-            )
+    def get_by_id(self, task_id: str, tenant_id: str | None = None) -> Task | None:
+        stmt = select(Task).where(Task.id == task_id)
+        if tenant_id is not None:
+            stmt = stmt.where(Task.tenant_id == tenant_id)
+        stmt = stmt.options(
+            selectinload(Task.attempts),
+            selectinload(Task.result),
+            selectinload(Task.events),
         )
         return self.db.scalars(stmt).first()
 
-    def get_by_idempotency_key(self, idempotency_key: str) -> Task | None:
+    def get_by_idempotency_key(
+        self, idempotency_key: str, tenant_id: str | None = None
+    ) -> Task | None:
         if not idempotency_key:
             return None
-        stmt = (
-            select(Task)
-            .where(Task.idempotency_key == idempotency_key)
-            .options(
-                selectinload(Task.attempts),
-                selectinload(Task.result),
-                selectinload(Task.events),
-            )
+        stmt = select(Task).where(Task.idempotency_key == idempotency_key)
+        if tenant_id is not None:
+            stmt = stmt.where(Task.tenant_id == tenant_id)
+        stmt = stmt.options(
+            selectinload(Task.attempts),
+            selectinload(Task.result),
+            selectinload(Task.events),
         )
         return self.db.scalars(stmt).first()
 
@@ -143,10 +143,12 @@ class TaskRepository:
         timeout_seconds: int = 60,
         max_retries: int = 3,
         scheduled_at: datetime | None = None,
+        tenant_id: str = "default",
+        actor_id: str | None = None,
     ) -> CreateTaskResult:
-        # Check idempotency first (optimistic fast path)
+        # Check idempotency first (optimistic fast path within same tenant)
         if idempotency_key:
-            existing = self.get_by_idempotency_key(idempotency_key)
+            existing = self.get_by_idempotency_key(idempotency_key, tenant_id=tenant_id)
             if existing:
                 return CreateTaskResult(existing, False)
 
@@ -160,6 +162,7 @@ class TaskRepository:
             status=TaskStatus.QUEUED.value,
             priority=priority,
             idempotency_key=idempotency_key,
+            tenant_id=tenant_id,
             timeout_seconds=timeout_seconds,
             max_retries=max_retries,
             retry_count=0,
@@ -178,6 +181,8 @@ class TaskRepository:
                 from_state=None,
                 to_state=TaskStatus.QUEUED.value,
                 metadata_json={"task_name": task_name, "priority": priority},
+                tenant_id=tenant_id,
+                actor_id=actor_id,
                 created_at=now,
             )
             self.db.add(event)
@@ -225,10 +230,14 @@ class TaskRepository:
         priority: int | None = None,
         limit: int = 20,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> tuple[list[Task], int]:
         stmt = select(Task)
         count_stmt = select(func.count(Task.id))
 
+        if tenant_id is not None:
+            stmt = stmt.where(Task.tenant_id == tenant_id)
+            count_stmt = count_stmt.where(Task.tenant_id == tenant_id)
         if status:
             stmt = stmt.where(Task.status == status)
             count_stmt = count_stmt.where(Task.status == status)
@@ -384,9 +393,7 @@ class TaskRepository:
         # Allocate monotonic, non-reusing attempt number under task row lock
         max_attempt = (
             self.db.scalars(
-                select(func.max(TaskAttempt.attempt_number)).where(
-                    TaskAttempt.task_id == task_id
-                )
+                select(func.max(TaskAttempt.attempt_number)).where(TaskAttempt.task_id == task_id)
             ).first()
             or 0
         )

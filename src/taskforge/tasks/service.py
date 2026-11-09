@@ -28,7 +28,12 @@ class TaskService:
         self.db = db
         self.repo = TaskRepository(db)
 
-    def submit_task(self, req: TaskCreateRequest) -> tuple[Task, bool]:
+    def submit_task(
+        self,
+        req: TaskCreateRequest,
+        tenant_id: str = "default",
+        actor_id: str | None = None,
+    ) -> tuple[Task, bool]:
         """Submits a task with strict idempotency and deduplication guarantees.
 
         Returns a tuple of (Task, is_created).
@@ -58,7 +63,7 @@ class TaskService:
                 )
 
         if req.idempotency_key:
-            existing = self.repo.get_by_idempotency_key(req.idempotency_key)
+            existing = self.repo.get_by_idempotency_key(req.idempotency_key, tenant_id=tenant_id)
             if existing:
                 _verify_payload_match(existing)
                 logger.info(
@@ -77,6 +82,8 @@ class TaskService:
             timeout_seconds=req.timeout_seconds,
             max_retries=req.max_retries,
             scheduled_at=req.scheduled_at,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
         )
 
         if not is_created:
@@ -96,8 +103,8 @@ class TaskService:
         )
         return task, True
 
-    def get_task(self, task_id: str) -> Task | None:
-        return self.repo.get_by_id(task_id)
+    def get_task(self, task_id: str, tenant_id: str | None = None) -> Task | None:
+        return self.repo.get_by_id(task_id, tenant_id=tenant_id)
 
     def list_tasks(
         self,
@@ -106,6 +113,7 @@ class TaskService:
         priority: int | None = None,
         limit: int = 20,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> tuple[list[Task], int]:
         return self.repo.list_tasks(
             status=status,
@@ -113,6 +121,7 @@ class TaskService:
             priority=priority,
             limit=limit,
             offset=offset,
+            tenant_id=tenant_id,
         )
 
     def cancel_task(self, task_id: str, reason: str = "user_requested") -> Task:
