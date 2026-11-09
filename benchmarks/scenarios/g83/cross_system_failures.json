@@ -2,24 +2,24 @@
   "milestone": "G8.3_cross_system_failure_validation",
   "description": "Cross-System Failure Validation Matrix (S1 - S7)",
   "schema_version": "2",
-  "generated_at": "2026-11-09T10:46:46.194613+00:00",
+  "generated_at": "2026-11-09T10:53:00.131681+00:00",
   "scenarios": {
     "S1": {
       "scenario_id": "S1",
       "description": "Worker abrupt termination (TerminateProcess) during execution with lease expiry and recovery",
-      "generated_at": "2026-11-09T10:46:38.240321+00:00",
+      "generated_at": "2026-11-09T10:52:52.102025+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "f17b0e1a-3656-4450-8d88-97804d12bc50",
-      "worker_pid": 24900,
-      "parent_pid": 13368,
-      "delivery_token_fingerprint": "be277ee4b413",
-      "lease_token_fingerprint": "5b56a19972d6",
-      "recovery_latency_ms": 2260.44,
+      "task_id": "e3598ed0-2bf6-4cf8-aae8-cb1197c60a6c",
+      "worker_pid": 27116,
+      "parent_pid": 5612,
+      "delivery_token_fingerprint": "0b6c9f6021ce",
+      "lease_token_fingerprint": "23367bbd6779",
+      "recovery_latency_ms": 2211.18,
       "relational": {
         "before": {
           "status": "RUNNING",
@@ -47,18 +47,18 @@
     "S2": {
       "scenario_id": "S2",
       "description": "Worker abrupt termination (TerminateProcess) post-result persistence with duplicate redelivery fencing",
-      "generated_at": "2026-11-09T10:46:41.535956+00:00",
+      "generated_at": "2026-11-09T10:52:55.479956+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "4175716b-e907-456d-bef0-713ffe42eba1",
-      "worker_pid": 1876,
-      "parent_pid": 13368,
-      "delivery_token_fingerprint": "fcd129898546",
-      "lease_token_fingerprint": "3568099cf59a",
+      "task_id": "42a78a89-cda8-4c6d-98f9-012dd8e8905e",
+      "worker_pid": 9156,
+      "parent_pid": 5612,
+      "delivery_token_fingerprint": "a0571739a2f5",
+      "lease_token_fingerprint": "42f2924f509b",
       "relational": {
         "result_rows": 1,
         "duplicate_results": 0
@@ -86,16 +86,16 @@
     "S3": {
       "scenario_id": "S3",
       "description": "Outbox publisher abrupt termination (TerminateProcess) post-enqueue; duplicate delivery fenced",
-      "generated_at": "2026-11-09T10:46:42.813562+00:00",
+      "generated_at": "2026-11-09T10:52:56.685401+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "7d479144-06f8-46dc-8940-6e3cc73757c2",
-      "worker_pid": 15432,
-      "parent_pid": 13368,
+      "task_id": "48c0ca82-a548-4fa4-9877-983696641796",
+      "worker_pid": 19908,
+      "parent_pid": 5612,
       "relational": {
         "result_rows": 1
       },
@@ -123,15 +123,15 @@
     "S4": {
       "scenario_id": "S4",
       "description": "Simulated PostgreSQL dependency failure; broker ACK withheld without durable DB disposition",
-      "generated_at": "2026-11-09T10:46:42.897609+00:00",
+      "generated_at": "2026-11-09T10:52:56.774392+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "mocked_dependency_failure",
-      "task_id": "220c90c1-d81c-4d49-9b79-69497b3e9c16",
-      "delivery_token_fingerprint": "62137b35152c",
+      "task_id": "f65a2e54-beca-4472-a026-97a67495be86",
+      "delivery_token_fingerprint": "d71784082291",
       "fault_injection": "OperationalError mock on SessionLocal (simulates TCP connection refused)",
       "relational": {
         "status_during_outage": "unmodified (task untouched by faulted worker)",
@@ -152,15 +152,15 @@
     "S5": {
       "scenario_id": "S5",
       "description": "Simulated Redis dependency failure during outbox publication; durable PostgreSQL intent preserved until recovery",
-      "generated_at": "2026-11-09T10:46:42.932913+00:00",
+      "generated_at": "2026-11-09T10:52:56.814538+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "mocked_dependency_failure",
-      "task_id": "dc9ab977-80c8-4a07-a83c-95f5f6a49ae9",
-      "outbox_event_id": "f7630f60-46e3-498a-8505-ea7df1ade34e",
+      "task_id": "02c78868-83c4-4ec3-8bdb-82c5c8e7ee77",
+      "outbox_event_id": "c0655c41-1a96-4963-9521-744196869794",
       "fault_injection": "redis.ConnectionError mock on broker.enqueue",
       "outbox": {
         "status_after_failed_publish": "PENDING",
@@ -180,7 +180,7 @@
     "S6": {
       "scenario_id": "S6",
       "description": "Supervisor abrupt termination (stop grace=0); replacement supervisor drains all tasks",
-      "generated_at": "2026-11-09T10:46:45.631721+00:00",
+      "generated_at": "2026-11-09T10:52:59.519095+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
@@ -188,11 +188,11 @@
       "invariants_passed": true,
       "test_nature": "real_process_termination",
       "task_ids": [
-        "9f89fcae-6108-4915-934e-37eb4a87852d",
-        "101e5a12-d6d4-4ad3-b0a6-24a6b57ae546",
-        "bbbd6008-f7d9-408e-a73d-10f78b72eec9",
-        "b6f1a709-2c31-41e6-a681-7b114bd7135d",
-        "66553fae-e4bf-4924-a81b-9c62f90a9c79"
+        "6a176a2c-d2ca-4697-80c5-48aaeb1d77b4",
+        "1372c651-47f0-4221-a5c0-61264bb0522e",
+        "14bb8f98-f197-4e90-87c8-0396cefbe378",
+        "781881e2-f6ac-45ca-90fb-1b264cf43b88",
+        "3ee4b87c-4cdf-4db9-b2c1-3b98d91a35f6"
       ],
       "task_count": 5,
       "supervisor_1": {
@@ -209,11 +209,11 @@
         "drained_success_count": 5,
         "stranded_tasks": 0,
         "task_final_statuses": {
-          "9f89fcae-6108-4915-934e-37eb4a87852d": "SUCCESS",
-          "101e5a12-d6d4-4ad3-b0a6-24a6b57ae546": "SUCCESS",
-          "bbbd6008-f7d9-408e-a73d-10f78b72eec9": "SUCCESS",
-          "b6f1a709-2c31-41e6-a681-7b114bd7135d": "SUCCESS",
-          "66553fae-e4bf-4924-a81b-9c62f90a9c79": "SUCCESS"
+          "6a176a2c-d2ca-4697-80c5-48aaeb1d77b4": "SUCCESS",
+          "1372c651-47f0-4221-a5c0-61264bb0522e": "SUCCESS",
+          "14bb8f98-f197-4e90-87c8-0396cefbe378": "SUCCESS",
+          "781881e2-f6ac-45ca-90fb-1b264cf43b88": "SUCCESS",
+          "3ee4b87c-4cdf-4db9-b2c1-3b98d91a35f6": "SUCCESS"
         }
       },
       "redis": {
@@ -229,7 +229,7 @@
     "S7": {
       "scenario_id": "S7",
       "description": "Concurrent recovery actors under FOR UPDATE SKIP LOCKED; actual lease contention exercised",
-      "generated_at": "2026-11-09T10:46:46.187616+00:00",
+      "generated_at": "2026-11-09T10:53:00.123372+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
@@ -240,39 +240,48 @@
       "concurrent_recovery_workers": 4,
       "contention_evidence": {
         "single_task_contention": {
-          "task_id": "d48eccff-d627-4db5-8ad0-66498762e756",
+          "task_id": "4f28bb18-dbf0-4635-ac6f-1fe345ee47af",
           "attempted_acquisitions": 4,
           "successful_acquisitions": 1,
           "rejected_acquisitions": 3,
           "max_concurrent_valid_leases_measured": 1,
-          "contending_workers": [
+          "concurrency_measurement_method": "sweep_line_over_recorded_lease_ownership_intervals",
+          "valid_ownership_intervals": [
             {
-              "worker_idx": 3,
-              "acquired": true,
-              "attempt_start_epoch": 1794221206.0664,
-              "duration_ms": 6.25,
-              "rejection_reason": null
-            },
+              "start_offset_ms": 1511976810.28,
+              "end_offset_ms": 1511976837.8,
+              "duration_ms": 27.52,
+              "token_fingerprint": "1331c493bda6"
+            }
+          ],
+          "contending_workers": [
             {
               "worker_idx": 1,
               "acquired": false,
-              "attempt_start_epoch": 1794221206.0674,
-              "duration_ms": 6.04,
+              "attempt_start_epoch": 1794221579.9754,
+              "duration_ms": 6.43,
               "rejection_reason": "active_lease_exists_under_row_lock"
             },
             {
               "worker_idx": 0,
               "acquired": false,
-              "attempt_start_epoch": 1794221206.0674,
-              "duration_ms": 6.94,
+              "attempt_start_epoch": 1794221579.9764,
+              "duration_ms": 7.47,
               "rejection_reason": "active_lease_exists_under_row_lock"
             },
             {
               "worker_idx": 2,
               "acquired": false,
-              "attempt_start_epoch": 1794221206.0744,
-              "duration_ms": 12.87,
+              "attempt_start_epoch": 1794221579.9824,
+              "duration_ms": 12.86,
               "rejection_reason": "active_lease_exists_under_row_lock"
+            },
+            {
+              "worker_idx": 3,
+              "acquired": true,
+              "attempt_start_epoch": 1794221580.0022,
+              "duration_ms": 6.66,
+              "rejection_reason": null
             }
           ]
         },
@@ -283,7 +292,7 @@
           "duplicate_recoveries": 0,
           "per_worker_results": [
             {
-              "worker_idx": 3,
+              "worker_idx": 2,
               "recovered_count": 0,
               "reclaimed_count": 10
             },
@@ -293,12 +302,12 @@
               "reclaimed_count": 0
             },
             {
-              "worker_idx": 2,
+              "worker_idx": 0,
               "recovered_count": 0,
               "reclaimed_count": 0
             },
             {
-              "worker_idx": 0,
+              "worker_idx": 3,
               "recovered_count": 10,
               "reclaimed_count": 0
             }

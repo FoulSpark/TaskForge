@@ -119,24 +119,42 @@ print('Dropped disposable database taskforge_migration_drill')
 
 ---
 
-### Stage 2: Full Regression Verification (161/161 Matrix)
+### Stage 2: Full Regression Verification (Dynamic Test Suite Derivation)
 
-Run all unit, security, integration, and reliability suites:
+Execute all unit, security, integration, and reliability test suites. Test counts are derived dynamically from the pytest collection rather than hardcoded, enforcing zero unhandled warnings and zero failures:
 
 ```powershell
-# Unit & Security Suites (25 tests)
-.venv\Scripts\pytest tests/unit/ tests/security/ -v --tb=short
+# Execute full test suite with dynamic collection derivation and strict warning handling
+.venv\Scripts\python -c @"
+import subprocess, sys
 
-# Integration Suite (67 tests)
-.venv\Scripts\pytest tests/integration/ -v --tb=short
+cmd = [
+    sys.executable, '-m', 'pytest',
+    'tests/unit/', 'tests/security/', 'tests/integration/', 'tests/reliability/',
+    '-v', '--tb=short',
+    '-W', 'error',
+    '-W', 'ignore:Using ``httpx`` with ``starlette.testclient`` is deprecated:DeprecationWarning'
+]
 
-# Reliability Suite (69 tests)
-.venv\Scripts\pytest tests/reliability/ -v --tb=short
+print('Running full regression matrix...')
+res = subprocess.run(cmd, capture_output=True, text=True)
+print(res.stdout[-1200:])
+
+if res.returncode != 0:
+    print('REGRESSION SUITE FAILED!')
+    sys.exit(res.returncode)
+else:
+    print('ALL COLLECTED TESTS PASSED CLEANLY WITH ZERO WARNING ERRORS.')
+"@
+
+# Verify formatting and linter standards
+.venv\Scripts\ruff check src/ tests/ migrations/
 ```
 
 **Pass/Fail Criteria:**
-- Total 161 tests executed.
-- 161 PASSED, 0 FAILED, 0 ERRORS.
+- Test runner executes all collected tests dynamically (100% pass rate).
+- 0 FAILED, 0 ERRORS, 0 SKIPPED, 0 XFAILED.
+- 0 unhandled warnings (`-W error` active, third-party testclient deprecation ignored).
 - Code style: `ruff check src/ tests/ migrations/` returns `All checks passed!`.
 
 ---
@@ -155,10 +173,10 @@ Execute the 7 real-process failure and simulated dependency boundary drills:
 | **S1** | Mid-execution `TerminateProcess` | Lease expiry observed (`~2.0s`); recovery latency `< 2500ms` | Attempt #2 reaches `SUCCESS`; in-flight depth = 0 |
 | **S2** | Post-result persistence `TerminateProcess` | Duplicate redelivery observed; `mock_get_handler.call_count == 0` | Result count = 1; redelivery fenced with `TERMINAL_DUPLICATE` |
 | **S3** | Post-enqueue outbox `TerminateProcess` | Redelivery observed; `observable_side_effects` count = 1 | Result count = 1; redelivery fenced with `TERMINAL_DUPLICATE` |
-| **S4** | Simulated PostgreSQL `OperationalError` | Redis delivery NOT acknowledged during DB outage | `UNEXPECTED_FAILURE` disposition; in-flight depth = 1 |
+| **S4** | Simulated PostgreSQL `OperationalError` | Redis delivery NOT acknowledged during simulated DB outage | `UNEXPECTED_FAILURE` disposition; in-flight depth = 1 |
 | **S5** | Simulated Redis `ConnectionError` | Outbox event stays `PENDING` (`retry_count = 1`) | Published to Redis upon simulated recovery; queue depth = 1 |
 | **S6** | Supervisor abrupt termination (`grace=0`) | Drain time `< 3.0s`; replacement supervisor drains | All 5 tasks reach `SUCCESS`; ready & in-flight depth = 0 |
-| **S7** | `threading.Barrier(4)` concurrent race | 4 threads race: 1 success, 3 rejections (`active_lease_exists`) | 10 tasks recovered by `SKIP LOCKED` with 0 duplicates |
+| **S7** | `threading.Barrier(4)` concurrent race | 4 threads race: 1 success, 3 rejections (`active_lease_exists`); `max_overlapping_valid_leases == 1` via sweep-line | 10 tasks recovered by `SKIP LOCKED` with 0 duplicates |
 
 **Machine-Validation Check:**
 ```powershell
@@ -243,3 +261,4 @@ All of the following conditions must be satisfied before creating the release ta
 ```powershell
 git tag -a v0.8.0-phase8-freeze -m "TaskForge Phase 8 Formal Freeze: Verified under cross-system failure validation matrix (S1-S7), transactional outbox, fail-closed lease fencing, and 161/161 regression test suite."
 ```
+

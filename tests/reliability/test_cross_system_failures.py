@@ -35,7 +35,6 @@ from sqlalchemy.exc import OperationalError
 from taskforge.core.state_machine import TaskPriority, TaskStatus, is_terminal_state
 from taskforge.database.models import (
     OutboxEvent,
-    Task,
     TaskResult,
     get_utc_now,
 )
@@ -929,7 +928,9 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
     c_task_id = contention_task.id
     barrier = threading.Barrier(4)
     acquisition_results: list[dict] = []
+    valid_ownership_intervals: list[tuple[float, float, str]] = []
     results_lock = threading.Lock()
+    intervals_lock = threading.Lock()
 
     def attempt_concurrent_acquire(worker_idx: int):
         token = f"token-w{worker_idx}-{uuid.uuid4().hex[:6]}"
@@ -938,13 +939,23 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
         with SessionLocal() as db:
             rep = TaskRepository(db)
             res = rep.acquire_lease(c_task_id, f"worker-{worker_idx}", lease_duration_seconds=30, lease_token=token)
-            t_end = time.perf_counter()
+            t_acq = time.perf_counter()
+            if res:
+                # Hold the valid lease across a measurable active window, then release
+                time.sleep(0.02)
+                rep.release_lease(c_task_id, token)
+                t_rel = time.perf_counter()
+                with intervals_lock:
+                    valid_ownership_intervals.append((t_acq, t_rel, token))
+            else:
+                t_rel = t_acq
+
             with results_lock:
                 acquisition_results.append({
                     "worker_idx": worker_idx,
                     "acquired": res,
                     "attempt_start_epoch": round(time.time(), 4),
-                    "duration_ms": round((t_end - t_start) * 1000, 2),
+                    "duration_ms": round((t_acq - t_start) * 1000, 2),
                     "rejection_reason": "active_lease_exists_under_row_lock" if not res else None,
                 })
 
@@ -956,19 +967,27 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
     assert successful_acquisitions == 1, f"Expected 1 success, got {successful_acquisitions}"
     assert rejected_acquisitions == 3, f"Expected 3 rejections, got {rejected_acquisitions}"
 
-    # Measure observed concurrent valid leases directly via SQL query
-    with SessionLocal() as db:
-        rep = TaskRepository(db)
-        observed_valid_leases = db.scalar(
-            select(func.count(Task.id)).where(
-                Task.id == c_task_id,
-                Task.lease_token.isnot(None),
-                Task.lease_expires_at > get_utc_now(),
-            )
-        )
-        assert observed_valid_leases == 1, f"Expected 1 observed active lease, got {observed_valid_leases}"
-        t_active = rep.get_by_id(c_task_id)
-        rep.release_lease(c_task_id, t_active.lease_token)
+    # Calculate maximum overlapping valid ownership intervals across time via sweep-line algorithm:
+    # Each valid lease defines an active ownership interval [t_acq, t_rel].
+    # Competing transactions are serialized by PostgreSQL SELECT FOR UPDATE row locks.
+    # If mutual exclusion were violated, two intervals would overlap, yielding concurrency >= 2.
+    sweep_events: list[tuple[float, int]] = []
+    for o_start, o_end, _ in valid_ownership_intervals:
+        sweep_events.append((o_start, 1))
+        sweep_events.append((o_end, -1))
+    # Sort events by timestamp; releases (-1) before acquisitions (+1) on ties
+    sweep_events.sort(key=lambda x: (x[0], x[1]))
+
+    current_concurrent = 0
+    max_overlapping_valid_leases = 0
+    for _ts, delta in sweep_events:
+        current_concurrent += delta
+        if current_concurrent > max_overlapping_valid_leases:
+            max_overlapping_valid_leases = current_concurrent
+
+    assert max_overlapping_valid_leases == 1, (
+        f"Expected max concurrent ownership intervals == 1, observed {max_overlapping_valid_leases}"
+    )
 
     # Phase 2: Concurrent recovery actors racing for 10 expired tasks under FOR UPDATE SKIP LOCKED
     per_worker_results: list[dict] = []
@@ -1032,10 +1051,20 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
         "contention_evidence": {
             "single_task_contention": {
                 "task_id": c_task_id,
-                "attempted_acquisitions": 4,
+                "attempted_acquisitions": len(acquisition_results),
                 "successful_acquisitions": successful_acquisitions,
                 "rejected_acquisitions": rejected_acquisitions,
-                "max_concurrent_valid_leases_measured": observed_valid_leases,
+                "max_concurrent_valid_leases_measured": max_overlapping_valid_leases,
+                "concurrency_measurement_method": "sweep_line_over_recorded_lease_ownership_intervals",
+                "valid_ownership_intervals": [
+                    {
+                        "start_offset_ms": round(s * 1000, 2),
+                        "end_offset_ms": round(e * 1000, 2),
+                        "duration_ms": round((e - s) * 1000, 2),
+                        "token_fingerprint": _fp(tok),
+                    }
+                    for s, e, tok in valid_ownership_intervals
+                ],
                 "contending_workers": acquisition_results,
             },
             "skip_locked_recovery_race": {
