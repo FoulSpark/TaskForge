@@ -2,24 +2,24 @@
   "milestone": "G8.3_cross_system_failure_validation",
   "description": "Cross-System Failure Validation Matrix (S1 - S7)",
   "schema_version": "2",
-  "generated_at": "2026-11-09T10:40:53.058066+00:00",
+  "generated_at": "2026-11-09T10:46:46.194613+00:00",
   "scenarios": {
     "S1": {
       "scenario_id": "S1",
       "description": "Worker abrupt termination (TerminateProcess) during execution with lease expiry and recovery",
-      "generated_at": "2026-11-09T10:40:43.640498+00:00",
+      "generated_at": "2026-11-09T10:46:38.240321+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "5ff68d08-4ae9-46a5-a7c3-949be7ee7d9d",
-      "worker_pid": 7396,
-      "parent_pid": 27280,
-      "delivery_token_fingerprint": "cbb6ed5785e1",
-      "lease_token_fingerprint": "a0166e4a0b32",
-      "recovery_latency_ms": 2212.96,
+      "task_id": "f17b0e1a-3656-4450-8d88-97804d12bc50",
+      "worker_pid": 24900,
+      "parent_pid": 13368,
+      "delivery_token_fingerprint": "be277ee4b413",
+      "lease_token_fingerprint": "5b56a19972d6",
+      "recovery_latency_ms": 2260.44,
       "relational": {
         "before": {
           "status": "RUNNING",
@@ -47,18 +47,18 @@
     "S2": {
       "scenario_id": "S2",
       "description": "Worker abrupt termination (TerminateProcess) post-result persistence with duplicate redelivery fencing",
-      "generated_at": "2026-11-09T10:40:47.087580+00:00",
+      "generated_at": "2026-11-09T10:46:41.535956+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "2093a2d4-cd1b-4e9b-b1cd-6bbe17073be1",
-      "worker_pid": 27256,
-      "parent_pid": 27280,
-      "delivery_token_fingerprint": "83a6ab78146a",
-      "lease_token_fingerprint": "2ae823671763",
+      "task_id": "4175716b-e907-456d-bef0-713ffe42eba1",
+      "worker_pid": 1876,
+      "parent_pid": 13368,
+      "delivery_token_fingerprint": "fcd129898546",
+      "lease_token_fingerprint": "3568099cf59a",
       "relational": {
         "result_rows": 1,
         "duplicate_results": 0
@@ -86,16 +86,16 @@
     "S3": {
       "scenario_id": "S3",
       "description": "Outbox publisher abrupt termination (TerminateProcess) post-enqueue; duplicate delivery fenced",
-      "generated_at": "2026-11-09T10:40:48.933272+00:00",
+      "generated_at": "2026-11-09T10:46:42.813562+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "real_process_termination",
-      "task_id": "542d3c76-60c0-48b9-8fa3-ccc584efca42",
-      "worker_pid": 28620,
-      "parent_pid": 27280,
+      "task_id": "7d479144-06f8-46dc-8940-6e3cc73757c2",
+      "worker_pid": 15432,
+      "parent_pid": 13368,
       "relational": {
         "result_rows": 1
       },
@@ -122,16 +122,16 @@
     },
     "S4": {
       "scenario_id": "S4",
-      "description": "PostgreSQL outage fails closed; broker ACK withheld without durable DB disposition",
-      "generated_at": "2026-11-09T10:40:49.087449+00:00",
+      "description": "Simulated PostgreSQL dependency failure; broker ACK withheld without durable DB disposition",
+      "generated_at": "2026-11-09T10:46:42.897609+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "mocked_dependency_failure",
-      "task_id": "037e704c-62cb-4d8a-9fe1-bc3342650383",
-      "delivery_token_fingerprint": "0b085b3d2db8",
+      "task_id": "220c90c1-d81c-4d49-9b79-69497b3e9c16",
+      "delivery_token_fingerprint": "62137b35152c",
       "fault_injection": "OperationalError mock on SessionLocal (simulates TCP connection refused)",
       "relational": {
         "status_during_outage": "unmodified (task untouched by faulted worker)",
@@ -151,16 +151,16 @@
     },
     "S5": {
       "scenario_id": "S5",
-      "description": "Redis outage during outbox publication; durable PostgreSQL intent preserved until recovery",
-      "generated_at": "2026-11-09T10:40:49.157443+00:00",
+      "description": "Simulated Redis dependency failure during outbox publication; durable PostgreSQL intent preserved until recovery",
+      "generated_at": "2026-11-09T10:46:42.932913+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
       },
       "invariants_passed": true,
       "test_nature": "mocked_dependency_failure",
-      "task_id": "595bb9f4-abf8-48a7-95e5-bb398591a907",
-      "outbox_event_id": "1bf33918-3447-4f2c-8f70-891a3ce0b6bd",
+      "task_id": "dc9ab977-80c8-4a07-a83c-95f5f6a49ae9",
+      "outbox_event_id": "f7630f60-46e3-498a-8505-ea7df1ade34e",
       "fault_injection": "redis.ConnectionError mock on broker.enqueue",
       "outbox": {
         "status_after_failed_publish": "PENDING",
@@ -180,7 +180,7 @@
     "S6": {
       "scenario_id": "S6",
       "description": "Supervisor abrupt termination (stop grace=0); replacement supervisor drains all tasks",
-      "generated_at": "2026-11-09T10:40:52.025180+00:00",
+      "generated_at": "2026-11-09T10:46:45.631721+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
@@ -188,11 +188,11 @@
       "invariants_passed": true,
       "test_nature": "real_process_termination",
       "task_ids": [
-        "928760f5-af50-47fb-8934-862a473ad849",
-        "d9abc2de-cac8-4430-b26e-40395a512616",
-        "c2272b2a-d9b1-482c-b875-333360efea4d",
-        "db02361c-c3ba-43f3-8110-64602733cd7b",
-        "18c746e3-1ca9-4ed8-89de-68812069787e"
+        "9f89fcae-6108-4915-934e-37eb4a87852d",
+        "101e5a12-d6d4-4ad3-b0a6-24a6b57ae546",
+        "bbbd6008-f7d9-408e-a73d-10f78b72eec9",
+        "b6f1a709-2c31-41e6-a681-7b114bd7135d",
+        "66553fae-e4bf-4924-a81b-9c62f90a9c79"
       ],
       "task_count": 5,
       "supervisor_1": {
@@ -209,11 +209,11 @@
         "drained_success_count": 5,
         "stranded_tasks": 0,
         "task_final_statuses": {
-          "928760f5-af50-47fb-8934-862a473ad849": "SUCCESS",
-          "d9abc2de-cac8-4430-b26e-40395a512616": "SUCCESS",
-          "c2272b2a-d9b1-482c-b875-333360efea4d": "SUCCESS",
-          "db02361c-c3ba-43f3-8110-64602733cd7b": "SUCCESS",
-          "18c746e3-1ca9-4ed8-89de-68812069787e": "SUCCESS"
+          "9f89fcae-6108-4915-934e-37eb4a87852d": "SUCCESS",
+          "101e5a12-d6d4-4ad3-b0a6-24a6b57ae546": "SUCCESS",
+          "bbbd6008-f7d9-408e-a73d-10f78b72eec9": "SUCCESS",
+          "b6f1a709-2c31-41e6-a681-7b114bd7135d": "SUCCESS",
+          "66553fae-e4bf-4924-a81b-9c62f90a9c79": "SUCCESS"
         }
       },
       "redis": {
@@ -229,7 +229,7 @@
     "S7": {
       "scenario_id": "S7",
       "description": "Concurrent recovery actors under FOR UPDATE SKIP LOCKED; actual lease contention exercised",
-      "generated_at": "2026-11-09T10:40:53.050066+00:00",
+      "generated_at": "2026-11-09T10:46:46.187616+00:00",
       "platform": {
         "os": "nt",
         "termination_mechanism": "TerminateProcess (Windows Popen.kill())"
@@ -240,11 +240,41 @@
       "concurrent_recovery_workers": 4,
       "contention_evidence": {
         "single_task_contention": {
-          "task_id": "d2fbfd40-b82c-4227-a9d3-0e95b4ebb762",
+          "task_id": "d48eccff-d627-4db5-8ad0-66498762e756",
           "attempted_acquisitions": 4,
           "successful_acquisitions": 1,
           "rejected_acquisitions": 3,
-          "max_concurrent_valid_leases": 1
+          "max_concurrent_valid_leases_measured": 1,
+          "contending_workers": [
+            {
+              "worker_idx": 3,
+              "acquired": true,
+              "attempt_start_epoch": 1794221206.0664,
+              "duration_ms": 6.25,
+              "rejection_reason": null
+            },
+            {
+              "worker_idx": 1,
+              "acquired": false,
+              "attempt_start_epoch": 1794221206.0674,
+              "duration_ms": 6.04,
+              "rejection_reason": "active_lease_exists_under_row_lock"
+            },
+            {
+              "worker_idx": 0,
+              "acquired": false,
+              "attempt_start_epoch": 1794221206.0674,
+              "duration_ms": 6.94,
+              "rejection_reason": "active_lease_exists_under_row_lock"
+            },
+            {
+              "worker_idx": 2,
+              "acquired": false,
+              "attempt_start_epoch": 1794221206.0744,
+              "duration_ms": 12.87,
+              "rejection_reason": "active_lease_exists_under_row_lock"
+            }
+          ]
         },
         "skip_locked_recovery_race": {
           "tasks_count": 10,
@@ -253,7 +283,7 @@
           "duplicate_recoveries": 0,
           "per_worker_results": [
             {
-              "worker_idx": 0,
+              "worker_idx": 3,
               "recovered_count": 0,
               "reclaimed_count": 10
             },
@@ -268,7 +298,7 @@
               "reclaimed_count": 0
             },
             {
-              "worker_idx": 3,
+              "worker_idx": 0,
               "recovered_count": 10,
               "reclaimed_count": 0
             }

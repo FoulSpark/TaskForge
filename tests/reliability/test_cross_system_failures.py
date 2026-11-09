@@ -35,6 +35,7 @@ from sqlalchemy.exc import OperationalError
 from taskforge.core.state_machine import TaskPriority, TaskStatus, is_terminal_state
 from taskforge.database.models import (
     OutboxEvent,
+    Task,
     TaskResult,
     get_utc_now,
 )
@@ -685,7 +686,7 @@ def test_s4_postgresql_outage_fails_closed_no_broker_ack(redis_conn, test_queue,
 
     envelope = _common_envelope(
         "S4",
-        "PostgreSQL outage fails closed; broker ACK withheld without durable DB disposition",
+        "Simulated PostgreSQL dependency failure; broker ACK withheld without durable DB disposition",
         True,
         test_nature="mocked_dependency_failure",
     )
@@ -754,7 +755,7 @@ def test_s5_redis_outage_outbox_preserves_pending_event(redis_conn, test_queue, 
 
     envelope = _common_envelope(
         "S5",
-        "Redis outage during outbox publication; durable PostgreSQL intent preserved until recovery",
+        "Simulated Redis dependency failure during outbox publication; durable PostgreSQL intent preserved until recovery",
         True,
         test_nature="mocked_dependency_failure",
     )
@@ -927,31 +928,46 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
     contention_task = repo.create_task("cs07-contention-direct", "noop", {}, TaskPriority.HIGH.value)
     c_task_id = contention_task.id
     barrier = threading.Barrier(4)
-    acquisition_results: list[bool] = []
+    acquisition_results: list[dict] = []
     results_lock = threading.Lock()
 
     def attempt_concurrent_acquire(worker_idx: int):
         token = f"token-w{worker_idx}-{uuid.uuid4().hex[:6]}"
         barrier.wait()  # Force overlapping execution windows
+        t_start = time.perf_counter()
         with SessionLocal() as db:
             rep = TaskRepository(db)
             res = rep.acquire_lease(c_task_id, f"worker-{worker_idx}", lease_duration_seconds=30, lease_token=token)
+            t_end = time.perf_counter()
             with results_lock:
-                acquisition_results.append(res)
+                acquisition_results.append({
+                    "worker_idx": worker_idx,
+                    "acquired": res,
+                    "attempt_start_epoch": round(time.time(), 4),
+                    "duration_ms": round((t_end - t_start) * 1000, 2),
+                    "rejection_reason": "active_lease_exists_under_row_lock" if not res else None,
+                })
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(attempt_concurrent_acquire, range(4)))
 
-    successful_acquisitions = sum(1 for r in acquisition_results if r is True)
-    rejected_acquisitions = sum(1 for r in acquisition_results if r is False)
+    successful_acquisitions = sum(1 for r in acquisition_results if r["acquired"] is True)
+    rejected_acquisitions = sum(1 for r in acquisition_results if r["acquired"] is False)
     assert successful_acquisitions == 1, f"Expected 1 success, got {successful_acquisitions}"
     assert rejected_acquisitions == 3, f"Expected 3 rejections, got {rejected_acquisitions}"
 
-    # Confirm exactly 1 valid lease credential exists for the task
+    # Measure observed concurrent valid leases directly via SQL query
     with SessionLocal() as db:
         rep = TaskRepository(db)
+        observed_valid_leases = db.scalar(
+            select(func.count(Task.id)).where(
+                Task.id == c_task_id,
+                Task.lease_token.isnot(None),
+                Task.lease_expires_at > get_utc_now(),
+            )
+        )
+        assert observed_valid_leases == 1, f"Expected 1 observed active lease, got {observed_valid_leases}"
         t_active = rep.get_by_id(c_task_id)
-        assert t_active.lease_token is not None
         rep.release_lease(c_task_id, t_active.lease_token)
 
     # Phase 2: Concurrent recovery actors racing for 10 expired tasks under FOR UPDATE SKIP LOCKED
@@ -1019,7 +1035,8 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
                 "attempted_acquisitions": 4,
                 "successful_acquisitions": successful_acquisitions,
                 "rejected_acquisitions": rejected_acquisitions,
-                "max_concurrent_valid_leases": 1,
+                "max_concurrent_valid_leases_measured": observed_valid_leases,
+                "contending_workers": acquisition_results,
             },
             "skip_locked_recovery_race": {
                 "tasks_count": 10,
