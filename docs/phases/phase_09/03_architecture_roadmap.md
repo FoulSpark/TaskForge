@@ -7,7 +7,7 @@ Phase 9 transforms TaskForge from an experimentally verified reliability core (`
 ```mermaid
 flowchart TD
     G90["G9.0: Baseline & Scope Lock (da27047)\n• Provenance, Environment, Threat Model\n• Pre-hardening Latency & Throughput Baseline"]
-    G91["G9.1: Security Hardening\n• API Key AuthN & Scope RBAC\n• Tenant Isolation Enforcement\n• Redis Token-Bucket Rate Limiting\n• Secret Masking & Error Sanitization"]
+    G91["G9.1: Security Hardening\n• API Key AuthN & Scope RBAC\n• Tenant Isolation Enforcement\n• Redis Sliding-Window Rate Limiting\n• Secret Masking & Error Sanitization"]
     G92["G9.2: Observability & Health\n• Prometheus Metrics Exporter (:9090)\n• Lifecycle Latency Histograms\n• Two-Stage /healthz (Live vs Ready)\n• Structured Tracing & Correlation IDs"]
     G93["G9.3: Deployment Reproducibility\n• Production Docker Compose Stack\n• Zero-Downtime Migration Procedures\n• Cold Bootstrap & Disaster Recovery Drill"]
     G94["G9.4: Performance Characterization\n• Post-Hardening Throughput & Latency (p50/p95/p99)\n• Sustained Load & Queue Lag Analysis\n• Saturation Limits & Pool Exhaustion Recovery"]

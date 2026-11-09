@@ -51,6 +51,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_tasks_tenant_id", "tasks", ["tenant_id"])
     op.create_index("ix_tasks_tenant_status", "tasks", ["tenant_id", "status"])
+    op.create_index("ix_tasks_tenant_created", "tasks", ["tenant_id", "created_at"])
 
     # 3. Add actor_id and tenant_id to task_events for auditability
     op.add_column(
@@ -59,18 +60,26 @@ def upgrade() -> None:
     )
     op.add_column("task_events", sa.Column("actor_id", sa.String(length=128), nullable=True))
     op.create_index("ix_task_events_tenant_id", "task_events", ["tenant_id"])
+    op.create_index("ix_task_events_tenant_created", "task_events", ["tenant_id", "created_at"])
+
+    # Backfill/synchronize existing task events from parent task tenant assignment
+    op.execute(
+        "UPDATE task_events SET tenant_id = tasks.tenant_id FROM tasks WHERE task_events.task_id = tasks.id"
+    )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index("ix_task_events_tenant_id", table_name="task_events")
+    op.drop_index("ix_task_events_tenant_created", table_name="task_events", if_exists=True)
+    op.drop_index("ix_task_events_tenant_id", table_name="task_events", if_exists=True)
     op.drop_column("task_events", "actor_id")
     op.drop_column("task_events", "tenant_id")
 
-    op.drop_index("ix_tasks_tenant_status", table_name="tasks")
-    op.drop_index("ix_tasks_tenant_id", table_name="tasks")
+    op.drop_index("ix_tasks_tenant_created", table_name="tasks", if_exists=True)
+    op.drop_index("ix_tasks_tenant_status", table_name="tasks", if_exists=True)
+    op.drop_index("ix_tasks_tenant_id", table_name="tasks", if_exists=True)
     op.drop_column("tasks", "tenant_id")
 
-    op.drop_index("ix_api_keys_tenant_id", table_name="api_keys")
-    op.drop_index("ix_api_keys_key_id", table_name="api_keys")
+    op.drop_index("ix_api_keys_tenant_id", table_name="api_keys", if_exists=True)
+    op.drop_index("ix_api_keys_key_id", table_name="api_keys", if_exists=True)
     op.drop_table("api_keys")

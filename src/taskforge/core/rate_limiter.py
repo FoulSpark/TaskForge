@@ -1,8 +1,9 @@
-"""Atomic Redis-backed Token-Bucket Rate Limiter for Milestone G9.1.4.
+"""Atomic Redis-backed Sliding-Window Log Rate Limiter for Milestone G9.1.4.
 
-Executes an atomic Lua script in Redis implementing a sliding window token-bucket.
+Executes an atomic Lua script in Redis implementing a sliding-window log using a sorted set.
 Keyed per tenant/client identifier: `taskforge:ratelimit:{client_key}`.
-Emits headers:
+Window configuration: 60-second rolling window with default 300 requests/minute (5 req/sec sustained).
+Emits standard headers:
 - `X-RateLimit-Limit`
 - `X-RateLimit-Remaining`
 - `Retry-After` (on 429)

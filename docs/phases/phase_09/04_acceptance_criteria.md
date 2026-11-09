@@ -17,11 +17,11 @@
 
 ## 2. Gate G9.1: Security Hardening
 
-- [ ] **AuthN:** API endpoints reject unauthenticated requests with HTTP `401 Unauthorized`.
-- [ ] **RBAC:** Endpoints enforce scope checks; clients attempting administrative actions receive HTTP `403 Forbidden`.
-- [ ] **Tenant Fencing:** All queries enforce `tenant_id` isolation. Cross-tenant task queries return HTTP `404 Not Found`.
-- [ ] **Rate Limiting:** Sliding-window / token-bucket rate limiter enforces traffic caps, returning HTTP `429 Too Many Requests` with `Retry-After`.
-- [ ] **Secret Sanitization:** Automated test suite asserts zero plain credentials, passwords, or raw 64-char lease tokens appear in logs, traces, or HTTP error bodies.
+- [x] **AuthN & Key Lifecycle:** API endpoints reject unauthenticated requests with HTTP `401 Unauthorized`. API keys adhere to canonical format `tf_live_<24-hex-key-id>_<32-char-secret>` with SHA-256 digests stored in `hashed_secret`.
+- [x] **RBAC:** Endpoints enforce scope checks (`tasks:write`, `tasks:read`, `admin:operator`); clients attempting administrative actions receive HTTP `403 Forbidden`.
+- [x] **Tenant Fencing:** All queries enforce `tenant_id` isolation. Client-supplied tenant IDs in request bodies are ignored. Cross-tenant task queries return HTTP `404 Not Found`.
+- [x] **Rate Limiting:** Atomic Sliding-Window Log Rate Limiter (Redis Lua-backed sorted set) enforces rolling 60-second quotas (default 300 req/min), returning HTTP `429 Too Many Requests` with `Retry-After` and `X-RateLimit-*` headers.
+- [x] **Secret Sanitization:** Automated test suite asserts zero plain credentials, passwords, or raw 64-char lease tokens appear in logs, traces, or HTTP error bodies.
 
 ---
 

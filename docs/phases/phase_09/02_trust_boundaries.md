@@ -12,18 +12,18 @@ flowchart TD
 
     subgraph Zone1["Zone 1: Perimeter & Gateway (Enforcement Layer)"]
         ReverseProxy["Reverse Proxy / TLS Terminator"]
-        AuthMiddleware["FastAPI Security Middleware\n• Bearer Token Validation\n• Rate Limiting (Token Bucket)\n• Request ID Injection\n• Context Extraction (tenant_id, scopes)"]
+        AuthMiddleware["FastAPI Security Middleware\n• Bearer Token Validation\n• Rate Limiting (Sliding-Window Log)\n• Request ID Injection\n• Context Extraction (tenant_id, scopes)"]
     end
-
+ 
     subgraph Zone2["Zone 2: Core Platform (Protected)"]
         App["TaskForge Application API"]
         Workers["Worker Pool Fleet"]
         OutboxPublisher["Outbox Sweep Loop"]
     end
-
+ 
     subgraph Zone3["Zone 3: State Storage (Strictly Isolated)"]
-        Postgres[(PostgreSQL 16\nRelational, Outbox, Events)]
-        Redis[(Redis 7.4\nPriority Queues, Rate Limit Tokens)]
+        Postgres[(PostgreSQL 16\nRelational, Outbox, Events, API Keys)]
+        Redis[(Redis 7.4\nPriority Queues, Sliding Window Sets)]
     end
 
     Caller -->|HTTPS| ReverseProxy
@@ -42,17 +42,16 @@ flowchart TD
 ## 2. Access Control & Identity Policies
 
 ### 2.1 Identity Principles
-* **Client Identity:** Clients are identified by cryptographically generated API keys. Keys map deterministically to a `tenant_id` and an assigned list of OAuth2-style `scopes`.
+* **Client Identity:** Clients are identified by cryptographically generated API keys with canonical format `tf_live_<24-hex-key-id>_<32-char-secret>`. Keys map deterministically to a `tenant_id` and an assigned list of OAuth2-style `scopes`. The secret is stored strictly as a SHA-256 digest in the `hashed_secret` column of `api_keys`.
 * **Worker Identity:** Worker processes do not possess long-lived credentials to modify task states at will. A worker may only transition a task to `RUNNING` or `SUCCESS`/`FAILURE` if it presents the exact `lease_token` matching the task's active lease record in PostgreSQL.
 
 ### 2.2 Role-Based Access Control (RBAC) Contract
 
 | Role / Scope | Permitted Actions | Forbidden Actions |
 | :--- | :--- | :--- |
-| `client:submitter` | `POST /api/v1/tasks` (scoped to own tenant) | Accessing other tenants' tasks; executing maintenance or recovery |
-| `client:viewer` | `GET /api/v1/tasks/{id}`, `GET /api/v1/tasks` (own tenant only) | Submitting tasks; modifying tasks |
-| `system:worker` | Claiming leased tasks, executing handlers, recording attempts | Bypassing lease token validation; modifying unrelated tasks |
-| `operator:admin` | Lease recovery triggers, emergency queue drain, global metrics inspection | Injecting unsigned tasks directly into worker execution queues |
+| `tasks:write` | `POST /api/v1/tasks` (scoped to own tenant) | Accessing other tenants' tasks; operator recovery endpoints |
+| `tasks:read` | `GET /api/v1/tasks/{id}`, `GET /api/v1/tasks` (own tenant only) | Submitting tasks; modifying tasks; operator endpoints |
+| `admin:operator` | Lease recovery triggers (`/api/v1/operator/recover`), queue sweep, queue purge | Injecting unvalidated tasks directly into worker execution queues |
 
 ### 2.3 Tenant Fencing Enforcement
 * **Rule 1 (Creation):** Every task created in `POST /api/v1/tasks` automatically inherits the authenticated caller's `tenant_id`. Clients cannot specify arbitrary tenant IDs in request payloads.

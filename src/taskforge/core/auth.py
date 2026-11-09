@@ -45,7 +45,8 @@ class ApiKeyService:
         """
         Generate a new high-entropy API key.
         Returns the plaintext key (shown ONCE to caller) and the persisted ApiKey row.
-        Format: tf_live_<24-char-base62-key-id>_<32-char-secret>
+        Format: tf_live_<24-hex-key-id>_<32-char-secret>
+        Entropy: 24 hex chars (96-bit key-ID) + 32 URL-safe chars (192-bit secret).
         """
         # Use hex for key_id so it never contains underscores
         key_id = secrets.token_hex(12)  # 24 chars hex

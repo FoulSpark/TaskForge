@@ -86,6 +86,8 @@ class Task(Base):
     __table_args__ = (
         Index("ix_tasks_status_priority", "status", "priority"),
         Index("ix_tasks_lease_recovery", "status", "lease_expires_at"),
+        Index("ix_tasks_tenant_status", "tenant_id", "status"),
+        Index("ix_tasks_tenant_created", "tenant_id", "created_at"),
     )
 
 
@@ -156,6 +158,11 @@ class TaskEvent(Base):
     )
 
     task: Mapped["Task"] = relationship("Task", back_populates="events")
+
+    __table_args__ = (Index("ix_task_events_tenant_created", "tenant_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_task_events_tenant_created", "tenant_id", "created_at"),
+    )
 
 
 class OutboxEvent(Base):
