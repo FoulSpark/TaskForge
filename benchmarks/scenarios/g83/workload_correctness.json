@@ -11,24 +11,24 @@
   "profiles": {
     "noop": {
       "iterations": 10,
-      "p50_ms": 37.57,
-      "mean_ms": 41.37,
-      "max_ms": 72.07,
+      "p50_ms": 35.05,
+      "mean_ms": 40.37,
+      "max_ms": 81.08,
       "deterministic_verification": "PASS"
     },
     "cpu_bound": {
       "iterations": 5,
       "primes_count": 1229,
       "largest_prime": 9973,
-      "p50_ms": 40.01,
-      "mean_ms": 39.81,
+      "p50_ms": 35.58,
+      "mean_ms": 35.4,
       "deterministic_verification": "PASS"
     },
     "io_bound": {
       "iterations": 5,
       "bytes_read": 2048,
-      "p50_ms": 60.7,
-      "mean_ms": 60.61,
+      "p50_ms": 57.68,
+      "mean_ms": 57.88,
       "deterministic_verification": "PASS"
     },
     "failing": {
@@ -39,7 +39,7 @@
     },
     "sleep": {
       "duration_sec": 0.2,
-      "elapsed_ms": 244.66,
+      "elapsed_ms": 239.23,
       "deterministic_verification": "PASS"
     }
   },

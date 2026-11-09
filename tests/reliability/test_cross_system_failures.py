@@ -17,15 +17,18 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any, Literal
 from unittest.mock import patch
 
 import pytest
 import redis
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 
@@ -79,10 +82,69 @@ def _fp(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:12] if raw else ""
 
 
-def _common_envelope(scenario_id: str, description: str, invariants_passed: bool) -> dict:
+class PlatformSchema(BaseModel):
+    os: str
+    termination_mechanism: str
+
+
+class CommonScenarioSchema(BaseModel):
+    scenario_id: str
+    description: str
+    generated_at: str
+    platform: PlatformSchema
+    invariants_passed: bool
+    test_nature: Literal[
+        "real_process_termination",
+        "mocked_dependency_failure",
+        "real_concurrent_actors",
+    ] = "real_process_termination"
+    audited_invariants: list[str]
+
+    # Optional / scenario-specific conditional fields
+    task_id: str | None = None
+    task_ids: list[str] | None = None
+    worker_pid: int | None = None
+    parent_pid: int | None = None
+    delivery_token_fingerprint: str | None = None
+    lease_token_fingerprint: str | None = None
+    recovery_latency_ms: float | None = None
+    fault_injection: str | None = None
+    outbox_event_id: str | None = None
+    task_count: int | None = None
+    relational: dict[str, Any] | None = None
+    redis: dict[str, Any] | None = None
+    outbox: dict[str, Any] | None = None
+    side_effects: dict[str, Any] | None = None
+    contention_evidence: dict[str, Any] | None = None
+    supervisor_1: dict[str, Any] | None = None
+    supervisor_2: dict[str, Any] | None = None
+    recovery: dict[str, Any] | None = None
+    concurrent_recovery_workers: int | None = None
+
+
+class MatrixEvidenceSchema(BaseModel):
+    milestone: str
+    description: str
+    schema_version: Literal["2"]
+    generated_at: str
+    scenarios: dict[str, CommonScenarioSchema]
+    all_invariants_satisfied: bool
+    verdict: Literal["PASS", "FAIL"]
+
+
+def _common_envelope(
+    scenario_id: str,
+    description: str,
+    invariants_passed: bool,
+    test_nature: Literal[
+        "real_process_termination",
+        "mocked_dependency_failure",
+        "real_concurrent_actors",
+    ] = "real_process_termination",
+) -> dict:
     """
     Mandatory common evidence envelope present in every scenario record.
-    Scenario-specific evidence is merged on top of this.
+    Scenario-specific evidence is merged on top of this. Machine-validated via Pydantic.
     """
     return {
         "scenario_id": scenario_id,
@@ -93,11 +155,15 @@ def _common_envelope(scenario_id: str, description: str, invariants_passed: bool
             "termination_mechanism": _TERMINATION_MECHANISM,
         },
         "invariants_passed": invariants_passed,
+        "test_nature": test_nature,
     }
 
 
 def save_evidence(record: dict):
-    """Persist structured evidence to benchmarks/scenarios/g83/cross_system_failures.json."""
+    """Persist structured evidence to benchmarks/scenarios/g83/cross_system_failures.json with Pydantic machine validation."""
+    # Machine-validate individual scenario schema
+    CommonScenarioSchema.model_validate(record)
+
     EVIDENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
     existing = {}
     if EVIDENCE_PATH.exists():
@@ -115,9 +181,12 @@ def save_evidence(record: dict):
         "schema_version": "2",
         "generated_at": datetime.now(UTC).isoformat(),
         "scenarios": records,
-        "all_invariants_satisfied": all_pass,
-        "verdict": "PASS" if all_pass else "FAIL",
+        "all_invariants_satisfied": all_pass and len(records) == 7,
+        "verdict": "PASS" if all_pass and len(records) == 7 else "FAIL",
     }
+    if len(records) == 7:
+        MatrixEvidenceSchema.model_validate(payload)
+
     with open(EVIDENCE_PATH, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
 
@@ -336,18 +405,19 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
     assert msg is not None
     assert msg["task_id"] == task_id
 
-    # S2 — handler invocation counter (Issue 4):
-    # We track how many times execute_task() is called on this task_id across both
-    # the original execution (which completed before crash) and the duplicate redelivery.
-    # The original subprocess counted as invocation #1 (committed result to DB).
-    # The duplicate redelivery dispatched here via execute_task() is invocation #2.
-    # TERMINAL_DUPLICATE must prevent any handler body from running on invocation #2.
-    handler_invocations_total = 2       # 1 (original subprocess) + 1 (duplicate redelivery attempt)
-    handler_body_executions = 1         # Only the first subprocess actually ran the handler body
-    side_effect_commits_expected = 1    # Exactly one committed result row (no second commit)
+    # S2 — observable handler execution tracking:
+    # 1. Original subprocess (CS-02) executed the task and committed the result row before crash.
+    # 2. Duplicate redelivery here must be fenced by execute_task() detecting terminal state.
+    # We spy on get_handler to observe and assert that the handler body was NEVER invoked on redelivery.
+    with patch("taskforge.workers.execution_engine.get_handler") as mock_get_handler:
+        disposition = execute_task(task_id, worker_id="dispatcher-s2-worker")
+        assert disposition == ExecutionDisposition.TERMINAL_DUPLICATE
+        redelivery_handler_body_calls = mock_get_handler.call_count
+        assert redelivery_handler_body_calls == 0
 
-    disposition = execute_task(task_id, worker_id="dispatcher-s2-worker")
-    assert disposition == ExecutionDisposition.TERMINAL_DUPLICATE
+    handler_invocations_total = 2
+    handler_body_executions = 1 + redelivery_handler_body_calls
+    side_effect_commits_expected = 1
 
     with SessionLocal() as db:
         rep = TaskRepository(db)
@@ -369,6 +439,7 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
         "S2",
         "Worker abrupt termination (TerminateProcess) post-result persistence with duplicate redelivery fencing",
         results_count == 1,
+        test_nature="real_process_termination",
     )
     envelope.update({
         "task_id": task_id,
@@ -389,7 +460,8 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
             "handler_invocations_total": handler_invocations_total,
             "handler_body_executions": handler_body_executions,
             "side_effect_commits": side_effect_commits_expected,
-            "duplicate_side_effects": 0,
+            "duplicate_side_effects": redelivery_handler_body_calls,
+            "observable_evidence": "mock_get_handler.call_count == 0 (verified handler body was fenced from running)",
             "note": (
                 "TaskForge provides at-least-once delivery. The terminal-state fence "
                 "in execute_task() prevents the handler body from running on duplicate "
@@ -415,8 +487,20 @@ def test_s3_outbox_publisher_sigkill_duplicate_delivery_fencing(redis_conn, test
     - Workers consume deliveries: Worker 1 executes to completion; Worker 2's duplicate delivery is fenced.
     - Invariants: at most one committed result, zero duplicate side-effects.
     """
+    from taskforge.tasks.registry import register_handler
+
+    observable_side_effects: list[dict] = []
+
+    @register_handler("cs03_observable_task")
+    def _observable_task_handler(payload):
+        observable_side_effects.append({
+            "worker": payload.get("_current_attempt"),
+            "timestamp": time.time(),
+        })
+        return {"status": "ok"}
+
     repo = TaskRepository(db_session)
-    t = repo.create_task("cs03-outbox-sigkill", "noop", {}, TaskPriority.HIGH.value, max_retries=2)
+    t = repo.create_task("cs03-outbox-sigkill", "cs03_observable_task", {}, TaskPriority.HIGH.value, max_retries=2)
     task_id = t.id
 
     token = "lease-token-s3"
@@ -513,18 +597,15 @@ def test_s3_outbox_publisher_sigkill_duplicate_delivery_fencing(redis_conn, test
     )
     assert result_count == 1
 
-    # S3 — handler invocation counter (Issue 4):
-    # - disp1 == COMPLETED: handler body ran once (worker-s3-first). Result committed.
-    # - disp2 == TERMINAL_DUPLICATE: handler body was NOT run a second time.
-    # Total handler body executions = 1; total invocations = 2 (two deliveries).
-    handler_invocations_total = 2
-    handler_body_executions = 1   # disp2 short-circuits before handler; at-least-once enforced
-    side_effect_commits = 1       # Only one TaskResult row was committed
+    # S3 — handler invocation counter observed via real registered handler:
+    assert len(observable_side_effects) == 1
+    duplicate_side_effects = len(observable_side_effects) - 1
 
     envelope = _common_envelope(
         "S3",
         "Outbox publisher abrupt termination (TerminateProcess) post-enqueue; duplicate delivery fenced",
         result_count == 1,
+        test_nature="real_process_termination",
     )
     envelope.update({
         "task_id": task_id,
@@ -540,10 +621,11 @@ def test_s3_outbox_publisher_sigkill_duplicate_delivery_fencing(redis_conn, test
             "disposition_delivery_2": disp2.value,
         },
         "side_effects": {
-            "handler_invocations_total": handler_invocations_total,
-            "handler_body_executions": handler_body_executions,
-            "side_effect_commits": side_effect_commits,
-            "duplicate_side_effects": 0,
+            "handler_invocations_total": 2,
+            "handler_body_executions": len(observable_side_effects),
+            "side_effect_commits": result_count,
+            "duplicate_side_effects": duplicate_side_effects,
+            "observable_evidence": f"registered handler observable_side_effects recorded exactly {len(observable_side_effects)} execution across 2 deliveries",
             "note": (
                 "TaskForge guarantees at-least-once delivery. The terminal-state fence "
                 "prevents handler body re-execution on the duplicate delivery (disp2 = TERMINAL_DUPLICATE). "
@@ -605,6 +687,7 @@ def test_s4_postgresql_outage_fails_closed_no_broker_ack(redis_conn, test_queue,
         "S4",
         "PostgreSQL outage fails closed; broker ACK withheld without durable DB disposition",
         True,
+        test_nature="mocked_dependency_failure",
     )
     envelope.update({
         "task_id": task_id,
@@ -673,6 +756,7 @@ def test_s5_redis_outage_outbox_preserves_pending_event(redis_conn, test_queue, 
         "S5",
         "Redis outage during outbox publication; durable PostgreSQL intent preserved until recovery",
         True,
+        test_nature="mocked_dependency_failure",
     )
     envelope.update({
         "task_id": task_id,
@@ -836,24 +920,50 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
     # we snapshot lease_token counts. At most one valid lease token should exist per task at
     # any point because SKIP LOCKED prevents two sessions from holding the same row.
 
-    from threading import Lock as _Lock
+    # Phase 1: Real concurrent lease acquisition contention on a single shared task.
+    # 4 concurrent threads attempt to acquire a lease on the exact same task simultaneously.
+    # A threading.Barrier forces overlapping execution windows so all threads call acquire_lease()
+    # at the exact same millisecond. Exactly 1 thread must succeed; 3 must be explicitly rejected (return False).
+    contention_task = repo.create_task("cs07-contention-direct", "noop", {}, TaskPriority.HIGH.value)
+    c_task_id = contention_task.id
+    barrier = threading.Barrier(4)
+    acquisition_results: list[bool] = []
+    results_lock = threading.Lock()
 
+    def attempt_concurrent_acquire(worker_idx: int):
+        token = f"token-w{worker_idx}-{uuid.uuid4().hex[:6]}"
+        barrier.wait()  # Force overlapping execution windows
+        with SessionLocal() as db:
+            rep = TaskRepository(db)
+            res = rep.acquire_lease(c_task_id, f"worker-{worker_idx}", lease_duration_seconds=30, lease_token=token)
+            with results_lock:
+                acquisition_results.append(res)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(attempt_concurrent_acquire, range(4)))
+
+    successful_acquisitions = sum(1 for r in acquisition_results if r is True)
+    rejected_acquisitions = sum(1 for r in acquisition_results if r is False)
+    assert successful_acquisitions == 1, f"Expected 1 success, got {successful_acquisitions}"
+    assert rejected_acquisitions == 3, f"Expected 3 rejections, got {rejected_acquisitions}"
+
+    # Confirm exactly 1 valid lease credential exists for the task
+    with SessionLocal() as db:
+        rep = TaskRepository(db)
+        t_active = rep.get_by_id(c_task_id)
+        assert t_active.lease_token is not None
+        rep.release_lease(c_task_id, t_active.lease_token)
+
+    # Phase 2: Concurrent recovery actors racing for 10 expired tasks under FOR UPDATE SKIP LOCKED
     per_worker_results: list[dict] = []
-    snapshot_lock = _Lock()
+    recovery_barrier = threading.Barrier(4)
 
     def run_recovery_worker(worker_idx: int) -> dict:
+        recovery_barrier.wait()  # Synchronize all recovery workers to start query simultaneously
         with SessionLocal() as db:
             rep = TaskRepository(db)
             recovered = rep.recover_expired_leases()
             rec_ids = [x.id for x in recovered]
-
-            # Snapshot inside the same transaction: check how many of our target task_ids
-            # still have a non-None lease_token at this exact moment (concurrent valid leases).
-            # Because SKIP LOCKED prevents two workers from claiming the same row, this will
-            # always be <= 1 per task when measured inside the claiming transaction.
-            with snapshot_lock:
-                pass  # snapshot boundary — lease transitions are serialized by SKIP LOCKED
-
             reclaimed = broker.reclaim_expired()
             return {
                 "worker_idx": worker_idx,
@@ -886,48 +996,47 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
         assert t_final.lease_token is None
         assert t_final.lease_expires_at is None
 
-    # Contention measurement: each of the 4 workers raced for the same 10 expired tasks.
-    # Total recovery attempts across workers = sum of per-worker recovered_counts (which equals
-    # 10 total because SKIP LOCKED ensures each row is claimed once). The remaining 3 workers
-    # see 0 rows remaining for them to claim — this is the rejection evidence.
-    total_acquisition_attempts = sum(r["recovered_count"] for r in per_worker_results)
-    # rejected_acquisition_slots: each worker could have attempted up to 10 recoveries;
-    # any that got 0 means all 10 were already SKIP LOCKED by another worker.
-    rejected_acquisition_slots = sum(
-        10 - r["recovered_count"] for r in per_worker_results
-    )
-    workers_that_acquired = sum(1 for r in per_worker_results if r["recovered_count"] > 0)
-    # max_concurrent_valid_leases: since SKIP LOCKED serializes acquisition, at most 1 worker
-    # can hold a valid lease for any given task row simultaneously. The final state shows
-    # all lease_tokens are None (released), confirming no concurrent ownership remained.
-    max_concurrent_valid_leases_per_task = 1  # Demonstrated by SKIP LOCKED serialization
-
     duplicate_count = len(target_recovered) - len(set(target_recovered))
-    invariants_passed = (len(set(target_recovered)) == 10 and duplicate_count == 0)
+    invariants_passed = (
+        successful_acquisitions == 1
+        and rejected_acquisitions == 3
+        and len(set(target_recovered)) == 10
+        and duplicate_count == 0
+    )
 
     envelope = _common_envelope(
         "S7",
         "Concurrent recovery actors under FOR UPDATE SKIP LOCKED; actual lease contention exercised",
         invariants_passed,
+        test_nature="real_concurrent_actors",
     )
     envelope.update({
         "task_count": 10,
         "concurrent_recovery_workers": 4,
         "contention_evidence": {
-            "total_successful_acquisitions": total_acquisition_attempts,
-            "rejected_acquisition_slots": rejected_acquisition_slots,
-            "duplicate_acquisitions": duplicate_count,
-            "workers_that_acquired_at_least_one_task": workers_that_acquired,
-            "max_concurrent_valid_leases_per_task": max_concurrent_valid_leases_per_task,
-            "contention_mechanism": "PostgreSQL SELECT FOR UPDATE SKIP LOCKED prevents concurrent ownership",
-            "per_worker_results": [
-                {
-                    "worker_idx": r["worker_idx"],
-                    "recovered_count": r["recovered_count"],
-                    "reclaimed_count": r["reclaimed_count"],
-                }
-                for r in per_worker_results
-            ],
+            "single_task_contention": {
+                "task_id": c_task_id,
+                "attempted_acquisitions": 4,
+                "successful_acquisitions": successful_acquisitions,
+                "rejected_acquisitions": rejected_acquisitions,
+                "max_concurrent_valid_leases": 1,
+            },
+            "skip_locked_recovery_race": {
+                "tasks_count": 10,
+                "concurrent_recovery_workers": 4,
+                "total_recovered_tasks": len(target_recovered),
+                "duplicate_recoveries": duplicate_count,
+                "per_worker_results": [
+                    {
+                        "worker_idx": r["worker_idx"],
+                        "recovered_count": r["recovered_count"],
+                        "reclaimed_count": r["reclaimed_count"],
+                    }
+                    for r in per_worker_results
+                ],
+            },
+            "contention_mechanism": "PostgreSQL SELECT FOR UPDATE row-level mutual exclusion and SKIP LOCKED",
+            "barrier_synchronized": True,
         },
         "relational": {
             "all_tasks_in_retry_wait": True,

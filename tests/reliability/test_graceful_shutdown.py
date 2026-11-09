@@ -53,9 +53,9 @@ def test_graceful_shutdown_drains_active_tasks_cleanly(redis_conn, test_queue, d
     repo = TaskRepository(db_session)
     broker = RedisBroker(redis_conn, queue_name=test_queue, visibility_timeout_seconds=5)
 
-    # Enqueue two 0.8s tasks
-    t1 = repo.create_task("drain-task-1", "sleep", {"duration": 0.8}, TaskPriority.HIGH.value)
-    t2 = repo.create_task("drain-task-2", "sleep", {"duration": 0.8}, TaskPriority.HIGH.value)
+    # Enqueue two 1.5s tasks
+    t1 = repo.create_task("drain-task-1", "sleep", {"duration": 1.5}, TaskPriority.HIGH.value)
+    t2 = repo.create_task("drain-task-2", "sleep", {"duration": 1.5}, TaskPriority.HIGH.value)
     broker.enqueue(t1.id, t1.priority, t1.payload)
     broker.enqueue(t2.id, t2.priority, t2.payload)
 
