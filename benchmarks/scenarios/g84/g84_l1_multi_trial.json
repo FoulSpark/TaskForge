@@ -7,57 +7,57 @@
   "trials": [
     {
       "trial": 1,
-      "duration_seconds": 6.4,
-      "throughput_rps": 156.3,
-      "p50_ms": 91.91,
-      "p95_ms": 129.31,
-      "p99_ms": 150.66,
+      "duration_seconds": 5.159,
+      "throughput_rps": 193.8,
+      "p50_ms": 74.01,
+      "p95_ms": 101.6,
+      "p99_ms": 138.36,
       "outbox_parity": "100%"
     },
     {
       "trial": 2,
-      "duration_seconds": 6.297,
-      "throughput_rps": 158.8,
-      "p50_ms": 90.24,
-      "p95_ms": 122.7,
-      "p99_ms": 164.01,
+      "duration_seconds": 4.987,
+      "throughput_rps": 200.5,
+      "p50_ms": 72.78,
+      "p95_ms": 91.02,
+      "p99_ms": 122.05,
       "outbox_parity": "100%"
     },
     {
       "trial": 3,
-      "duration_seconds": 6.273,
-      "throughput_rps": 159.4,
-      "p50_ms": 90.38,
-      "p95_ms": 127.88,
-      "p99_ms": 156.29,
+      "duration_seconds": 5.078,
+      "throughput_rps": 196.9,
+      "p50_ms": 73.13,
+      "p95_ms": 97.41,
+      "p99_ms": 136.06,
       "outbox_parity": "100%"
     },
     {
       "trial": 4,
-      "duration_seconds": 6.213,
-      "throughput_rps": 160.9,
-      "p50_ms": 89.84,
-      "p95_ms": 121.53,
-      "p99_ms": 151.12,
+      "duration_seconds": 4.995,
+      "throughput_rps": 200.2,
+      "p50_ms": 72.78,
+      "p95_ms": 91.31,
+      "p99_ms": 119.94,
       "outbox_parity": "100%"
     },
     {
       "trial": 5,
-      "duration_seconds": 6.28,
-      "throughput_rps": 159.2,
-      "p50_ms": 90.3,
-      "p95_ms": 130.25,
-      "p99_ms": 156.86,
+      "duration_seconds": 5.058,
+      "throughput_rps": 197.7,
+      "p50_ms": 72.72,
+      "p95_ms": 95.82,
+      "p99_ms": 138.92,
       "outbox_parity": "100%"
     }
   ],
   "aggregate_metrics": {
-    "min_throughput_rps": 156.3,
-    "max_throughput_rps": 160.9,
-    "avg_throughput_rps": 158.9,
-    "min_p95_ms": 121.53,
-    "max_p95_ms": 130.25,
-    "avg_p95_ms": 126.33
+    "min_throughput_rps": 193.8,
+    "max_throughput_rps": 200.5,
+    "avg_throughput_rps": 197.8,
+    "min_p95_ms": 91.02,
+    "max_p95_ms": 101.6,
+    "avg_p95_ms": 95.43
   },
   "verdict": "PASS"
 }

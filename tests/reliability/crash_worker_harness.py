@@ -16,6 +16,7 @@ from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
 from taskforge.queue.broker import RedisBroker
 from taskforge.queue.redis_client import create_redis_client
+from taskforge.tasks.registry import get_handler
 from taskforge.workers.execution_engine import execute_task
 from taskforge.workers.lease_manager import LeaseManager
 
@@ -157,13 +158,16 @@ def run_crash_drill(crash_point: str, queue_name: str, task_id: str, visibility_
                         status="RUNNING",
                         lease_token=lease.lease_token,
                     )
-                    # Emit observable IPC marker verifying handler body execution before result commit
+                    task = repo.get_by_id(task_id)
+                    handler = get_handler(task.task_type)
+                    handler_result = handler(task.payload or {})
+                    # Emit observable IPC marker verifying handler body execution after handler return and before result commit
                     sys.stdout.write("EXECUTED:1\n")
                     sys.stdout.flush()
                     repo.complete_task_success(
                         task_id=task_id,
                         lease_token=lease.lease_token,
-                        return_value={"status": "computed_successfully", "pid": os.getpid()},
+                        return_value=handler_result,
                         attempt_id=attempt.id,
                     )
                 fp = hashlib.sha256(lease.lease_token.encode()).hexdigest()[:12]

@@ -59,9 +59,10 @@ CAMPAIGN_ID = os.environ.get("TASKFORGE_CAMPAIGN_ID", f"cmp-{uuid.uuid4().hex[:8
 def _read_subprocess_output(proc: subprocess.Popen, timeout: float = 5.0) -> dict[str, str]:
     """
     Bounded non-blocking line reader using a background thread and bounded queue timeout.
-    Guarantees execution never hangs indefinitely on child processes.
+    Enforces bounded child process communication and verifies reader thread termination.
     """
     q: queue.Queue[str] = queue.Queue()
+    reader_errors: list[Exception] = []
 
     def _reader():
         try:
@@ -73,8 +74,8 @@ def _read_subprocess_output(proc: subprocess.Popen, timeout: float = 5.0) -> dic
                     q.put(line)
                     if line.startswith("READY:"):
                         break
-        except Exception:
-            pass
+        except Exception as e:
+            reader_errors.append(e)
 
     t = threading.Thread(target=_reader, daemon=True)
     t.start()
@@ -105,6 +106,13 @@ def _read_subprocess_output(proc: subprocess.Popen, timeout: float = 5.0) -> dic
         proc.wait(timeout=1.0)
 
     t.join(timeout=1.0)
+    if t.is_alive():
+        raise RuntimeError("Subprocess output reader did not terminate after child cleanup")
+    if reader_errors:
+        raise RuntimeError(
+            f"Subprocess output reader encountered unexpected error: {reader_errors[0]}"
+        ) from reader_errors[0]
+
     return output
 
 
@@ -548,7 +556,7 @@ def test_s2_worker_sigkill_after_result_persistence_duplicate_fencing(redis_conn
             "total_handler_body_executions": total_handler_body_executions,
             "side_effect_commits": results_count,
             "duplicate_side_effects": redelivery_body_executions,
-            "observable_evidence": "CS-02 subprocess executed handler and emitted EXECUTED:1 IPC marker before result persistence; mock_get_handler.call_count == 0 on redelivery",
+            "observable_evidence": "CS-02 subprocess invoked registered handler via get_handler() and emitted EXECUTED:1 IPC marker after handler return; mock_get_handler.call_count == 0 on redelivery",
             "note": (
                 "TaskForge provides at-least-once delivery. The terminal-state fence "
                 "in execute_task() prevents the handler body from running on duplicate "
@@ -966,11 +974,11 @@ def test_s6_supervisor_restart_recovers_and_drains_tasks(redis_conn, test_queue,
 
 
 def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_session):
-    """S7: Concurrent recovery actors race safety.
-    - Create 10 expired tasks in DB (status RUNNING, lease expired) and 10 in-flight in Redis.
-    - Concurrently launch 4 recovery workers across multiple threads.
-    - Invariant: FOR UPDATE SKIP LOCKED guarantees each task is recovered by exactly one worker.
-    - Invariant: Zero duplicate recovery transitions, max_concurrent_valid_leases <= 1.
+    """S7: Concurrent recovery actors and lease contention safety.
+    - Phase 1: Real concurrent lease acquisition contention across 3 successive barrier races on a single task.
+      Verifies mutually exclusive ownership and max overlapping valid leases == 1 via PostgreSQL clock timestamps.
+    - Phase 2: Concurrent recovery execution across 4 synchronized workers for 10 expired tasks under FOR UPDATE SKIP LOCKED.
+      Verifies disjoint task recovery with unique outcomes (zero duplicate recoveries) and all tasks transitioned to RETRY_WAIT.
     """
     repo = TaskRepository(db_session)
     task_ids = []
@@ -997,9 +1005,10 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
         # Manually expire in Redis in_flight
         redis_conn.zadd(f"{test_queue}:in_flight", {msg["_raw_envelope"]: time.time() - 10})
 
-    # S7 — Meaningful lease-contention measurement (Issue 3):
-    # Strategy: Run 4 concurrent recovery workers.  Each tries to recover ALL 10 tasks.
-    # FOR UPDATE SKIP LOCKED in recover_expired_leases() ensures each row is claimed by exactly
+    # S7 — Meaningful lease-contention measurement & concurrent recovery verification:
+    # Phase 1 exercises single-task acquisition contention with PostgreSQL timestamped audit logs.
+    # Phase 2 exercises concurrent recovery execution across 4 synchronized workers, demonstrating
+    # partition of recovered tasks without duplicate processing across concurrent workers.
     # one worker at a time. We record per-worker acquisition counts and reject counts, then
     # verify: total successful acquisitions == 10, duplicates == 0.
     #
@@ -1185,7 +1194,9 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
         f"Expected max concurrent database ownership intervals == 1, observed {max_overlapping_valid_leases}"
     )
 
-    # Phase 2: Concurrent recovery actors racing for 10 expired tasks under FOR UPDATE SKIP LOCKED
+    # Phase 2: Concurrent recovery execution across 4 synchronized workers for 10 expired tasks under FOR UPDATE SKIP LOCKED.
+    # Demonstrates partition of recovered tasks without duplicate processing across concurrent workers;
+    # narrows claim to concurrent recovery execution with unique recovery outcomes.
     per_worker_results: list[dict] = []
     recovery_barrier = threading.Barrier(4)
 
@@ -1238,7 +1249,7 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
 
     envelope = _common_envelope(
         "S7",
-        "Concurrent recovery actors under FOR UPDATE SKIP LOCKED; actual lease contention exercised",
+        "Concurrent lease contention and concurrent recovery execution with unique outcomes under FOR UPDATE SKIP LOCKED",
         invariants_passed,
         test_nature="real_concurrent_actors",
     )
@@ -1257,7 +1268,7 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
                 "database_ownership_intervals": db_ownership_intervals,
                 "contending_workers": acquisition_results,
             },
-            "skip_locked_recovery_race": {
+            "skip_locked_concurrent_recovery_execution": {
                 "tasks_count": 10,
                 "concurrent_recovery_workers": 4,
                 "total_recovered_tasks": len(target_recovered),
@@ -1270,8 +1281,9 @@ def test_s7_concurrent_recovery_actors_race_safety(redis_conn, test_queue, db_se
                     }
                     for r in per_worker_results
                 ],
+                "claim_scope": "concurrent_recovery_execution_with_unique_recovery_outcomes",
             },
-            "contention_mechanism": "PostgreSQL SELECT FOR UPDATE row-level mutual exclusion and SKIP LOCKED",
+            "contention_mechanism": "PostgreSQL SELECT FOR UPDATE row-level mutual exclusion (Phase 1) and SKIP LOCKED concurrent recovery partition (Phase 2)",
             "barrier_synchronized": True,
         },
         "relational": {
