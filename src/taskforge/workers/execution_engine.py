@@ -14,6 +14,7 @@ from taskforge.database.models import TaskAttempt, get_utc_now
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
 from taskforge.monitoring.metrics import record_task_execution_duration
+from taskforge.monitoring.profiler import record_diagnostic_event
 from taskforge.tasks.registry import get_handler
 from taskforge.workers.lease_manager import LeaseManager
 
@@ -173,9 +174,11 @@ def execute_task(
 
         def timed_callable(fn: Any, arg: Any) -> Any:
             started = time.perf_counter()
+            record_diagnostic_event("handler_start", task_id=task_id)
             try:
                 return fn(arg)
             finally:
+                record_diagnostic_event("handler_end", task_id=task_id)
                 record_task_execution_duration(task_type, time.perf_counter() - started)
 
         try:

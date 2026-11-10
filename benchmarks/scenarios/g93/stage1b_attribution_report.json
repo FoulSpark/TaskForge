@@ -1,0 +1,638 @@
+{
+  "milestone": "G9.3_stage1b_attribution",
+  "timestamp_utc": "2026-11-10T15:30:36.774749+00:00",
+  "git_provenance": {
+    "base_authorized_sha": "c795315e3f49f8352406458bdbef4a692d62e9c9",
+    "frozen_baseline_tag": "v0.8.0-phase8-freeze",
+    "frozen_baseline_commit": "da27047f56fe2eec75acdb8502f505542cf61202"
+  },
+  "workload_definitions_sha256": "04f2306538868a41514c19f0958e04bf0b0586b3a83989e115231a32e50f0110",
+  "runs": {
+    "W-01_baseline": {
+      "workload_id": "W-01",
+      "name": "baseline_noop_profiling",
+      "trial_id": "run_uninstrumented_W-01",
+      "profiling_enabled": false,
+      "measured_tasks": 500,
+      "completed_tasks": 500,
+      "duration_seconds": 44.968,
+      "throughput_tps": 11.12,
+      "execution_overhead_p50_ms": 159.28,
+      "flush_report": {},
+      "raw_events_path": null,
+      "raw_events_sha256": null
+    },
+    "W-01_instrumented": {
+      "workload_id": "W-01",
+      "name": "baseline_noop_profiling",
+      "trial_id": "run_instrumented_W-01",
+      "profiling_enabled": true,
+      "measured_tasks": 500,
+      "completed_tasks": 500,
+      "duration_seconds": 49.006,
+      "throughput_tps": 10.2,
+      "execution_overhead_p50_ms": 148.185,
+      "flush_report": {
+        "persisted_count": 8946,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_b1\\events_16_g93_W-01_run_instrumented_W-01_1794324685.jsonl",
+      "raw_events_sha256": "92fd866044d672493763df5e4bfc9b7a3b4ffe38475b7eb9af870be96dee708e",
+      "lifecycle_attribution": {
+        "timestamp_completeness": {
+          "expected_events_per_task": 14,
+          "event_counts": {
+            "outbox_claim_start": 623,
+            "outbox_claim_commit": 623,
+            "task_transaction_commit": 550,
+            "api_request_received": 550,
+            "api_response_sent": 550,
+            "redis_enqueue_start": 550,
+            "redis_enqueue_complete": 550,
+            "redis_dequeue_complete": 550,
+            "lease_claim_start": 550,
+            "lease_commit": 550,
+            "outbox_published_commit": 550,
+            "handler_start": 550,
+            "handler_end": 550,
+            "terminal_transaction_start": 550,
+            "terminal_commit": 550,
+            "redis_ack_complete": 550
+          },
+          "tracked_tasks": 550
+        },
+        "outbox_lag_analysis": {
+          "eligible_lag_count": 460,
+          "unavailable_race_count": 40,
+          "unclaimed_count": 0,
+          "distribution": {
+            "p50_ms": 110.905,
+            "p95_ms": 234.546,
+            "p99_ms": 335.415,
+            "max_ms": 362.175,
+            "min_ms": 0.335,
+            "mean_ms": 118.285,
+            "stddev_ms": 74.726,
+            "count": 460
+          }
+        },
+        "broker_dwell_analysis": {
+          "client_observed_dwell_distribution": {
+            "p50_ms": 22455.51,
+            "p95_ms": 36864.142,
+            "p99_ms": 37416.392,
+            "max_ms": 37417.978,
+            "min_ms": 6.85,
+            "mean_ms": 21502.258,
+            "stddev_ms": 11365.338,
+            "count": 499
+          },
+          "negative_intervals": {
+            "count": 1,
+            "frequency_percent": 0.2,
+            "min_ms": -0.606,
+            "max_ms": -0.606,
+            "mean_ms": -0.606
+          }
+        },
+        "publication_dequeue_race_overlap": {
+          "overlap_count": 10,
+          "distribution": {
+            "p50_ms": 185.188,
+            "p95_ms": 245.91,
+            "p99_ms": 249.824,
+            "max_ms": 250.802,
+            "min_ms": 97.368,
+            "mean_ms": 180.271,
+            "stddev_ms": 57.834,
+            "count": 10
+          }
+        },
+        "stage_distributions": {
+          "t_api_server_ms": {
+            "p50_ms": 63.938,
+            "p95_ms": 133.52,
+            "p99_ms": 150.152,
+            "max_ms": 172.774,
+            "min_ms": 33.655,
+            "mean_ms": 73.327,
+            "stddev_ms": 28.363,
+            "count": 500
+          },
+          "t_outbox_claim_ms": {
+            "p50_ms": 21.658,
+            "p95_ms": 44.707,
+            "p99_ms": 60.254,
+            "max_ms": 60.254,
+            "min_ms": 9.19,
+            "mean_ms": 25.048,
+            "stddev_ms": 11.338,
+            "count": 500
+          },
+          "t_redis_enq_ms": {
+            "p50_ms": 5.379,
+            "p95_ms": 17.307,
+            "p99_ms": 24.678,
+            "max_ms": 67.98,
+            "min_ms": 0.531,
+            "mean_ms": 6.687,
+            "stddev_ms": 6.001,
+            "count": 500
+          },
+          "t_outbox_commit_ms": {
+            "p50_ms": 129.141,
+            "p95_ms": 244.566,
+            "p99_ms": 283.518,
+            "max_ms": 310.122,
+            "min_ms": 46.006,
+            "mean_ms": 142.875,
+            "stddev_ms": 50.465,
+            "count": 500
+          },
+          "t_worker_lease_ms": {
+            "p50_ms": 23.253,
+            "p95_ms": 87.047,
+            "p99_ms": 110.829,
+            "max_ms": 138.885,
+            "min_ms": 8.071,
+            "mean_ms": 31.422,
+            "stddev_ms": 23.513,
+            "count": 500
+          },
+          "t_handler_exec_ms": {
+            "p50_ms": 0.013,
+            "p95_ms": 0.021,
+            "p99_ms": 0.031,
+            "max_ms": 0.052,
+            "min_ms": 0.004,
+            "mean_ms": 0.014,
+            "stddev_ms": 0.005,
+            "count": 500
+          },
+          "t_terminal_persist_ms": {
+            "p50_ms": 24.64,
+            "p95_ms": 68.648,
+            "p99_ms": 84.49,
+            "max_ms": 102.022,
+            "min_ms": 6.373,
+            "mean_ms": 29.796,
+            "stddev_ms": 16.19,
+            "count": 500
+          },
+          "t_redis_ack_ms": {
+            "p50_ms": 31.577,
+            "p95_ms": 97.195,
+            "p99_ms": 123.519,
+            "max_ms": 139.567,
+            "min_ms": 6.507,
+            "mean_ms": 37.544,
+            "stddev_ms": 25.657,
+            "count": 500
+          },
+          "t_end_to_end_ms": {
+            "p50_ms": 22936.623,
+            "p95_ms": 37405.793,
+            "p99_ms": 37698.2,
+            "max_ms": 37733.173,
+            "min_ms": 663.042,
+            "mean_ms": 21976.028,
+            "stddev_ms": 11329.291,
+            "count": 500
+          }
+        }
+      }
+    },
+    "W-02_baseline": {
+      "workload_id": "W-02",
+      "name": "cpu_bound_prime_sieve",
+      "trial_id": "run_uninstrumented_W-02",
+      "profiling_enabled": false,
+      "measured_tasks": 200,
+      "completed_tasks": 200,
+      "duration_seconds": 24.718,
+      "throughput_tps": 8.09,
+      "execution_overhead_p50_ms": 66.995,
+      "flush_report": {},
+      "raw_events_path": null,
+      "raw_events_sha256": null
+    },
+    "W-02_instrumented": {
+      "workload_id": "W-02",
+      "name": "cpu_bound_prime_sieve",
+      "trial_id": "run_instrumented_W-02",
+      "profiling_enabled": true,
+      "measured_tasks": 200,
+      "completed_tasks": 200,
+      "duration_seconds": 32.135,
+      "throughput_tps": 6.22,
+      "execution_overhead_p50_ms": 63.275,
+      "flush_report": {
+        "persisted_count": 4034,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_b1\\events_16_g93_W-02_run_instrumented_W-02_1794324768.jsonl",
+      "raw_events_sha256": "cbd4fc5738bc112b30579e5d4b3c479c1db0726a235ecc5b6e6ae2f1fae3ab7f",
+      "lifecycle_attribution": {
+        "timestamp_completeness": {
+          "expected_events_per_task": 14,
+          "event_counts": {
+            "outbox_claim_start": 477,
+            "outbox_claim_commit": 477,
+            "task_transaction_commit": 220,
+            "api_request_received": 220,
+            "api_response_sent": 220,
+            "redis_enqueue_start": 220,
+            "redis_enqueue_complete": 220,
+            "redis_dequeue_complete": 220,
+            "lease_claim_start": 220,
+            "outbox_published_commit": 220,
+            "lease_commit": 220,
+            "handler_start": 220,
+            "handler_end": 220,
+            "terminal_transaction_start": 220,
+            "terminal_commit": 220,
+            "redis_ack_complete": 220
+          },
+          "tracked_tasks": 220
+        },
+        "outbox_lag_analysis": {
+          "eligible_lag_count": 189,
+          "unavailable_race_count": 11,
+          "unclaimed_count": 0,
+          "distribution": {
+            "p50_ms": 71.776,
+            "p95_ms": 135.38,
+            "p99_ms": 145.563,
+            "max_ms": 170.413,
+            "min_ms": 1.304,
+            "mean_ms": 71.606,
+            "stddev_ms": 40.743,
+            "count": 189
+          }
+        },
+        "broker_dwell_analysis": {
+          "client_observed_dwell_distribution": {
+            "p50_ms": 15355.156,
+            "p95_ms": 26702.582,
+            "p99_ms": 26900.744,
+            "max_ms": 26951.758,
+            "min_ms": 0.54,
+            "mean_ms": 15569.422,
+            "stddev_ms": 7605.404,
+            "count": 199
+          },
+          "negative_intervals": {
+            "count": 1,
+            "frequency_percent": 0.5,
+            "min_ms": -3.45,
+            "max_ms": -3.45,
+            "mean_ms": -3.45
+          }
+        },
+        "publication_dequeue_race_overlap": {
+          "overlap_count": 4,
+          "distribution": {
+            "p50_ms": 81.279,
+            "p95_ms": 90.255,
+            "p99_ms": 91.252,
+            "max_ms": 91.501,
+            "min_ms": 74.556,
+            "mean_ms": 82.154,
+            "stddev_ms": 7.165,
+            "count": 4
+          }
+        },
+        "stage_distributions": {
+          "t_api_server_ms": {
+            "p50_ms": 27.717,
+            "p95_ms": 62.353,
+            "p99_ms": 105.985,
+            "max_ms": 124.385,
+            "min_ms": 16.316,
+            "mean_ms": 32.906,
+            "stddev_ms": 16.311,
+            "count": 200
+          },
+          "t_outbox_claim_ms": {
+            "p50_ms": 10.096,
+            "p95_ms": 27.327,
+            "p99_ms": 86.763,
+            "max_ms": 86.763,
+            "min_ms": 3.278,
+            "mean_ms": 13.786,
+            "stddev_ms": 13.849,
+            "count": 200
+          },
+          "t_redis_enq_ms": {
+            "p50_ms": 2.785,
+            "p95_ms": 7.716,
+            "p99_ms": 13.783,
+            "max_ms": 16.474,
+            "min_ms": 0.405,
+            "mean_ms": 3.488,
+            "stddev_ms": 2.58,
+            "count": 200
+          },
+          "t_outbox_commit_ms": {
+            "p50_ms": 68.876,
+            "p95_ms": 104.414,
+            "p99_ms": 125.583,
+            "max_ms": 131.997,
+            "min_ms": 47.444,
+            "mean_ms": 72.214,
+            "stddev_ms": 15.724,
+            "count": 200
+          },
+          "t_worker_lease_ms": {
+            "p50_ms": 11.2,
+            "p95_ms": 34.753,
+            "p99_ms": 41.875,
+            "max_ms": 47.615,
+            "min_ms": 5.609,
+            "mean_ms": 13.921,
+            "stddev_ms": 8.409,
+            "count": 200
+          },
+          "t_handler_exec_ms": {
+            "p50_ms": 0.123,
+            "p95_ms": 0.172,
+            "p99_ms": 0.191,
+            "max_ms": 0.238,
+            "min_ms": 0.062,
+            "mean_ms": 0.119,
+            "stddev_ms": 0.032,
+            "count": 200
+          },
+          "t_terminal_persist_ms": {
+            "p50_ms": 11.889,
+            "p95_ms": 27.632,
+            "p99_ms": 45.001,
+            "max_ms": 47.82,
+            "min_ms": 6.946,
+            "mean_ms": 14.152,
+            "stddev_ms": 7.027,
+            "count": 200
+          },
+          "t_redis_ack_ms": {
+            "p50_ms": 12.898,
+            "p95_ms": 49.503,
+            "p99_ms": 61.83,
+            "max_ms": 77.648,
+            "min_ms": 6.958,
+            "mean_ms": 17.103,
+            "stddev_ms": 12.359,
+            "count": 200
+          },
+          "t_end_to_end_ms": {
+            "p50_ms": 15670.981,
+            "p95_ms": 26954.059,
+            "p99_ms": 27091.08,
+            "max_ms": 27175.698,
+            "min_ms": 327.675,
+            "mean_ms": 15730.973,
+            "stddev_ms": 7652.116,
+            "count": 200
+          }
+        }
+      }
+    },
+    "W-03_baseline": {
+      "workload_id": "W-03",
+      "name": "io_simulation_delay",
+      "trial_id": "run_uninstrumented_W-03",
+      "profiling_enabled": false,
+      "measured_tasks": 200,
+      "completed_tasks": 200,
+      "duration_seconds": 14.551,
+      "throughput_tps": 13.75,
+      "execution_overhead_p50_ms": 190.67,
+      "flush_report": {},
+      "raw_events_path": null,
+      "raw_events_sha256": null
+    },
+    "W-03_instrumented": {
+      "workload_id": "W-03",
+      "name": "io_simulation_delay",
+      "trial_id": "run_instrumented_W-03",
+      "profiling_enabled": true,
+      "measured_tasks": 200,
+      "completed_tasks": 200,
+      "duration_seconds": 18.724,
+      "throughput_tps": 10.68,
+      "execution_overhead_p50_ms": 171.505,
+      "flush_report": {
+        "persisted_count": 3502,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_b1\\events_16_g93_W-03_run_instrumented_W-03_1794324817.jsonl",
+      "raw_events_sha256": "bc1bb1863627aa6ebe6c986c51d1faa3f5ef7b66ff6dd475c968389ad3a05442",
+      "lifecycle_attribution": {
+        "timestamp_completeness": {
+          "expected_events_per_task": 14,
+          "event_counts": {
+            "outbox_claim_start": 211,
+            "outbox_claim_commit": 211,
+            "task_transaction_commit": 220,
+            "api_request_received": 220,
+            "api_response_sent": 220,
+            "redis_enqueue_start": 220,
+            "redis_enqueue_complete": 220,
+            "redis_dequeue_complete": 220,
+            "lease_claim_start": 220,
+            "lease_commit": 220,
+            "outbox_published_commit": 220,
+            "handler_start": 220,
+            "handler_end": 220,
+            "terminal_transaction_start": 220,
+            "terminal_commit": 220,
+            "redis_ack_complete": 220
+          },
+          "tracked_tasks": 220
+        },
+        "outbox_lag_analysis": {
+          "eligible_lag_count": 179,
+          "unavailable_race_count": 21,
+          "unclaimed_count": 0,
+          "distribution": {
+            "p50_ms": 145.127,
+            "p95_ms": 270.233,
+            "p99_ms": 383.161,
+            "max_ms": 521.305,
+            "min_ms": 1.562,
+            "mean_ms": 141.132,
+            "stddev_ms": 91.222,
+            "count": 179
+          }
+        },
+        "broker_dwell_analysis": {
+          "client_observed_dwell_distribution": {
+            "p50_ms": 9250.22,
+            "p95_ms": 12147.037,
+            "p99_ms": 12551.255,
+            "max_ms": 12556.185,
+            "min_ms": 0.459,
+            "mean_ms": 8382.352,
+            "stddev_ms": 3369.541,
+            "count": 200
+          },
+          "negative_intervals": {
+            "count": 0,
+            "frequency_percent": 0.0,
+            "min_ms": 0.0,
+            "max_ms": 0.0,
+            "mean_ms": 0.0
+          }
+        },
+        "publication_dequeue_race_overlap": {
+          "overlap_count": 10,
+          "distribution": {
+            "p50_ms": 173.736,
+            "p95_ms": 206.656,
+            "p99_ms": 213.423,
+            "max_ms": 215.115,
+            "min_ms": 108.983,
+            "mean_ms": 167.572,
+            "stddev_ms": 33.905,
+            "count": 10
+          }
+        },
+        "stage_distributions": {
+          "t_api_server_ms": {
+            "p50_ms": 81.559,
+            "p95_ms": 166.816,
+            "p99_ms": 225.382,
+            "max_ms": 259.235,
+            "min_ms": 36.198,
+            "mean_ms": 90.397,
+            "stddev_ms": 36.715,
+            "count": 200
+          },
+          "t_outbox_claim_ms": {
+            "p50_ms": 29.904,
+            "p95_ms": 77.678,
+            "p99_ms": 77.678,
+            "max_ms": 77.678,
+            "min_ms": 13.521,
+            "mean_ms": 32.554,
+            "stddev_ms": 16.154,
+            "count": 200
+          },
+          "t_redis_enq_ms": {
+            "p50_ms": 8.057,
+            "p95_ms": 24.944,
+            "p99_ms": 41.642,
+            "max_ms": 74.72,
+            "min_ms": 0.521,
+            "mean_ms": 10.276,
+            "stddev_ms": 9.069,
+            "count": 200
+          },
+          "t_outbox_commit_ms": {
+            "p50_ms": 159.335,
+            "p95_ms": 313.669,
+            "p99_ms": 513.605,
+            "max_ms": 531.821,
+            "min_ms": 47.858,
+            "mean_ms": 170.736,
+            "stddev_ms": 81.849,
+            "count": 200
+          },
+          "t_worker_lease_ms": {
+            "p50_ms": 25.647,
+            "p95_ms": 69.809,
+            "p99_ms": 115.23,
+            "max_ms": 121.352,
+            "min_ms": 8.914,
+            "mean_ms": 30.972,
+            "stddev_ms": 20.281,
+            "count": 200
+          },
+          "t_handler_exec_ms": {
+            "p50_ms": 6.239,
+            "p95_ms": 10.779,
+            "p99_ms": 13.27,
+            "max_ms": 18.001,
+            "min_ms": 5.09,
+            "mean_ms": 6.792,
+            "stddev_ms": 1.906,
+            "count": 200
+          },
+          "t_terminal_persist_ms": {
+            "p50_ms": 28.686,
+            "p95_ms": 87.351,
+            "p99_ms": 121.842,
+            "max_ms": 157.4,
+            "min_ms": 12.926,
+            "mean_ms": 34.445,
+            "stddev_ms": 21.854,
+            "count": 200
+          },
+          "t_redis_ack_ms": {
+            "p50_ms": 33.509,
+            "p95_ms": 142.839,
+            "p99_ms": 193.193,
+            "max_ms": 225.365,
+            "min_ms": 9.893,
+            "mean_ms": 45.811,
+            "stddev_ms": 38.151,
+            "count": 200
+          },
+          "t_end_to_end_ms": {
+            "p50_ms": 9942.074,
+            "p95_ms": 12585.397,
+            "p99_ms": 12867.689,
+            "max_ms": 12987.242,
+            "min_ms": 990.907,
+            "mean_ms": 9001.6,
+            "stddev_ms": 3237.993,
+            "count": 200
+          }
+        }
+      }
+    }
+  },
+  "overhead_comparison": {
+    "W-01": {
+      "baseline_duration_s": 44.968,
+      "instrumented_duration_s": 49.006,
+      "duration_delta_pct": 8.98,
+      "baseline_throughput_tps": 11.12,
+      "instrumented_throughput_tps": 10.2,
+      "throughput_delta_pct": -8.27,
+      "baseline_exec_p50_ms": 159.28,
+      "instrumented_exec_p50_ms": 148.185,
+      "exec_p50_delta_pct": -6.97
+    },
+    "W-02": {
+      "baseline_duration_s": 24.718,
+      "instrumented_duration_s": 32.135,
+      "duration_delta_pct": 30.01,
+      "baseline_throughput_tps": 8.09,
+      "instrumented_throughput_tps": 6.22,
+      "throughput_delta_pct": -23.11,
+      "baseline_exec_p50_ms": 66.995,
+      "instrumented_exec_p50_ms": 63.275,
+      "exec_p50_delta_pct": -5.55
+    },
+    "W-03": {
+      "baseline_duration_s": 14.551,
+      "instrumented_duration_s": 18.724,
+      "duration_delta_pct": 28.68,
+      "baseline_throughput_tps": 13.75,
+      "instrumented_throughput_tps": 10.68,
+      "throughput_delta_pct": -22.33,
+      "baseline_exec_p50_ms": 190.67,
+      "instrumented_exec_p50_ms": 171.505,
+      "exec_p50_delta_pct": -10.05
+    }
+  }
+}

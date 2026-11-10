@@ -1,4 +1,5 @@
 import threading
+import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from taskforge.core.logging import get_logger
 from taskforge.database.models import OutboxEvent, get_utc_now
 from taskforge.database.session import SessionLocal
+from taskforge.monitoring.profiler import record_diagnostic_event
 from taskforge.queue.broker import MessageBroker, get_broker
 
 logger = get_logger(__name__)
@@ -20,6 +22,9 @@ def publish_pending_outbox_events(
     Ensures at-least-once delivery and respects available_at/scheduled_at execution delays.
     Starvation-free: Future-scheduled events are filtered at the database level and do not consume the batch.
     """
+    batch_id = f"batch-{uuid.uuid4().hex[:8]}"
+    record_diagnostic_event("outbox_claim_start", batch_id=batch_id)
+
     now = get_utc_now()
     stmt = (
         select(OutboxEvent)
@@ -36,10 +41,12 @@ def publish_pending_outbox_events(
         .with_for_update(skip_locked=True)
     )
     events = list(db.scalars(stmt).all())
+    record_diagnostic_event("outbox_claim_commit", batch_id=batch_id, metadata={"claimed_count": len(events)})
     if not events:
         return 0
 
     published_count = 0
+    published_task_ids: list[str] = []
 
     for event in events:
         try:
@@ -62,7 +69,9 @@ def publish_pending_outbox_events(
             priority = event.payload.get("priority", 2)
 
             # Enqueue to message broker
+            record_diagnostic_event("redis_enqueue_start", task_id=task_id, batch_id=batch_id)
             broker.enqueue(task_id=task_id, priority=priority, payload=event.payload)
+            record_diagnostic_event("redis_enqueue_complete", task_id=task_id, batch_id=batch_id)
 
             # If retry event, update task status from RETRY_WAIT to QUEUED
             if event.event_type in ("TASK_RETRY", "task.retry"):
@@ -89,6 +98,7 @@ def publish_pending_outbox_events(
             event.status = "PUBLISHED"
             event.published_at = now
             published_count += 1
+            published_task_ids.append(task_id)
             logger.debug("outbox_event_published", event_id=event.id, task_id=task_id)
         except Exception as exc:
             event.retry_count += 1
@@ -101,6 +111,8 @@ def publish_pending_outbox_events(
             )
 
     db.commit()
+    for tid in published_task_ids:
+        record_diagnostic_event("outbox_published_commit", task_id=tid, batch_id=batch_id)
     return published_count
 
 

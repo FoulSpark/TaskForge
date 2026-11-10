@@ -7,6 +7,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from taskforge.monitoring.metrics import normalize_route, record_api_request
+from taskforge.monitoring.profiler import record_diagnostic_event
 
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
@@ -72,6 +73,10 @@ class PrometheusHttpMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         start_time = time.perf_counter()
+        mono_start_ns = time.perf_counter_ns()
+        epoch_start = time.time()
+        request.state.http_ingress_mono_ns = mono_start_ns
+        request.state.http_ingress_epoch = epoch_start
         observed = False
 
         def observe_once(status_code: int) -> None:
@@ -87,6 +92,22 @@ class PrometheusHttpMiddleware(BaseHTTPMiddleware):
                         status_code=status_code,
                         duration_seconds=duration,
                     )
+                except Exception:
+                    pass
+
+                try:
+                    created_tid = getattr(request.state, "created_task_id", None)
+                    if created_tid:
+                        record_diagnostic_event(
+                            "api_request_received",
+                            task_id=created_tid,
+                            t_mono_ns=mono_start_ns,
+                            t_epoch_utc=epoch_start,
+                        )
+                        record_diagnostic_event(
+                            "api_response_sent",
+                            task_id=created_tid,
+                        )
                 except Exception:
                     pass
 

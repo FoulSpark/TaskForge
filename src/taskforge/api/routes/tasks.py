@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from taskforge.api.dependencies import require_scope
@@ -23,6 +23,7 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 def submit_task(
     payload: TaskCreateRequest,
     response: Response,
+    request: Request,
     db: Session = Depends(get_db),
     principal: AuthenticatedPrincipal = Depends(require_scope("tasks:write")),
 ):
@@ -32,6 +33,10 @@ def submit_task(
         tenant_id=principal.tenant_id,
         actor_id=principal.key_id,
     )
+    try:
+        request.state.created_task_id = task.id
+    except Exception:
+        pass
     response.status_code = status.HTTP_201_CREATED if is_created else status.HTTP_200_OK
     return task
 

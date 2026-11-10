@@ -4,6 +4,7 @@ import uuid
 from taskforge.core.logging import get_logger
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
+from taskforge.monitoring.profiler import record_diagnostic_event
 
 logger = get_logger(__name__)
 
@@ -42,6 +43,7 @@ class LeaseManager:
     def acquire(self) -> bool:
         if not self.lease_token:
             self.lease_token = f"lease-{uuid.uuid4().hex}"
+        record_diagnostic_event("lease_claim_start", task_id=self.task_id)
         with SessionLocal() as db:
             repo = TaskRepository(db)
             acquired = repo.acquire_lease(
@@ -51,6 +53,7 @@ class LeaseManager:
                 lease_token=self.lease_token,
             )
             if acquired:
+                record_diagnostic_event("lease_commit", task_id=self.task_id)
                 self._start_renewal()
                 return True
             self.lease_token = None

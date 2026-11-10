@@ -17,6 +17,7 @@ from taskforge.workers.execution_engine import (
 )
 from taskforge.workers.heartbeat import WorkerHeartbeat
 from taskforge.workers.lease_manager import LeaseManager
+from taskforge.monitoring.profiler import record_diagnostic_event
 
 logger = get_logger(__name__)
 
@@ -141,6 +142,8 @@ class WorkerDispatcher:
             if not task_id:
                 continue
 
+            record_diagnostic_event("redis_dequeue_complete", task_id=task_id)
+
             with self._active_lock:
                 self._active_tasks += 1
                 self._heartbeat.set_active_tasks(self._active_tasks)
@@ -188,6 +191,7 @@ class WorkerDispatcher:
                 ExecutionDisposition.RETRY_DURABLY_SCHEDULED,
             ):
                 self.broker.ack(task_id, task_msg, delivery_token=delivery_token)
+                record_diagnostic_event("redis_ack_complete", task_id=task_id)
             else:
                 logger.warning(
                     "delivery_ack_withheld_for_disposition",

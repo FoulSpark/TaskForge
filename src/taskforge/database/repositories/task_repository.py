@@ -29,6 +29,7 @@ from taskforge.monitoring.metrics import (
     record_task_retry,
     record_task_submitted,
 )
+from taskforge.monitoring.profiler import record_diagnostic_event
 
 
 @dataclass(frozen=True)
@@ -220,6 +221,7 @@ class TaskRepository:
             self.db.add(outbox)
 
             self.db.commit()
+            record_diagnostic_event("task_transaction_commit", task_id=task_id)
             created_task = self.get_by_id(task.id)
             if created_task:
                 record_task_submitted(created_task.task_type, created_task.priority)
@@ -577,7 +579,9 @@ class TaskRepository:
             )
             self.db.add(event)
 
+            record_diagnostic_event("terminal_transaction_start", task_id=task.id)
             self.db.commit()
+            record_diagnostic_event("terminal_commit", task_id=task.id)
             self.db.refresh(task)
             was_terminal = curr_status in {
                 TaskStatus.SUCCESS,
@@ -740,7 +744,9 @@ class TaskRepository:
             task.lease_token = None
             task.lease_expires_at = None
 
+            record_diagnostic_event("terminal_transaction_start", task_id=task.id)
             self.db.commit()
+            record_diagnostic_event("terminal_commit", task_id=task.id)
             self.db.refresh(task)
 
             if task.status == TaskStatus.RETRY_WAIT.value:
