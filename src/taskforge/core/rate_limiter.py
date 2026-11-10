@@ -14,6 +14,7 @@ Failure Policy:
 
 import os
 import time
+import uuid
 
 from fastapi import Request, Response
 from redis.exceptions import RedisError
@@ -24,29 +25,39 @@ from taskforge.api.schemas import APIErrorResponse, ErrorDetail
 from taskforge.core.config import get_settings
 from taskforge.queue.redis_client import create_redis_client
 
-# Atomic Lua script for sliding window rate limiting
+# Atomic Lua script for sliding-window log rate limiting with authoritative Redis TIME and unique members
 # KEYS[1] = rate limit key
-# ARGV[1] = current timestamp (seconds float)
-# ARGV[2] = window size (seconds float, e.g. 60.0)
-# ARGV[3] = max requests per window
+# ARGV[1] = window size in seconds (e.g. 60.0)
+# ARGV[2] = max requests allowed per window (e.g. 300)
+# ARGV[3] = unique request discriminator (UUID/entropy string)
 # Returns: [allowed (1 or 0), remaining_requests, retry_after_seconds]
 LUA_RATE_LIMIT = """
 local key = KEYS[1]
-local now = tonumber(ARGV[1])
-local window = tonumber(ARGV[2])
-local max_requests = tonumber(ARGV[3])
+local window = tonumber(ARGV[1])
+local max_requests = tonumber(ARGV[2])
+local req_id = ARGV[3]
+
+-- 1. Obtain authoritative server timestamp from Redis TIME to eliminate client clock skew
+local redis_time = redis.call('TIME')
+local now_sec = tonumber(redis_time[1])
+local now_usec = tonumber(redis_time[2])
+local now = now_sec + (now_usec / 1000000.0)
 local clear_before = now - window
 
--- Remove timestamps older than current window
+-- 2. Prune records older than the sliding window boundary
 redis.call('ZREMRANGEBYSCORE', key, '-inf', clear_before)
 
+-- 3. Check current occupancy in the sliding window
 local current_requests = redis.call('ZCARD', key)
 
 if current_requests < max_requests then
-    redis.call('ZADD', key, now, now)
-    redis.call('EXPIRE', key, math.ceil(window))
+    -- Unique member guarantees no collision or overwrite even within the exact same microsecond
+    local member = string.format("%d:%d:%s", now_sec, now_usec, req_id)
+    redis.call('ZADD', key, now, member)
+    redis.call('EXPIRE', key, math.ceil(window) + 1)
     return {1, max_requests - current_requests - 1, 0}
 else
+    -- Find oldest entry in window to calculate accurate Retry-After header
     local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
     local retry_after = 1
     if oldest and #oldest >= 2 then
@@ -99,7 +110,9 @@ class RedisRateLimiter:
             self._script = self.redis.register_script(LUA_RATE_LIMIT)
         return self._script
 
-    def is_allowed(self, client_key: str) -> tuple[bool, int, float]:
+    def is_allowed(
+        self, client_key: str, request_id: str | None = None
+    ) -> tuple[bool, int, float]:
         if self.redis is None:
             # Fallback or initialization
             try:
@@ -107,13 +120,13 @@ class RedisRateLimiter:
             except Exception:
                 return False, 0, 5.0  # Fail closed on missing redis
 
-        now = time.time()
+        req_id = request_id or uuid.uuid4().hex
         redis_key = f"taskforge:ratelimit:{client_key}"
         try:
             script = self._get_script()
             res = script(
                 keys=[redis_key],
-                args=[now, self.window_seconds, self.requests_per_minute],
+                args=[self.window_seconds, self.requests_per_minute, req_id],
             )
             allowed = bool(res[0])
             remaining = int(res[1])
@@ -159,7 +172,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         else:
             client_key = request.client.host if request.client else "127.0.0.1"
 
-        allowed, remaining, retry_after = self.limiter.is_allowed(client_key)
+        request_id = getattr(request.state, "correlation_id", None) or uuid.uuid4().hex
+        allowed, remaining, retry_after = self.limiter.is_allowed(client_key, request_id=request_id)
 
         if not allowed:
             correlation_id = getattr(request.state, "correlation_id", "unknown")

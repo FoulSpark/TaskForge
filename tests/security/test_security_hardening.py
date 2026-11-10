@@ -9,6 +9,7 @@ Verifies:
 - G9.1.5: Secret sanitization (assert zero plaintext credentials, passwords, or raw lease tokens)
 """
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -29,6 +30,13 @@ def enable_strict_auth_for_security_suite(monkeypatch):
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture
+def redis_conn():
+    from taskforge.queue.redis_client import create_redis_client
+
+    return create_redis_client()
 
 
 @pytest.fixture
@@ -232,6 +240,105 @@ def test_rate_limiting_enforces_quota_and_emits_headers(client, auth_keys):
     resp = client.get("/api/v1/tasks", headers=headers)
     assert "X-RateLimit-Limit" in resp.headers
     assert "X-RateLimit-Remaining" in resp.headers
+
+
+def test_rate_limiter_unique_members_same_instant(redis_conn):
+    """Verify that multiple requests in the exact same millisecond get unique members
+    and do not overwrite each other in the Redis sorted set."""
+    from taskforge.core.rate_limiter import RedisRateLimiter
+
+    client_key = f"test-instant-{uuid.uuid4().hex}"
+    limiter = RedisRateLimiter(requests_per_minute=10, redis_client=redis_conn)
+
+    # Send 5 rapid requests with explicit unique request IDs
+    for i in range(5):
+        allowed, remaining, _ = limiter.is_allowed(client_key, request_id=f"req-{i}")
+        assert allowed is True
+        assert remaining == 10 - (i + 1)
+
+    # Check ZCARD in Redis directly: must be exactly 5
+    zcard = redis_conn.zcard(f"taskforge:ratelimit:{client_key}")
+    assert zcard == 5, f"Expected 5 distinct members in sorted set, got {zcard}"
+
+    # Verify members have unique request IDs
+    members = [
+        m.decode() if isinstance(m, bytes) else m
+        for m in redis_conn.zrange(f"taskforge:ratelimit:{client_key}", 0, -1)
+    ]
+    assert len(set(members)) == 5
+    redis_conn.delete(f"taskforge:ratelimit:{client_key}")
+
+
+def test_rate_limiter_boundary_and_rejection_no_slot_consumption(redis_conn):
+    """Verify quota boundary: rejected requests return Retry-After and do NOT consume quota slots."""
+    from taskforge.core.rate_limiter import RedisRateLimiter
+
+    client_key = f"test-quota-{uuid.uuid4().hex}"
+    limiter = RedisRateLimiter(requests_per_minute=3, redis_client=redis_conn)
+
+    # Fill quota (3 requests)
+    for _ in range(3):
+        allowed, _, _ = limiter.is_allowed(client_key)
+        assert allowed is True
+
+    # 4th request must be rejected
+    allowed, remaining, retry_after = limiter.is_allowed(client_key)
+    assert allowed is False
+    assert remaining == 0
+    assert retry_after >= 1.0
+
+    # 5th request also rejected
+    allowed2, remaining2, retry_after2 = limiter.is_allowed(client_key)
+    assert allowed2 is False
+    assert remaining2 == 0
+
+    # Sorted set size must remain strictly 3 (rejections must not add members)
+    zcard = redis_conn.zcard(f"taskforge:ratelimit:{client_key}")
+    assert zcard == 3, f"Rejected requests must not consume slots or add members, got {zcard}"
+    redis_conn.delete(f"taskforge:ratelimit:{client_key}")
+
+
+def test_rate_limiter_concurrent_burst_enforces_exact_limit(redis_conn):
+    """Verify concurrent requests from multiple threads cannot exceed the limit."""
+    import concurrent.futures
+
+    from taskforge.core.rate_limiter import RedisRateLimiter
+
+    client_key = f"test-concurrent-{uuid.uuid4().hex}"
+    limit = 10
+    limiter = RedisRateLimiter(requests_per_minute=limit, redis_client=redis_conn)
+
+    def attempt_request(idx):
+        return limiter.is_allowed(client_key, request_id=f"worker-req-{idx}")
+
+    # Launch 30 concurrent requests
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(attempt_request, range(30)))
+
+    allowed_count = sum(1 for allowed, _, _ in results if allowed)
+    rejected_count = sum(1 for allowed, _, _ in results if not allowed)
+
+    assert allowed_count == limit, f"Expected exactly {limit} allowed requests, got {allowed_count}"
+    assert rejected_count == 20, f"Expected exactly 20 rejected requests, got {rejected_count}"
+    redis_conn.delete(f"taskforge:ratelimit:{client_key}")
+
+
+def test_rate_limiter_fails_closed_on_redis_error():
+    """Verify that when Redis is unreachable or raises RedisError, rate limiter fails closed."""
+    from unittest.mock import MagicMock
+
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from taskforge.core.rate_limiter import RedisRateLimiter
+
+    mock_redis = MagicMock()
+    mock_redis.register_script.return_value.side_effect = RedisConnectionError("Connection refused")
+    limiter = RedisRateLimiter(requests_per_minute=100, redis_client=mock_redis)
+
+    allowed, remaining, retry_after = limiter.is_allowed("test-client")
+    assert allowed is False
+    assert remaining == 0
+    assert retry_after == 5.0  # Fail-closed backoff
 
 
 # ==============================================================================
