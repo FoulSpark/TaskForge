@@ -308,8 +308,12 @@ TaskForge exposes independent liveness and readiness endpoints:
 * **Executor Lifecycle & Shutdown Semantics:**
   - **Instantiation:** The dedicated readiness executor (`ThreadPoolExecutor(max_workers=2, thread_name_prefix="readiness-probe")`) is created during application startup.
   - **Ingress Quiescence:** Once application shutdown begins (FastAPI lifespan exit), no new readiness requests are accepted; incoming requests immediately fast-fail with HTTP `503 Service Unavailable`.
-  - **Cancellation of Pending Work:** Any submitted probe futures that have not yet started executing are cancelled via `cancel_futures=True`.
-  - **Running Thread Drain Policy:** For any probe operation actively executing I/O in a worker thread at shutdown, the thread is allowed a finite grace period ($\le 1.0$s) to terminate naturally under its driver-level socket/statement timeouts. The shutdown handler does not block process termination indefinitely; if a thread remains blocked after the grace period, process exit reclaims OS-level thread and socket resources cleanly.
+  - **Cancellation of Pending Work:** Any submitted probe futures that have not yet started executing in the executor queue are cancelled via `executor.shutdown(wait=False, cancel_futures=True)`.
+  - **Running Thread Drain & Lifespan Non-Blocking Contract:** For any probe operation actively executing I/O in a worker thread at shutdown, the FastAPI lifespan teardown handler grants a bounded grace period ($\le 1.0$s) awaiting natural thread completion under driver-level socket/statement timeouts. The application lifespan handler does not block indefinitely waiting on worker threads.
+  - **Python Interpreter Shutdown Limitations & Supervisor Backstop:**
+    * In standard CPython, worker threads spawned by `ThreadPoolExecutor` are joined during interpreter shutdown (`atexit` / runtime teardown). `shutdown(wait=False)` returns immediately from the function call, but it cannot abort running threads, and the Python runtime itself will attempt to join non-daemon worker threads before process termination.
+    * Consequently, if an underlying database or Redis thread remains blocked indefinitely at the OS socket/driver level beyond the configured driver timeouts, graceful Python interpreter termination can be stalled.
+    * Clean recovery therefore relies on the strict driver-level socket deadlines (`connect_timeout=1`, `socket_connect_timeout=0.5s`), while the operational container/process supervisor termination policy (e.g. Docker `stop_grace_period` / `docker stop -t 5` or Kubernetes `terminationGracePeriodSeconds` issuing `SIGKILL`) serves as the authoritative operational backstop against stalled processes.
 
 ---
 
