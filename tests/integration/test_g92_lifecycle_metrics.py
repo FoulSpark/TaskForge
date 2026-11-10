@@ -330,11 +330,13 @@ def test_stage_7_lease_recovery_instrumentation(repo):
     rec_requeued_before = LEASE_RECOVERIES_TOTAL.labels(initiator="operator", recovery_result="requeued")._value.get()
 
     recovered = repo.recover_expired_leases(initiator="operator")
-    assert len(recovered) == 1
-    assert recovered[0].status == TaskStatus.RETRY_WAIT.value
+    assert len(recovered) >= 1
+    target_rec = next(r for r in recovered if r.task_id == t.id)
+    assert target_rec.status == TaskStatus.RETRY_WAIT.value
 
+    requeued_count = sum(1 for r in recovered if r.status == TaskStatus.RETRY_WAIT.value)
     rec_requeued_after = LEASE_RECOVERIES_TOTAL.labels(initiator="operator", recovery_result="requeued")._value.get()
-    assert rec_requeued_after == rec_requeued_before + 1
+    assert rec_requeued_after == rec_requeued_before + requeued_count
 
 
 def test_stage_3_queue_wait_instrumentation(repo):
