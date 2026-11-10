@@ -1,0 +1,6637 @@
+{
+  "milestone": "G9.4.1_outbox_publisher_diagnostic_profiling",
+  "timestamp_utc": "2026-11-10T19:39:54.981746+00:00",
+  "platform": {
+    "system": "Windows",
+    "release": "11",
+    "machine": "AMD64",
+    "python_version": "3.12.10"
+  },
+  "provenance": {
+    "authorized_base_commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
+    "frozen_tag": "v0.8.0-phase8-freeze (da27047f56fe2eec75acdb8502f505542cf61202)",
+    "workload_definitions_sha256": "04f2306538868a41514c19f0958e04bf0b0586b3a83989e115231a32e50f0110"
+  },
+  "configuration": {
+    "outbox_poll_interval_s": 0.1,
+    "outbox_batch_size": 50,
+    "dispatcher_enable_capacity_wakeup": true,
+    "database": "taskforge_g94_benchmark"
+  },
+  "campaign_a_workload_baseline": [
+    {
+      "workload_id": "W-01",
+      "trial_id": "T1",
+      "concurrency": 10,
+      "measured_count": 500,
+      "wall_clock_duration_s": 21.838,
+      "throughput_tps": 22.9,
+      "publisher_active_duty_ratio_pct": 35.96,
+      "publisher_total_active_ms": 7852.923,
+      "outbox_state_counts": {
+        "PUBLISHED": 500
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-01_T1_1794339460.jsonl",
+      "raw_trace_sha256": "e81ee88ab0fc83c413860bb8514b286b905ef29a3c870c05f3246718a159a651",
+      "profiler_flush_report": {
+        "persisted_count": 9687,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 202.123,
+          "p95_ms": 408.142,
+          "p99_ms": 484.453,
+          "max_ms": 543.201,
+          "min_ms": 0.419,
+          "mean_ms": 206.715,
+          "stddev_ms": 125.045,
+          "count": 465
+        },
+        "batch_claim_duration": {
+          "p50_ms": 39.378,
+          "p95_ms": 76.898,
+          "p99_ms": 96.964,
+          "max_ms": 96.964,
+          "min_ms": 17.841,
+          "mean_ms": 42.46,
+          "stddev_ms": 16.816,
+          "count": 500
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 10.079,
+          "p95_ms": 22.934,
+          "p99_ms": 29.776,
+          "max_ms": 72.201,
+          "min_ms": 0.645,
+          "mean_ms": 11.403,
+          "stddev_ms": 7.047,
+          "count": 500
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 218.783,
+          "p95_ms": 340.672,
+          "p99_ms": 391.4,
+          "max_ms": 421.941,
+          "min_ms": 75.917,
+          "mean_ms": 223.931,
+          "stddev_ms": 65.432,
+          "count": 500
+        },
+        "broker_dwell": {
+          "p50_ms": 5294.888,
+          "p95_ms": 6733.699,
+          "p99_ms": 6861.94,
+          "max_ms": 7048.589,
+          "min_ms": 0.699,
+          "mean_ms": 4631.76,
+          "stddev_ms": 1942.55,
+          "count": 499
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 238.48,
+          "p95_ms": 392.095,
+          "p99_ms": 464.749,
+          "max_ms": 500.88,
+          "min_ms": 91.28,
+          "mean_ms": 218.285,
+          "stddev_ms": 104.333,
+          "count": 500
+        },
+        "handler_exec": {
+          "p50_ms": 0.011,
+          "p95_ms": 0.021,
+          "p99_ms": 0.027,
+          "max_ms": 0.05,
+          "min_ms": 0.005,
+          "mean_ms": 0.012,
+          "stddev_ms": 0.005,
+          "count": 500
+        },
+        "end_to_end": {
+          "p50_ms": 5974.253,
+          "p95_ms": 7467.312,
+          "p99_ms": 7584.161,
+          "max_ms": 7661.962,
+          "min_ms": 717.179,
+          "mean_ms": 5387.216,
+          "stddev_ms": 1846.096,
+          "count": 500
+        }
+      },
+      "batches_processed": 77,
+      "outbox_lag_races": 35,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-01",
+      "trial_id": "T2",
+      "concurrency": 10,
+      "measured_count": 500,
+      "wall_clock_duration_s": 19.711,
+      "throughput_tps": 25.37,
+      "publisher_active_duty_ratio_pct": 32.18,
+      "publisher_total_active_ms": 6343.102,
+      "outbox_state_counts": {
+        "PUBLISHED": 500
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-01_T2_1794339485.jsonl",
+      "raw_trace_sha256": "42f5f0c520c18bf0905e489de6965c0135f2aeb74d49e6ac95904e9a38e073b2",
+      "profiler_flush_report": {
+        "persisted_count": 9658,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 195.357,
+          "p95_ms": 388.788,
+          "p99_ms": 444.779,
+          "max_ms": 479.432,
+          "min_ms": 0.628,
+          "mean_ms": 196.864,
+          "stddev_ms": 120.319,
+          "count": 463
+        },
+        "batch_claim_duration": {
+          "p50_ms": 32.991,
+          "p95_ms": 50.049,
+          "p99_ms": 51.026,
+          "max_ms": 51.026,
+          "min_ms": 12.988,
+          "mean_ms": 32.86,
+          "stddev_ms": 8.651,
+          "count": 500
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 8.523,
+          "p95_ms": 19.638,
+          "p99_ms": 24.802,
+          "max_ms": 29.209,
+          "min_ms": 1.335,
+          "mean_ms": 9.328,
+          "stddev_ms": 5.111,
+          "count": 500
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 206.974,
+          "p95_ms": 306.45,
+          "p99_ms": 349.777,
+          "max_ms": 377.615,
+          "min_ms": 60.749,
+          "mean_ms": 209.441,
+          "stddev_ms": 57.309,
+          "count": 500
+        },
+        "broker_dwell": {
+          "p50_ms": 5063.711,
+          "p95_ms": 6106.746,
+          "p99_ms": 6253.764,
+          "max_ms": 6368.622,
+          "min_ms": 0.272,
+          "mean_ms": 4191.362,
+          "stddev_ms": 1864.784,
+          "count": 500
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 228.11,
+          "p95_ms": 307.764,
+          "p99_ms": 338.16,
+          "max_ms": 358.97,
+          "min_ms": 63.92,
+          "mean_ms": 195.623,
+          "stddev_ms": 78.943,
+          "count": 500
+        },
+        "handler_exec": {
+          "p50_ms": 0.011,
+          "p95_ms": 0.021,
+          "p99_ms": 0.047,
+          "max_ms": 0.156,
+          "min_ms": 0.006,
+          "mean_ms": 0.012,
+          "stddev_ms": 0.009,
+          "count": 500
+        },
+        "end_to_end": {
+          "p50_ms": 5703.071,
+          "p95_ms": 6733.728,
+          "p99_ms": 6843.077,
+          "max_ms": 6913.579,
+          "min_ms": 424.534,
+          "mean_ms": 4877.497,
+          "stddev_ms": 1816.851,
+          "count": 500
+        }
+      },
+      "batches_processed": 75,
+      "outbox_lag_races": 37,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-01",
+      "trial_id": "T3",
+      "concurrency": 10,
+      "measured_count": 500,
+      "wall_clock_duration_s": 19.551,
+      "throughput_tps": 25.57,
+      "publisher_active_duty_ratio_pct": 32.0,
+      "publisher_total_active_ms": 6257.328,
+      "outbox_state_counts": {
+        "PUBLISHED": 500
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-01_T3_1794339507.jsonl",
+      "raw_trace_sha256": "5b74c66f6cf424653f6f2634978d016d908086319d0b8b43ee4f243c4d9dac57",
+      "profiler_flush_report": {
+        "persisted_count": 9690,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 174.011,
+          "p95_ms": 369.839,
+          "p99_ms": 393.057,
+          "max_ms": 436.604,
+          "min_ms": 0.419,
+          "mean_ms": 178.745,
+          "stddev_ms": 112.632,
+          "count": 461
+        },
+        "batch_claim_duration": {
+          "p50_ms": 27.966,
+          "p95_ms": 52.761,
+          "p99_ms": 61.037,
+          "max_ms": 61.037,
+          "min_ms": 12.974,
+          "mean_ms": 31.139,
+          "stddev_ms": 9.13,
+          "count": 500
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 7.833,
+          "p95_ms": 17.691,
+          "p99_ms": 22.602,
+          "max_ms": 78.559,
+          "min_ms": 0.911,
+          "mean_ms": 9.07,
+          "stddev_ms": 5.97,
+          "count": 500
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 185.794,
+          "p95_ms": 281.358,
+          "p99_ms": 311.466,
+          "max_ms": 341.895,
+          "min_ms": 9.644,
+          "mean_ms": 191.591,
+          "stddev_ms": 52.083,
+          "count": 500
+        },
+        "broker_dwell": {
+          "p50_ms": 5119.795,
+          "p95_ms": 6094.861,
+          "p99_ms": 6203.144,
+          "max_ms": 6288.617,
+          "min_ms": 0.937,
+          "mean_ms": 4186.699,
+          "stddev_ms": 1891.093,
+          "count": 499
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 223.475,
+          "p95_ms": 305.669,
+          "p99_ms": 345.556,
+          "max_ms": 380.46,
+          "min_ms": 66.53,
+          "mean_ms": 197.338,
+          "stddev_ms": 79.322,
+          "count": 500
+        },
+        "handler_exec": {
+          "p50_ms": 0.011,
+          "p95_ms": 0.02,
+          "p99_ms": 0.032,
+          "max_ms": 0.063,
+          "min_ms": 0.004,
+          "mean_ms": 0.012,
+          "stddev_ms": 0.005,
+          "count": 500
+        },
+        "end_to_end": {
+          "p50_ms": 5719.754,
+          "p95_ms": 6696.207,
+          "p99_ms": 6752.786,
+          "max_ms": 6808.942,
+          "min_ms": 532.976,
+          "mean_ms": 4836.585,
+          "stddev_ms": 1839.477,
+          "count": 500
+        }
+      },
+      "batches_processed": 77,
+      "outbox_lag_races": 39,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-02",
+      "trial_id": "T1",
+      "concurrency": 4,
+      "measured_count": 200,
+      "wall_clock_duration_s": 7.631,
+      "throughput_tps": 26.21,
+      "publisher_active_duty_ratio_pct": 15.39,
+      "publisher_total_active_ms": 1174.834,
+      "outbox_state_counts": {
+        "PUBLISHED": 200
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-02_T1_1794339529.jsonl",
+      "raw_trace_sha256": "1e35d35f0b6fe6cf484f80d159ace28615097f4adf96838704191ddb4ed5f79d",
+      "profiler_flush_report": {
+        "persisted_count": 4046,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 105.252,
+          "p95_ms": 184.328,
+          "p99_ms": 209.488,
+          "max_ms": 216.503,
+          "min_ms": 0.882,
+          "mean_ms": 103.185,
+          "stddev_ms": 57.651,
+          "count": 191
+        },
+        "batch_claim_duration": {
+          "p50_ms": 12.804,
+          "p95_ms": 16.516,
+          "p99_ms": 23.152,
+          "max_ms": 23.152,
+          "min_ms": 8.882,
+          "mean_ms": 13.406,
+          "stddev_ms": 2.848,
+          "count": 200
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 3.379,
+          "p95_ms": 6.834,
+          "p99_ms": 9.435,
+          "max_ms": 10.639,
+          "min_ms": 0.622,
+          "mean_ms": 3.618,
+          "stddev_ms": 1.788,
+          "count": 200
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 77.74,
+          "p95_ms": 99.868,
+          "p99_ms": 109.492,
+          "max_ms": 113.471,
+          "min_ms": 5.261,
+          "mean_ms": 78.194,
+          "stddev_ms": 12.547,
+          "count": 200
+        },
+        "broker_dwell": {
+          "p50_ms": 2014.806,
+          "p95_ms": 2463.989,
+          "p99_ms": 2546.749,
+          "max_ms": 2594.682,
+          "min_ms": 0.725,
+          "mean_ms": 1696.344,
+          "stddev_ms": 739.263,
+          "count": 200
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 84.17,
+          "p95_ms": 116.863,
+          "p99_ms": 134.812,
+          "max_ms": 143.07,
+          "min_ms": 27.71,
+          "mean_ms": 75.932,
+          "stddev_ms": 30.515,
+          "count": 200
+        },
+        "handler_exec": {
+          "p50_ms": 0.077,
+          "p95_ms": 0.128,
+          "p99_ms": 0.152,
+          "max_ms": 0.199,
+          "min_ms": 0.063,
+          "mean_ms": 0.083,
+          "stddev_ms": 0.02,
+          "count": 200
+        },
+        "end_to_end": {
+          "p50_ms": 2259.229,
+          "p95_ms": 2742.698,
+          "p99_ms": 2773.736,
+          "max_ms": 2779.171,
+          "min_ms": 185.321,
+          "mean_ms": 1979.158,
+          "stddev_ms": 709.099,
+          "count": 200
+        }
+      },
+      "batches_processed": 44,
+      "outbox_lag_races": 9,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-02",
+      "trial_id": "T2",
+      "concurrency": 4,
+      "measured_count": 200,
+      "wall_clock_duration_s": 7.52,
+      "throughput_tps": 26.6,
+      "publisher_active_duty_ratio_pct": 15.94,
+      "publisher_total_active_ms": 1198.345,
+      "outbox_state_counts": {
+        "PUBLISHED": 200
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-02_T2_1794339538.jsonl",
+      "raw_trace_sha256": "4bfe6bd3f4acfe2ed7d61fa3f2a3a0c2eac745847c42630044b9957c7748af16",
+      "profiler_flush_report": {
+        "persisted_count": 4019,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 99.339,
+          "p95_ms": 196.217,
+          "p99_ms": 218.46,
+          "max_ms": 222.305,
+          "min_ms": 0.447,
+          "mean_ms": 105.288,
+          "stddev_ms": 61.726,
+          "count": 189
+        },
+        "batch_claim_duration": {
+          "p50_ms": 12.444,
+          "p95_ms": 18.484,
+          "p99_ms": 21.049,
+          "max_ms": 21.049,
+          "min_ms": 4.172,
+          "mean_ms": 12.795,
+          "stddev_ms": 3.698,
+          "count": 200
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 3.313,
+          "p95_ms": 7.545,
+          "p99_ms": 9.657,
+          "max_ms": 44.295,
+          "min_ms": 0.74,
+          "mean_ms": 3.859,
+          "stddev_ms": 3.418,
+          "count": 200
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 78.982,
+          "p95_ms": 105.163,
+          "p99_ms": 126.474,
+          "max_ms": 132.75,
+          "min_ms": 49.822,
+          "mean_ms": 80.773,
+          "stddev_ms": 14.205,
+          "count": 200
+        },
+        "broker_dwell": {
+          "p50_ms": 1897.758,
+          "p95_ms": 2368.55,
+          "p99_ms": 2425.674,
+          "max_ms": 2439.094,
+          "min_ms": 3.378,
+          "mean_ms": 1582.381,
+          "stddev_ms": 730.007,
+          "count": 200
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 90.175,
+          "p95_ms": 123.778,
+          "p99_ms": 142.473,
+          "max_ms": 149.11,
+          "min_ms": 35.21,
+          "mean_ms": 77.818,
+          "stddev_ms": 31.068,
+          "count": 200
+        },
+        "handler_exec": {
+          "p50_ms": 0.076,
+          "p95_ms": 0.131,
+          "p99_ms": 0.149,
+          "max_ms": 0.23,
+          "min_ms": 0.064,
+          "mean_ms": 0.083,
+          "stddev_ms": 0.023,
+          "count": 200
+        },
+        "end_to_end": {
+          "p50_ms": 2194.521,
+          "p95_ms": 2578.958,
+          "p99_ms": 2625.436,
+          "max_ms": 2638.831,
+          "min_ms": 248.035,
+          "mean_ms": 1867.284,
+          "stddev_ms": 699.309,
+          "count": 200
+        }
+      },
+      "batches_processed": 42,
+      "outbox_lag_races": 11,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-02",
+      "trial_id": "T3",
+      "concurrency": 4,
+      "measured_count": 200,
+      "wall_clock_duration_s": 7.677,
+      "throughput_tps": 26.05,
+      "publisher_active_duty_ratio_pct": 14.69,
+      "publisher_total_active_ms": 1127.837,
+      "outbox_state_counts": {
+        "PUBLISHED": 200
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-02_T3_1794339546.jsonl",
+      "raw_trace_sha256": "667507271b1d59ccef54173f30591e7d854dce240371fe34e28acc7d963d1092",
+      "profiler_flush_report": {
+        "persisted_count": 4051,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 96.981,
+          "p95_ms": 192.293,
+          "p99_ms": 209.587,
+          "max_ms": 239.713,
+          "min_ms": 0.388,
+          "mean_ms": 97.6,
+          "stddev_ms": 60.34,
+          "count": 189
+        },
+        "batch_claim_duration": {
+          "p50_ms": 11.729,
+          "p95_ms": 16.175,
+          "p99_ms": 16.318,
+          "max_ms": 16.318,
+          "min_ms": 6.568,
+          "mean_ms": 11.891,
+          "stddev_ms": 2.787,
+          "count": 200
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 3.3,
+          "p95_ms": 7.298,
+          "p99_ms": 8.306,
+          "max_ms": 9.454,
+          "min_ms": 0.743,
+          "mean_ms": 3.606,
+          "stddev_ms": 1.838,
+          "count": 200
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 75.432,
+          "p95_ms": 100.071,
+          "p99_ms": 105.147,
+          "max_ms": 111.151,
+          "min_ms": 53.402,
+          "mean_ms": 77.36,
+          "stddev_ms": 12.273,
+          "count": 200
+        },
+        "broker_dwell": {
+          "p50_ms": 2059.304,
+          "p95_ms": 2469.039,
+          "p99_ms": 2544.399,
+          "max_ms": 2566.929,
+          "min_ms": 3.105,
+          "mean_ms": 1725.706,
+          "stddev_ms": 707.676,
+          "count": 199
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 87.46,
+          "p95_ms": 125.818,
+          "p99_ms": 150.601,
+          "max_ms": 153.46,
+          "min_ms": 34.88,
+          "mean_ms": 77.465,
+          "stddev_ms": 32.259,
+          "count": 200
+        },
+        "handler_exec": {
+          "p50_ms": 0.077,
+          "p95_ms": 0.135,
+          "p99_ms": 0.155,
+          "max_ms": 0.634,
+          "min_ms": 0.062,
+          "mean_ms": 0.087,
+          "stddev_ms": 0.045,
+          "count": 200
+        },
+        "end_to_end": {
+          "p50_ms": 2298.557,
+          "p95_ms": 2700.051,
+          "p99_ms": 2746.765,
+          "max_ms": 2753.958,
+          "min_ms": 249.645,
+          "mean_ms": 1992.817,
+          "stddev_ms": 701.706,
+          "count": 200
+        }
+      },
+      "batches_processed": 44,
+      "outbox_lag_races": 11,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-03",
+      "trial_id": "T1",
+      "concurrency": 10,
+      "measured_count": 200,
+      "wall_clock_duration_s": 7.96,
+      "throughput_tps": 25.13,
+      "publisher_active_duty_ratio_pct": 31.98,
+      "publisher_total_active_ms": 2545.798,
+      "outbox_state_counts": {
+        "PUBLISHED": 200
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-03_T1_1794339555.jsonl",
+      "raw_trace_sha256": "4b8d1705f453d3277714c224a8175155896c3540c38ec00d1df872c6381048b1",
+      "profiler_flush_report": {
+        "persisted_count": 3968,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 199.105,
+          "p95_ms": 396.397,
+          "p99_ms": 410.456,
+          "max_ms": 419.067,
+          "min_ms": 0.347,
+          "mean_ms": 193.014,
+          "stddev_ms": 111.535,
+          "count": 175
+        },
+        "batch_claim_duration": {
+          "p50_ms": 31.161,
+          "p95_ms": 58.006,
+          "p99_ms": 73.443,
+          "max_ms": 73.443,
+          "min_ms": 16.588,
+          "mean_ms": 36.575,
+          "stddev_ms": 15.442,
+          "count": 200
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 7.58,
+          "p95_ms": 17.986,
+          "p99_ms": 27.163,
+          "max_ms": 65.811,
+          "min_ms": 0.796,
+          "mean_ms": 8.81,
+          "stddev_ms": 6.574,
+          "count": 200
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 187.021,
+          "p95_ms": 288.053,
+          "p99_ms": 302.893,
+          "max_ms": 313.389,
+          "min_ms": 84.606,
+          "mean_ms": 192.935,
+          "stddev_ms": 54.87,
+          "count": 200
+        },
+        "broker_dwell": {
+          "p50_ms": 1864.652,
+          "p95_ms": 2424.865,
+          "p99_ms": 2481.719,
+          "max_ms": 2558.546,
+          "min_ms": 3.62,
+          "mean_ms": 1553.709,
+          "stddev_ms": 751.716,
+          "count": 199
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 226.125,
+          "p95_ms": 315.236,
+          "p99_ms": 344.346,
+          "max_ms": 357.87,
+          "min_ms": 81.1,
+          "mean_ms": 200.332,
+          "stddev_ms": 83.296,
+          "count": 200
+        },
+        "handler_exec": {
+          "p50_ms": 6.514,
+          "p95_ms": 9.954,
+          "p99_ms": 13.66,
+          "max_ms": 16.982,
+          "min_ms": 5.078,
+          "mean_ms": 6.984,
+          "stddev_ms": 1.76,
+          "count": 200
+        },
+        "end_to_end": {
+          "p50_ms": 2499.366,
+          "p95_ms": 2983.532,
+          "p99_ms": 3058.606,
+          "max_ms": 3134.56,
+          "min_ms": 506.146,
+          "mean_ms": 2215.822,
+          "stddev_ms": 718.508,
+          "count": 200
+        }
+      },
+      "batches_processed": 31,
+      "outbox_lag_races": 25,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-03",
+      "trial_id": "T2",
+      "concurrency": 10,
+      "measured_count": 200,
+      "wall_clock_duration_s": 8.307,
+      "throughput_tps": 24.08,
+      "publisher_active_duty_ratio_pct": 30.11,
+      "publisher_total_active_ms": 2501.688,
+      "outbox_state_counts": {
+        "PUBLISHED": 200
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-03_T2_1794339564.jsonl",
+      "raw_trace_sha256": "af0705ec7dd15f75066f3d293ee2857603fa092ca44a7d7236179548872b3c39",
+      "profiler_flush_report": {
+        "persisted_count": 3996,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 190.098,
+          "p95_ms": 356.945,
+          "p99_ms": 417.373,
+          "max_ms": 446.994,
+          "min_ms": 2.252,
+          "mean_ms": 189.67,
+          "stddev_ms": 106.812,
+          "count": 181
+        },
+        "batch_claim_duration": {
+          "p50_ms": 27.477,
+          "p95_ms": 56.95,
+          "p99_ms": 56.95,
+          "max_ms": 56.95,
+          "min_ms": 16.706,
+          "mean_ms": 29.1,
+          "stddev_ms": 10.352,
+          "count": 200
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 8.133,
+          "p95_ms": 16.941,
+          "p99_ms": 24.785,
+          "max_ms": 29.408,
+          "min_ms": 1.254,
+          "mean_ms": 9.011,
+          "stddev_ms": 4.999,
+          "count": 200
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 182.301,
+          "p95_ms": 284.174,
+          "p99_ms": 313.598,
+          "max_ms": 326.022,
+          "min_ms": 81.014,
+          "mean_ms": 187.311,
+          "stddev_ms": 53.268,
+          "count": 200
+        },
+        "broker_dwell": {
+          "p50_ms": 2106.322,
+          "p95_ms": 2776.215,
+          "p99_ms": 2827.63,
+          "max_ms": 2896.895,
+          "min_ms": 4.437,
+          "mean_ms": 1797.525,
+          "stddev_ms": 839.155,
+          "count": 199
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 218.655,
+          "p95_ms": 342.955,
+          "p99_ms": 357.848,
+          "max_ms": 366.61,
+          "min_ms": 79.31,
+          "mean_ms": 209.968,
+          "stddev_ms": 94.761,
+          "count": 200
+        },
+        "handler_exec": {
+          "p50_ms": 6.43,
+          "p95_ms": 10.254,
+          "p99_ms": 14.001,
+          "max_ms": 16.444,
+          "min_ms": 5.166,
+          "mean_ms": 7.008,
+          "stddev_ms": 1.776,
+          "count": 200
+        },
+        "end_to_end": {
+          "p50_ms": 2674.603,
+          "p95_ms": 3313.807,
+          "p99_ms": 3392.543,
+          "max_ms": 3419.984,
+          "min_ms": 606.288,
+          "mean_ms": 2464.569,
+          "stddev_ms": 753.925,
+          "count": 200
+        }
+      },
+      "batches_processed": 33,
+      "outbox_lag_races": 19,
+      "outbox_unclaimed": 0
+    },
+    {
+      "workload_id": "W-03",
+      "trial_id": "T3",
+      "concurrency": 10,
+      "measured_count": 200,
+      "wall_clock_duration_s": 8.016,
+      "throughput_tps": 24.95,
+      "publisher_active_duty_ratio_pct": 32.65,
+      "publisher_total_active_ms": 2616.922,
+      "outbox_state_counts": {
+        "PUBLISHED": 200
+      },
+      "outbox_failures": 0,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignA_W-03_T3_1794339573.jsonl",
+      "raw_trace_sha256": "3f9cca099aed8c8dc2125c73420d818ebef42396dd5ff4b74b146b56036b461c",
+      "profiler_flush_report": {
+        "persisted_count": 3858,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "metrics": {
+        "eligible_outbox_lag": {
+          "p50_ms": 191.792,
+          "p95_ms": 383.976,
+          "p99_ms": 405.494,
+          "max_ms": 423.913,
+          "min_ms": 3.071,
+          "mean_ms": 188.119,
+          "stddev_ms": 114.505,
+          "count": 191
+        },
+        "batch_claim_duration": {
+          "p50_ms": 31.817,
+          "p95_ms": 52.971,
+          "p99_ms": 56.851,
+          "max_ms": 56.851,
+          "min_ms": 12.415,
+          "mean_ms": 33.437,
+          "stddev_ms": 10.242,
+          "count": 200
+        },
+        "redis_enqueue_round_trip": {
+          "p50_ms": 8.859,
+          "p95_ms": 17.967,
+          "p99_ms": 21.928,
+          "max_ms": 52.569,
+          "min_ms": 0.856,
+          "mean_ms": 9.34,
+          "stddev_ms": 5.597,
+          "count": 200
+        },
+        "outbox_publication_commit": {
+          "p50_ms": 183.339,
+          "p95_ms": 299.051,
+          "p99_ms": 338.01,
+          "max_ms": 356.769,
+          "min_ms": 64.43,
+          "mean_ms": 189.683,
+          "stddev_ms": 58.657,
+          "count": 200
+        },
+        "broker_dwell": {
+          "p50_ms": 2021.889,
+          "p95_ms": 2604.808,
+          "p99_ms": 2648.702,
+          "max_ms": 2652.403,
+          "min_ms": 2.814,
+          "mean_ms": 1724.466,
+          "stddev_ms": 781.789,
+          "count": 200
+        },
+        "worker_attempt_duration": {
+          "p50_ms": 190.9,
+          "p95_ms": 323.266,
+          "p99_ms": 345.288,
+          "max_ms": 360.65,
+          "min_ms": 93.8,
+          "mean_ms": 203.929,
+          "stddev_ms": 87.285,
+          "count": 200
+        },
+        "handler_exec": {
+          "p50_ms": 6.467,
+          "p95_ms": 9.795,
+          "p99_ms": 11.58,
+          "max_ms": 44.108,
+          "min_ms": 5.228,
+          "mean_ms": 7.011,
+          "stddev_ms": 2.976,
+          "count": 200
+        },
+        "end_to_end": {
+          "p50_ms": 2661.273,
+          "p95_ms": 3141.267,
+          "p99_ms": 3186.135,
+          "max_ms": 3220.046,
+          "min_ms": 607.559,
+          "mean_ms": 2405.812,
+          "stddev_ms": 706.054,
+          "count": 200
+        }
+      },
+      "batches_processed": 32,
+      "outbox_lag_races": 9,
+      "outbox_unclaimed": 0
+    }
+  ],
+  "campaign_b_backlog_drain": [
+    {
+      "trial_id": "T1",
+      "burst_count": 1000,
+      "wall_clock_drain_duration_s": 3.692,
+      "drain_rate_tasks_per_sec": 270.83,
+      "batches_processed": 20,
+      "publisher_active_duty_ratio_pct": 43.32,
+      "publisher_active_ms": 1599.388,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignB_burst_T1_1794339582.jsonl",
+      "raw_trace_sha256": "6a1aa6114b6a9dd2a1383772279a97e4163fc78a149bc33af24681c79d410d9b",
+      "profiler_flush_report": {
+        "persisted_count": 3040,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "cadence_distributions": {
+        "claim_duration": {
+          "p50_ms": 3.596,
+          "p95_ms": 4.995,
+          "p99_ms": 5.231,
+          "max_ms": 5.29,
+          "min_ms": 3.039,
+          "mean_ms": 3.793,
+          "stddev_ms": 0.615,
+          "count": 20
+        },
+        "batch_enqueue_duration": {
+          "p50_ms": 23.672,
+          "p95_ms": 39.318,
+          "p99_ms": 43.633,
+          "max_ms": 44.712,
+          "min_ms": 20.171,
+          "mean_ms": 25.67,
+          "stddev_ms": 6.096,
+          "count": 20
+        },
+        "commit_duration": {
+          "p50_ms": 49.093,
+          "p95_ms": 64.181,
+          "p99_ms": 66.48,
+          "max_ms": 67.055,
+          "min_ms": 46.783,
+          "mean_ms": 50.507,
+          "stddev_ms": 5.271,
+          "count": 20
+        },
+        "inter_batch_sleep": {
+          "p50_ms": 110.391,
+          "p95_ms": 114.325,
+          "p99_ms": 114.337,
+          "max_ms": 114.34,
+          "min_ms": 102.707,
+          "mean_ms": 109.82,
+          "stddev_ms": 3.38,
+          "count": 19
+        }
+      },
+      "per_batch_cadence": [
+        {
+          "batch_index": 1,
+          "batch_id": "batch-5c052a77",
+          "claim_duration_ms": 4.979,
+          "enqueue_duration_ms": 21.378,
+          "commit_duration_ms": 46.783,
+          "active_duration_ms": 73.14,
+          "sleep_before_claim_ms": 0.0
+        },
+        {
+          "batch_index": 2,
+          "batch_id": "batch-b5f223ba",
+          "claim_duration_ms": 3.039,
+          "enqueue_duration_ms": 22.16,
+          "commit_duration_ms": 47.83,
+          "active_duration_ms": 73.03,
+          "sleep_before_claim_ms": 110.352
+        },
+        {
+          "batch_index": 3,
+          "batch_id": "batch-6b85f96d",
+          "claim_duration_ms": 3.646,
+          "enqueue_duration_ms": 22.583,
+          "commit_duration_ms": 49.916,
+          "active_duration_ms": 76.144,
+          "sleep_before_claim_ms": 113.379
+        },
+        {
+          "batch_index": 4,
+          "batch_id": "batch-47986cc9",
+          "claim_duration_ms": 3.592,
+          "enqueue_duration_ms": 22.19,
+          "commit_duration_ms": 49.182,
+          "active_duration_ms": 74.965,
+          "sleep_before_claim_ms": 111.243
+        },
+        {
+          "batch_index": 5,
+          "batch_id": "batch-c9d66556",
+          "claim_duration_ms": 3.599,
+          "enqueue_duration_ms": 26.681,
+          "commit_duration_ms": 50.312,
+          "active_duration_ms": 80.591,
+          "sleep_before_claim_ms": 112.041
+        },
+        {
+          "batch_index": 6,
+          "batch_id": "batch-14fe703d",
+          "claim_duration_ms": 3.213,
+          "enqueue_duration_ms": 22.316,
+          "commit_duration_ms": 49.22,
+          "active_duration_ms": 74.75,
+          "sleep_before_claim_ms": 106.2
+        },
+        {
+          "batch_index": 7,
+          "batch_id": "batch-72129eae",
+          "claim_duration_ms": 3.905,
+          "enqueue_duration_ms": 27.095,
+          "commit_duration_ms": 48.308,
+          "active_duration_ms": 79.307,
+          "sleep_before_claim_ms": 110.391
+        },
+        {
+          "batch_index": 8,
+          "batch_id": "batch-fcf666ce",
+          "claim_duration_ms": 3.542,
+          "enqueue_duration_ms": 21.001,
+          "commit_duration_ms": 49.046,
+          "active_duration_ms": 73.59,
+          "sleep_before_claim_ms": 107.433
+        },
+        {
+          "batch_index": 9,
+          "batch_id": "batch-e030a797",
+          "claim_duration_ms": 3.365,
+          "enqueue_duration_ms": 22.744,
+          "commit_duration_ms": 48.21,
+          "active_duration_ms": 74.318,
+          "sleep_before_claim_ms": 114.323
+        },
+        {
+          "batch_index": 10,
+          "batch_id": "batch-c7e5732e",
+          "claim_duration_ms": 3.968,
+          "enqueue_duration_ms": 20.171,
+          "commit_duration_ms": 49.114,
+          "active_duration_ms": 73.253,
+          "sleep_before_claim_ms": 114.34
+        },
+        {
+          "batch_index": 11,
+          "batch_id": "batch-41cc565f",
+          "claim_duration_ms": 3.354,
+          "enqueue_duration_ms": 44.712,
+          "commit_duration_ms": 67.055,
+          "active_duration_ms": 115.121,
+          "sleep_before_claim_ms": 112.968
+        },
+        {
+          "batch_index": 12,
+          "batch_id": "batch-ade4711d",
+          "claim_duration_ms": 3.287,
+          "enqueue_duration_ms": 28.062,
+          "commit_duration_ms": 64.03,
+          "active_duration_ms": 95.379,
+          "sleep_before_claim_ms": 102.707
+        },
+        {
+          "batch_index": 13,
+          "batch_id": "batch-a5f3b268",
+          "claim_duration_ms": 5.29,
+          "enqueue_duration_ms": 27.588,
+          "commit_duration_ms": 47.891,
+          "active_duration_ms": 80.769,
+          "sleep_before_claim_ms": 105.536
+        },
+        {
+          "batch_index": 14,
+          "batch_id": "batch-278c2617",
+          "claim_duration_ms": 3.574,
+          "enqueue_duration_ms": 24.41,
+          "commit_duration_ms": 48.733,
+          "active_duration_ms": 76.717,
+          "sleep_before_claim_ms": 106.241
+        },
+        {
+          "batch_index": 15,
+          "batch_id": "batch-6e744b32",
+          "claim_duration_ms": 4.716,
+          "enqueue_duration_ms": 39.034,
+          "commit_duration_ms": 49.279,
+          "active_duration_ms": 93.029,
+          "sleep_before_claim_ms": 112.259
+        },
+        {
+          "batch_index": 16,
+          "batch_id": "batch-57c1b082",
+          "claim_duration_ms": 4.183,
+          "enqueue_duration_ms": 26.233,
+          "commit_duration_ms": 47.612,
+          "active_duration_ms": 78.028,
+          "sleep_before_claim_ms": 104.975
+        },
+        {
+          "batch_index": 17,
+          "batch_id": "batch-51aacc84",
+          "claim_duration_ms": 4.213,
+          "enqueue_duration_ms": 21.506,
+          "commit_duration_ms": 50.32,
+          "active_duration_ms": 76.039,
+          "sleep_before_claim_ms": 109.605
+        },
+        {
+          "batch_index": 18,
+          "batch_id": "batch-42055e44",
+          "claim_duration_ms": 3.092,
+          "enqueue_duration_ms": 24.25,
+          "commit_duration_ms": 49.073,
+          "active_duration_ms": 76.415,
+          "sleep_before_claim_ms": 110.248
+        },
+        {
+          "batch_index": 19,
+          "batch_id": "batch-b008d03c",
+          "claim_duration_ms": 3.756,
+          "enqueue_duration_ms": 23.095,
+          "commit_duration_ms": 47.336,
+          "active_duration_ms": 74.187,
+          "sleep_before_claim_ms": 110.478
+        },
+        {
+          "batch_index": 20,
+          "batch_id": "batch-f2b12d85",
+          "claim_duration_ms": 3.539,
+          "enqueue_duration_ms": 26.181,
+          "commit_duration_ms": 50.895,
+          "active_duration_ms": 80.615,
+          "sleep_before_claim_ms": 111.86
+        }
+      ],
+      "time_series_depletion": [
+        {
+          "t_elapsed_ms": 0.8,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 15.98,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 29.42,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 43.02,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 56.56,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 70.1,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 84.16,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 97.33,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 111.48,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 125.66,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 141.36,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 154.91,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 168.54,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 181.71,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 195.24,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 208.23,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 222.44,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 234.98,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 247.56,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 260.11,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 273.85,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 286.32,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 299.44,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 312.32,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 324.82,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 337.41,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 350.1,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 363.48,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 376.62,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 389.1,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 401.78,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 414.27,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 426.62,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 438.95,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 453.8,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 466.56,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 480.09,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 493.21,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 505.85,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 518.77,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 532.04,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 544.77,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 557.99,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 572.63,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 585.17,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 597.34,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 610.39,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 623.65,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 636.16,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 648.79,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 661.95,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 674.91,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 688.51,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 702.6,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 715.65,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 729.34,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 742.91,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 757.19,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 769.98,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 783.47,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 796.29,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 809.04,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 821.72,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 834.9,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 847.93,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 861.13,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 875.3,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 889.37,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 902.99,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 915.96,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 928.67,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 942.23,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 955.3,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 968.56,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 981.69,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 994.83,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1008.29,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1020.91,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1034.06,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1047.22,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1059.93,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1073.05,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1085.79,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1099.35,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1112.51,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1125.26,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1138.46,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1151.5,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1164.06,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1176.74,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1189.33,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1202.46,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1215.58,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1229.19,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1242.88,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1256.41,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1270.46,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1284.02,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1296.69,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1309.18,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1322.0,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1334.89,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1347.92,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1360.61,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1373.86,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1386.54,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1399.56,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1413.19,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1425.8,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1438.83,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1451.96,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1466.98,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1480.15,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1494.83,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1508.5,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1521.74,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1534.27,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1547.07,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1559.77,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1573.01,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1585.96,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1598.86,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1612.79,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1626.43,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1639.72,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1653.3,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1666.21,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1679.35,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1693.17,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1705.8,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1718.12,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1730.83,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1743.94,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1756.66,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1769.62,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1782.53,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1795.6,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1809.01,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1822.88,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1836.87,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1851.03,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1865.0,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1878.92,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1896.14,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1910.47,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1925.63,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1939.22,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1954.14,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1967.02,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1980.08,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1993.58,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2006.67,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2019.73,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2032.9,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2045.99,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2059.29,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2072.42,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2084.98,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2098.51,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2112.56,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2125.8,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2138.75,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2152.72,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2165.55,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2178.07,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2192.52,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2205.18,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2217.92,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2230.84,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2243.92,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2257.58,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2270.69,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2285.56,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2300.87,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2315.53,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2330.29,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2343.8,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2356.7,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2369.81,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2382.75,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2395.58,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2408.79,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2421.86,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2434.83,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2448.22,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2461.42,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2474.02,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2488.55,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2502.07,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2515.0,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2527.94,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2540.74,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2554.19,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2567.74,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2580.65,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2594.24,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2607.22,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2620.46,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2633.52,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2648.1,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2661.92,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2677.15,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2690.82,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2705.76,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2721.05,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2735.5,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2749.77,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2764.83,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2778.88,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2792.95,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2806.07,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2818.98,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2832.01,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2845.03,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2858.25,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2874.14,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2891.0,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2903.97,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2917.15,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2930.23,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2943.97,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2957.07,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2970.73,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2984.09,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2998.05,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3011.34,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3024.21,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3037.22,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3051.2,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3064.75,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3077.79,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3090.14,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3103.13,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3116.46,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3129.86,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3143.13,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3155.95,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3169.45,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3183.92,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3196.82,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3209.77,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3223.03,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3236.45,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3249.94,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3264.59,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3277.8,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3290.62,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3303.66,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3315.99,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3328.65,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3341.64,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3354.71,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3369.1,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3382.99,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3396.11,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3409.24,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3422.96,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3436.73,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3449.87,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3462.81,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3475.78,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3489.17,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3502.16,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3515.23,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3528.35,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3545.04,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3560.34,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3577.22,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3593.9,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3607.56,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3621.08,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3634.99,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3649.31,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3662.6,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3675.68,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3689.24,
+          "pending": 0,
+          "published": 1000,
+          "failed": 0
+        }
+      ],
+      "invariants": {
+        "initial_backlog_pre_inserted": 1000,
+        "final_pending": 0,
+        "final_published": 1000,
+        "final_failed": 0,
+        "broker_queue_depth": 1000,
+        "durable_delivery_loss_count": 0
+      }
+    },
+    {
+      "trial_id": "T2",
+      "burst_count": 1000,
+      "wall_clock_drain_duration_s": 3.605,
+      "drain_rate_tasks_per_sec": 277.37,
+      "batches_processed": 20,
+      "publisher_active_duty_ratio_pct": 41.26,
+      "publisher_active_ms": 1487.626,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignB_burst_T2_1794339587.jsonl",
+      "raw_trace_sha256": "c96b4e9425515a666b433ccb6175fe9c1fb33779c1e636d4326eff669c1da1b0",
+      "profiler_flush_report": {
+        "persisted_count": 3040,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "cadence_distributions": {
+        "claim_duration": {
+          "p50_ms": 3.663,
+          "p95_ms": 4.745,
+          "p99_ms": 4.954,
+          "max_ms": 5.007,
+          "min_ms": 2.71,
+          "mean_ms": 3.705,
+          "stddev_ms": 0.669,
+          "count": 20
+        },
+        "batch_enqueue_duration": {
+          "p50_ms": 22.117,
+          "p95_ms": 24.647,
+          "p99_ms": 25.173,
+          "max_ms": 25.304,
+          "min_ms": 20.68,
+          "mean_ms": 22.354,
+          "stddev_ms": 1.517,
+          "count": 20
+        },
+        "commit_duration": {
+          "p50_ms": 48.589,
+          "p95_ms": 50.558,
+          "p99_ms": 51.106,
+          "max_ms": 51.243,
+          "min_ms": 45.425,
+          "mean_ms": 48.322,
+          "stddev_ms": 1.454,
+          "count": 20
+        },
+        "inter_batch_sleep": {
+          "p50_ms": 111.776,
+          "p95_ms": 114.883,
+          "p99_ms": 115.019,
+          "max_ms": 115.052,
+          "min_ms": 100.73,
+          "mean_ms": 110.815,
+          "stddev_ms": 3.617,
+          "count": 19
+        }
+      },
+      "per_batch_cadence": [
+        {
+          "batch_index": 1,
+          "batch_id": "batch-45a37c58",
+          "claim_duration_ms": 4.612,
+          "enqueue_duration_ms": 24.366,
+          "commit_duration_ms": 48.608,
+          "active_duration_ms": 77.587,
+          "sleep_before_claim_ms": 0.0
+        },
+        {
+          "batch_index": 2,
+          "batch_id": "batch-3077656d",
+          "claim_duration_ms": 3.9,
+          "enqueue_duration_ms": 24.613,
+          "commit_duration_ms": 51.243,
+          "active_duration_ms": 79.756,
+          "sleep_before_claim_ms": 106.274
+        },
+        {
+          "batch_index": 3,
+          "batch_id": "batch-c82ec64f",
+          "claim_duration_ms": 5.007,
+          "enqueue_duration_ms": 20.68,
+          "commit_duration_ms": 49.251,
+          "active_duration_ms": 74.938,
+          "sleep_before_claim_ms": 106.966
+        },
+        {
+          "batch_index": 4,
+          "batch_id": "batch-63cd1903",
+          "claim_duration_ms": 4.483,
+          "enqueue_duration_ms": 20.682,
+          "commit_duration_ms": 47.364,
+          "active_duration_ms": 72.53,
+          "sleep_before_claim_ms": 111.983
+        },
+        {
+          "batch_index": 5,
+          "batch_id": "batch-dd764da1",
+          "claim_duration_ms": 3.593,
+          "enqueue_duration_ms": 20.83,
+          "commit_duration_ms": 45.425,
+          "active_duration_ms": 69.848,
+          "sleep_before_claim_ms": 113.301
+        },
+        {
+          "batch_index": 6,
+          "batch_id": "batch-f608c0e2",
+          "claim_duration_ms": 3.409,
+          "enqueue_duration_ms": 22.719,
+          "commit_duration_ms": 47.917,
+          "active_duration_ms": 74.046,
+          "sleep_before_claim_ms": 115.052
+        },
+        {
+          "batch_index": 7,
+          "batch_id": "batch-ad20f37f",
+          "claim_duration_ms": 4.205,
+          "enqueue_duration_ms": 21.75,
+          "commit_duration_ms": 46.728,
+          "active_duration_ms": 72.683,
+          "sleep_before_claim_ms": 110.986
+        },
+        {
+          "batch_index": 8,
+          "batch_id": "batch-5c871c1b",
+          "claim_duration_ms": 2.909,
+          "enqueue_duration_ms": 20.695,
+          "commit_duration_ms": 50.522,
+          "active_duration_ms": 74.126,
+          "sleep_before_claim_ms": 114.865
+        },
+        {
+          "batch_index": 9,
+          "batch_id": "batch-cf17a665",
+          "claim_duration_ms": 4.731,
+          "enqueue_duration_ms": 22.048,
+          "commit_duration_ms": 48.584,
+          "active_duration_ms": 75.362,
+          "sleep_before_claim_ms": 110.815
+        },
+        {
+          "batch_index": 10,
+          "batch_id": "batch-bb423fc7",
+          "claim_duration_ms": 3.734,
+          "enqueue_duration_ms": 20.716,
+          "commit_duration_ms": 49.039,
+          "active_duration_ms": 73.489,
+          "sleep_before_claim_ms": 111.933
+        },
+        {
+          "batch_index": 11,
+          "batch_id": "batch-532a2e86",
+          "claim_duration_ms": 3.183,
+          "enqueue_duration_ms": 21.05,
+          "commit_duration_ms": 47.493,
+          "active_duration_ms": 71.726,
+          "sleep_before_claim_ms": 111.857
+        },
+        {
+          "batch_index": 12,
+          "batch_id": "batch-710247ee",
+          "claim_duration_ms": 2.954,
+          "enqueue_duration_ms": 20.777,
+          "commit_duration_ms": 49.228,
+          "active_duration_ms": 72.96,
+          "sleep_before_claim_ms": 114.784
+        },
+        {
+          "batch_index": 13,
+          "batch_id": "batch-c1bedc0d",
+          "claim_duration_ms": 3.86,
+          "enqueue_duration_ms": 25.304,
+          "commit_duration_ms": 49.354,
+          "active_duration_ms": 78.518,
+          "sleep_before_claim_ms": 114.219
+        },
+        {
+          "batch_index": 14,
+          "batch_id": "batch-e4980b39",
+          "claim_duration_ms": 2.71,
+          "enqueue_duration_ms": 22.186,
+          "commit_duration_ms": 46.759,
+          "active_duration_ms": 71.656,
+          "sleep_before_claim_ms": 107.305
+        },
+        {
+          "batch_index": 15,
+          "batch_id": "batch-f7480f3f",
+          "claim_duration_ms": 3.05,
+          "enqueue_duration_ms": 23.048,
+          "commit_duration_ms": 49.05,
+          "active_duration_ms": 75.148,
+          "sleep_before_claim_ms": 113.551
+        },
+        {
+          "batch_index": 16,
+          "batch_id": "batch-0a5ca2d0",
+          "claim_duration_ms": 3.762,
+          "enqueue_duration_ms": 23.659,
+          "commit_duration_ms": 47.921,
+          "active_duration_ms": 75.341,
+          "sleep_before_claim_ms": 109.059
+        },
+        {
+          "batch_index": 17,
+          "batch_id": "batch-c284a5fc",
+          "claim_duration_ms": 3.329,
+          "enqueue_duration_ms": 24.374,
+          "commit_duration_ms": 49.326,
+          "active_duration_ms": 77.03,
+          "sleep_before_claim_ms": 110.923
+        },
+        {
+          "batch_index": 18,
+          "batch_id": "batch-5cc86bf6",
+          "claim_duration_ms": 4.302,
+          "enqueue_duration_ms": 22.576,
+          "commit_duration_ms": 45.786,
+          "active_duration_ms": 72.664,
+          "sleep_before_claim_ms": 109.106
+        },
+        {
+          "batch_index": 19,
+          "batch_id": "batch-60eef65a",
+          "claim_duration_ms": 3.166,
+          "enqueue_duration_ms": 21.686,
+          "commit_duration_ms": 48.237,
+          "active_duration_ms": 73.088,
+          "sleep_before_claim_ms": 100.73
+        },
+        {
+          "batch_index": 20,
+          "batch_id": "batch-44ef4276",
+          "claim_duration_ms": 3.208,
+          "enqueue_duration_ms": 23.327,
+          "commit_duration_ms": 48.595,
+          "active_duration_ms": 75.13,
+          "sleep_before_claim_ms": 111.776
+        }
+      ],
+      "time_series_depletion": [
+        {
+          "t_elapsed_ms": 0.71,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 15.68,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 30.03,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 43.03,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 57.09,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 70.26,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 83.56,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 96.79,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 115.1,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 130.41,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 146.45,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 159.56,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 172.8,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 185.93,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 199.24,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 214.63,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 227.27,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 240.11,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 252.97,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 266.29,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 279.22,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 292.03,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 305.5,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 318.32,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 331.3,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 345.22,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 359.46,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 373.51,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 387.21,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 400.12,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 412.47,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 425.35,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 438.37,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 451.13,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 463.99,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 477.26,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 490.04,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 503.53,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 517.47,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 530.95,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 544.85,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 559.17,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 573.56,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 586.71,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 599.04,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 611.57,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 625.07,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 639.56,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 653.45,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 666.67,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 681.2,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 694.29,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 707.54,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 720.57,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 734.21,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 747.59,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 761.01,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 773.94,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 790.98,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 804.24,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 817.82,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 830.78,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 844.54,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 858.12,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 872.67,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 887.6,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 902.67,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 916.37,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 930.04,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 943.6,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 957.29,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 969.62,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 982.55,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 995.52,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1008.59,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1021.37,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1034.93,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1048.32,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1061.29,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1074.94,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1088.25,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1101.36,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1115.05,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1129.3,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1142.15,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1154.25,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1167.33,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1180.13,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1193.35,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1206.99,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1220.58,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1233.25,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1246.06,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1258.85,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1272.29,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1287.13,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1300.04,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1313.15,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1326.78,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1339.19,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1352.39,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1366.06,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1379.73,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1393.28,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1407.76,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1421.03,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1433.86,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1446.51,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1459.34,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1473.29,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1486.93,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1502.39,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1515.25,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1527.84,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1540.6,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1554.31,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1567.44,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1580.47,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1593.34,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1606.87,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1620.71,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1633.84,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1647.47,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1661.14,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1674.04,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1687.7,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1700.61,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1712.96,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1726.26,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1739.57,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1753.41,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1767.68,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1785.63,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1800.49,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1814.31,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1827.5,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1840.68,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1854.82,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1868.47,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1881.59,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1895.45,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1908.36,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1921.02,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1934.1,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1946.92,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1959.66,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1973.25,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1986.37,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1999.37,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2013.37,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2027.85,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2042.04,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2055.43,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2068.24,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2081.95,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2095.05,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2108.09,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2121.53,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2133.88,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2147.31,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2159.98,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2173.32,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2186.4,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2199.53,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2212.88,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2226.94,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2240.6,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2253.86,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2267.74,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2280.53,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2293.11,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2306.86,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2320.24,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2333.29,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2346.63,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2360.1,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2373.53,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2388.4,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2401.51,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2414.4,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2427.6,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2440.86,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2453.76,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2466.79,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2480.02,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2493.94,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2506.64,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2519.82,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2533.25,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2546.96,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2560.61,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2573.95,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2587.88,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2601.4,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2614.28,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2627.03,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2639.46,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2652.61,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2665.62,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2679.2,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2692.34,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2706.05,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2719.68,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2733.27,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2747.01,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2761.26,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2776.5,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2790.64,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2805.26,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2817.9,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2830.83,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2843.59,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2856.41,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2871.48,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2886.15,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2899.9,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2913.58,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2927.85,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2944.13,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2958.33,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2972.03,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2986.1,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2999.7,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3013.21,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3026.09,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3038.88,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3053.33,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3066.38,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3079.29,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3092.66,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3105.28,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3118.29,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3131.19,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3144.99,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3158.15,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3172.46,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3185.47,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3199.06,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3212.19,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3225.11,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3237.93,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3250.37,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3263.12,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3276.47,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3289.3,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3302.22,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3315.12,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3328.0,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3340.7,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3353.56,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3366.86,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3379.68,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3393.27,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3407.13,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3419.75,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3432.4,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3445.29,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3458.33,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3471.4,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3484.91,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3497.65,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3510.52,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3524.64,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3537.54,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3550.35,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3562.95,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3576.25,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3589.03,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3602.51,
+          "pending": 0,
+          "published": 1000,
+          "failed": 0
+        }
+      ],
+      "invariants": {
+        "initial_backlog_pre_inserted": 1000,
+        "final_pending": 0,
+        "final_published": 1000,
+        "final_failed": 0,
+        "broker_queue_depth": 1000,
+        "durable_delivery_loss_count": 0
+      }
+    },
+    {
+      "trial_id": "T3",
+      "burst_count": 1000,
+      "wall_clock_drain_duration_s": 3.57,
+      "drain_rate_tasks_per_sec": 280.09,
+      "batches_processed": 20,
+      "publisher_active_duty_ratio_pct": 42.18,
+      "publisher_active_ms": 1505.924,
+      "raw_trace_path": "E:\\TaskForge\\benchmarks\\raw\\g941\\events_g941_campaignB_burst_T3_1794339591.jsonl",
+      "raw_trace_sha256": "e438ef0b49918be6708e266b362a77d873f3f46a1af365bd69ef894ea6df6d43",
+      "profiler_flush_report": {
+        "persisted_count": 3040,
+        "total_dropped": 0,
+        "drops_by_type": {},
+        "unpersisted_count": 0,
+        "drain_timeout_exceeded": false
+      },
+      "cadence_distributions": {
+        "claim_duration": {
+          "p50_ms": 3.446,
+          "p95_ms": 4.437,
+          "p99_ms": 4.797,
+          "max_ms": 4.887,
+          "min_ms": 2.97,
+          "mean_ms": 3.639,
+          "stddev_ms": 0.556,
+          "count": 20
+        },
+        "batch_enqueue_duration": {
+          "p50_ms": 21.986,
+          "p95_ms": 29.413,
+          "p99_ms": 31.144,
+          "max_ms": 31.577,
+          "min_ms": 19.035,
+          "mean_ms": 23.158,
+          "stddev_ms": 3.381,
+          "count": 20
+        },
+        "commit_duration": {
+          "p50_ms": 48.4,
+          "p95_ms": 50.79,
+          "p99_ms": 50.937,
+          "max_ms": 50.974,
+          "min_ms": 45.947,
+          "mean_ms": 48.499,
+          "stddev_ms": 1.407,
+          "count": 20
+        },
+        "inter_batch_sleep": {
+          "p50_ms": 110.318,
+          "p95_ms": 113.771,
+          "p99_ms": 114.66,
+          "max_ms": 114.882,
+          "min_ms": 100.192,
+          "mean_ms": 108.505,
+          "stddev_ms": 4.966,
+          "count": 19
+        }
+      },
+      "per_batch_cadence": [
+        {
+          "batch_index": 1,
+          "batch_id": "batch-520dc56e",
+          "claim_duration_ms": 4.414,
+          "enqueue_duration_ms": 21.303,
+          "commit_duration_ms": 48.792,
+          "active_duration_ms": 74.508,
+          "sleep_before_claim_ms": 0.0
+        },
+        {
+          "batch_index": 2,
+          "batch_id": "batch-f30a509d",
+          "claim_duration_ms": 3.235,
+          "enqueue_duration_ms": 22.336,
+          "commit_duration_ms": 47.01,
+          "active_duration_ms": 72.581,
+          "sleep_before_claim_ms": 107.207
+        },
+        {
+          "batch_index": 3,
+          "batch_id": "batch-e0dfa17d",
+          "claim_duration_ms": 3.888,
+          "enqueue_duration_ms": 21.59,
+          "commit_duration_ms": 47.224,
+          "active_duration_ms": 72.703,
+          "sleep_before_claim_ms": 114.882
+        },
+        {
+          "batch_index": 4,
+          "batch_id": "batch-12bdf947",
+          "claim_duration_ms": 4.384,
+          "enqueue_duration_ms": 19.405,
+          "commit_duration_ms": 48.273,
+          "active_duration_ms": 72.062,
+          "sleep_before_claim_ms": 112.855
+        },
+        {
+          "batch_index": 5,
+          "batch_id": "batch-95d67045",
+          "claim_duration_ms": 3.569,
+          "enqueue_duration_ms": 21.634,
+          "commit_duration_ms": 45.947,
+          "active_duration_ms": 71.15,
+          "sleep_before_claim_ms": 100.192
+        },
+        {
+          "batch_index": 6,
+          "batch_id": "batch-ff5eb091",
+          "claim_duration_ms": 3.01,
+          "enqueue_duration_ms": 21.244,
+          "commit_duration_ms": 47.135,
+          "active_duration_ms": 71.39,
+          "sleep_before_claim_ms": 112.653
+        },
+        {
+          "batch_index": 7,
+          "batch_id": "batch-a9b4455d",
+          "claim_duration_ms": 3.257,
+          "enqueue_duration_ms": 20.183,
+          "commit_duration_ms": 47.465,
+          "active_duration_ms": 70.905,
+          "sleep_before_claim_ms": 113.149
+        },
+        {
+          "batch_index": 8,
+          "batch_id": "batch-6a4416d6",
+          "claim_duration_ms": 4.887,
+          "enqueue_duration_ms": 26.823,
+          "commit_duration_ms": 47.837,
+          "active_duration_ms": 79.548,
+          "sleep_before_claim_ms": 101.012
+        },
+        {
+          "batch_index": 9,
+          "batch_id": "batch-7d0bf047",
+          "claim_duration_ms": 3.088,
+          "enqueue_duration_ms": 22.589,
+          "commit_duration_ms": 46.863,
+          "active_duration_ms": 72.541,
+          "sleep_before_claim_ms": 102.608
+        },
+        {
+          "batch_index": 10,
+          "batch_id": "batch-a33aad91",
+          "claim_duration_ms": 4.266,
+          "enqueue_duration_ms": 21.939,
+          "commit_duration_ms": 48.578,
+          "active_duration_ms": 74.782,
+          "sleep_before_claim_ms": 113.588
+        },
+        {
+          "batch_index": 11,
+          "batch_id": "batch-b15269dd",
+          "claim_duration_ms": 3.749,
+          "enqueue_duration_ms": 22.032,
+          "commit_duration_ms": 48.527,
+          "active_duration_ms": 74.308,
+          "sleep_before_claim_ms": 113.648
+        },
+        {
+          "batch_index": 12,
+          "batch_id": "batch-5480dab3",
+          "claim_duration_ms": 4.319,
+          "enqueue_duration_ms": 21.616,
+          "commit_duration_ms": 50.781,
+          "active_duration_ms": 76.715,
+          "sleep_before_claim_ms": 111.622
+        },
+        {
+          "batch_index": 13,
+          "batch_id": "batch-ecfc6a8d",
+          "claim_duration_ms": 3.401,
+          "enqueue_duration_ms": 19.035,
+          "commit_duration_ms": 50.158,
+          "active_duration_ms": 72.594,
+          "sleep_before_claim_ms": 107.045
+        },
+        {
+          "batch_index": 14,
+          "batch_id": "batch-e5ae6fe1",
+          "claim_duration_ms": 3.433,
+          "enqueue_duration_ms": 31.577,
+          "commit_duration_ms": 47.966,
+          "active_duration_ms": 82.977,
+          "sleep_before_claim_ms": 111.933
+        },
+        {
+          "batch_index": 15,
+          "batch_id": "batch-6ba15434",
+          "claim_duration_ms": 3.458,
+          "enqueue_duration_ms": 29.299,
+          "commit_duration_ms": 49.438,
+          "active_duration_ms": 82.195,
+          "sleep_before_claim_ms": 102.323
+        },
+        {
+          "batch_index": 16,
+          "batch_id": "batch-79f0f122",
+          "claim_duration_ms": 3.321,
+          "enqueue_duration_ms": 27.366,
+          "commit_duration_ms": 50.248,
+          "active_duration_ms": 80.935,
+          "sleep_before_claim_ms": 103.766
+        },
+        {
+          "batch_index": 17,
+          "batch_id": "batch-cb83b58e",
+          "claim_duration_ms": 3.829,
+          "enqueue_duration_ms": 22.373,
+          "commit_duration_ms": 50.094,
+          "active_duration_ms": 76.296,
+          "sleep_before_claim_ms": 104.52
+        },
+        {
+          "batch_index": 18,
+          "batch_id": "batch-ed145ae0",
+          "claim_duration_ms": 3.299,
+          "enqueue_duration_ms": 20.889,
+          "commit_duration_ms": 48.638,
+          "active_duration_ms": 72.825,
+          "sleep_before_claim_ms": 110.318
+        },
+        {
+          "batch_index": 19,
+          "batch_id": "batch-719bb2e7",
+          "claim_duration_ms": 3.013,
+          "enqueue_duration_ms": 26.87,
+          "commit_duration_ms": 48.031,
+          "active_duration_ms": 77.914,
+          "sleep_before_claim_ms": 112.828
+        },
+        {
+          "batch_index": 20,
+          "batch_id": "batch-484da8cc",
+          "claim_duration_ms": 2.97,
+          "enqueue_duration_ms": 23.053,
+          "commit_duration_ms": 50.974,
+          "active_duration_ms": 76.997,
+          "sleep_before_claim_ms": 105.445
+        }
+      ],
+      "time_series_depletion": [
+        {
+          "t_elapsed_ms": 0.82,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 15.7,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 29.2,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 42.6,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 55.58,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 69.01,
+          "pending": 1000,
+          "published": 0,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 82.64,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 95.45,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 108.38,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 121.73,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 134.53,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 148.64,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 162.71,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 175.75,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 189.14,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 202.46,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 215.31,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 228.01,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 240.92,
+          "pending": 950,
+          "published": 50,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 253.96,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 267.44,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 281.25,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 294.52,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 307.38,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 320.07,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 332.91,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 346.25,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 359.18,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 372.25,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 385.6,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 398.55,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 411.65,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 424.76,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 437.88,
+          "pending": 900,
+          "published": 100,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 451.54,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 464.23,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 477.0,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 490.8,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 504.19,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 517.66,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 530.76,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 544.47,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 557.82,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 572.33,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 584.84,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 597.61,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 610.24,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 623.02,
+          "pending": 850,
+          "published": 150,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 636.15,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 648.92,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 662.5,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 676.86,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 691.21,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 705.1,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 718.79,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 732.19,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 744.69,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 757.5,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 773.76,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 786.9,
+          "pending": 800,
+          "published": 200,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 800.04,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 812.8,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 825.86,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 839.24,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 853.17,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 867.72,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 882.29,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 895.52,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 909.01,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 923.04,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 936.29,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 949.19,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 961.85,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 974.67,
+          "pending": 750,
+          "published": 250,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 987.6,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1001.13,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1013.77,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1027.27,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1040.59,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1053.67,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1066.63,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1080.05,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1093.66,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1108.18,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1121.33,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1133.59,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1146.23,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1159.62,
+          "pending": 700,
+          "published": 300,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1172.36,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1184.97,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1198.35,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1212.19,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1225.5,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1239.71,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1253.32,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1268.3,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1282.35,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1296.18,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1309.35,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1322.75,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1336.24,
+          "pending": 650,
+          "published": 350,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1350.12,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1363.26,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1376.57,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1390.28,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1403.46,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1417.2,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1431.22,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1444.56,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1457.79,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1471.2,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1483.76,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1497.24,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1510.31,
+          "pending": 600,
+          "published": 400,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1523.72,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1535.89,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1548.75,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1561.7,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1574.9,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1588.41,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1602.08,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1615.07,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1628.34,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1642.02,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1654.4,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1666.97,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1679.64,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1692.47,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1705.51,
+          "pending": 550,
+          "published": 450,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1719.09,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1732.35,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1745.57,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1757.92,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1771.0,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1783.89,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1797.12,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1810.66,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1824.17,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1839.24,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1852.57,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1865.35,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1878.17,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1891.02,
+          "pending": 500,
+          "published": 500,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1904.5,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1917.16,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1929.99,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1943.0,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1955.92,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1969.2,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1982.05,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 1995.75,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2009.83,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2024.43,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2037.22,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2050.59,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2063.18,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2075.66,
+          "pending": 450,
+          "published": 550,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2089.41,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2102.38,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2115.15,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2128.56,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2142.01,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2154.73,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2167.56,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2181.04,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2194.69,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2208.22,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2221.12,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2233.93,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2246.8,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2260.3,
+          "pending": 400,
+          "published": 600,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2273.55,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2286.62,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2300.28,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2313.02,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2325.7,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2338.79,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2351.75,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2365.3,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2379.92,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2393.48,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2408.07,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2421.9,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2435.59,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2448.31,
+          "pending": 350,
+          "published": 650,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2461.06,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2474.09,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2487.5,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2501.51,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2514.07,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2527.82,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2541.44,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2553.9,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2566.83,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2581.65,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2594.91,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2609.48,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2623.67,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2636.7,
+          "pending": 300,
+          "published": 700,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2650.82,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2663.67,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2676.86,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2689.47,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2701.84,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2714.62,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2727.48,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2741.14,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2753.72,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2769.86,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2783.08,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2795.44,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2808.66,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2822.55,
+          "pending": 250,
+          "published": 750,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2835.57,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2848.09,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2861.54,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2874.8,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2888.56,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2901.8,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2914.65,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2927.66,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2940.9,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2953.76,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2966.59,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2979.37,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 2992.23,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3004.89,
+          "pending": 200,
+          "published": 800,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3017.54,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3030.95,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3044.11,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3057.76,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3071.68,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3084.81,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3097.97,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3111.42,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3125.75,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3138.94,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3151.84,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3165.2,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3178.13,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3191.23,
+          "pending": 150,
+          "published": 850,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3204.57,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3217.98,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3231.75,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3245.54,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3259.17,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3273.01,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3286.26,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3299.81,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3313.06,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3326.39,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3339.12,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3352.42,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3365.28,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3378.37,
+          "pending": 100,
+          "published": 900,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3392.2,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3406.82,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3420.68,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3434.75,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3447.42,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3460.76,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3473.98,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3486.99,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3500.84,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3513.6,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3526.41,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3540.6,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3553.48,
+          "pending": 50,
+          "published": 950,
+          "failed": 0
+        },
+        {
+          "t_elapsed_ms": 3567.12,
+          "pending": 0,
+          "published": 1000,
+          "failed": 0
+        }
+      ],
+      "invariants": {
+        "initial_backlog_pre_inserted": 1000,
+        "final_pending": 0,
+        "final_published": 1000,
+        "final_failed": 0,
+        "broker_queue_depth": 1000,
+        "durable_delivery_loss_count": 0
+      }
+    }
+  ]
+}
