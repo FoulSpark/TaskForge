@@ -156,15 +156,19 @@ The attribution engine computes discrete intervals without assuming stage contig
 10. **$T_{\text{redis-ack}} = t_{\text{redis-ack-complete}} - t_{\text{terminal-commit}}$:** Broker delivery acknowledgement (`ZREM`) round-trip.
 
 ### 5.2 Per-Task Outbox-Lag Eligibility & Correlation Methodology
-Because `outbox_claim_start` is a batch-level operation claiming up to 50 tasks while `task_transaction_commit` is an individual task submission event, outbox lag is governed by the following per-task eligibility rules:
+Because `outbox_claim_start` is a batch-level operation claiming up to 50 tasks while `task_transaction_commit` is an individual task submission event observed upon return from `db.commit()`, outbox lag is governed by the following conservative attribution rules:
 1. **Task-to-Outbox Correlation:** Every `OutboxEvent` row contains `aggregate_id = task.id` and `payload["task_id"] = task.id`. The benchmark harness correlates each task directly with its outbox lifecycle via this immutable identifier.
 2. **Batch Cycle Sequencing:** Every outbox publisher claim cycle is tracked with a monotonic sequence identifier $C_k$, recording its query execution start $t_{\text{claim-start}}(C_k)$, commit timestamp $t_{\text{claim-commit}}(C_k)$, and the set of claimed task IDs $S(C_k)$.
-3. **Exclusion of Pre-Commit Claim Cycles:** A claim cycle $C_i$ that begins *before* a task's `task_transaction_commit` ($t_{\text{claim-start}}(C_i) \le t_{\text{task-transaction-commit}}$) cannot observe that task under snapshot isolation. Such cycles are structurally non-eligible for that task and are strictly excluded from its lag attribution.
-4. **Lag Calculation for Successfully Claimed Tasks:** If a task is claimed in batch $C_{\text{claim}}$, and $t_{\text{claim-start}}(C_{\text{claim}}) > t_{\text{task-transaction-commit}}$, the idle outbox residence lag is:
-   $$T_{\text{outbox-lag}} = t_{\text{claim-start}}(C_{\text{claim}}) - t_{\text{task-transaction-commit}}$$
-5. **Concurrent Claim Race Handling:** If a task is claimed in a batch $C_{\text{claim}}$ whose query start preceded or was concurrent with the task commit timestamp ($t_{\text{claim-start}}(C_{\text{claim}}) \le t_{\text{task-transaction-commit}}$ due to lock acquisition interleaving):
-   - The harness will **never** invent or zero-clamp a negative lag value.
-   - The lag for that task will be recorded as `UNAVAILABLE_RACE` and reported in a separate anomaly audit, excluding it from standard lag percentiles.
+3. **Client-Observed Commit-Return Limitation:** The timestamp $t_{\text{commit-return}}$ (`task_transaction_commit`) reflects the instant the Python application observed the completion of `db.commit()`, not the exact internal instant PostgreSQL committed the row. A claim query initiated before `db.commit()` returned ($t_{\text{claim-start}} \le t_{\text{commit-return}}$) may observe and claim the task if the database committed prior to snapshot acquisition.
+4. **Ordering & Lag Attribution for Successfully Claimed Tasks:**
+   - If a task is claimed in batch $C_{\text{claim}}$, and $t_{\text{claim-start}}(C_{\text{claim}}) > t_{\text{commit-return}}$, the causal ordering is established using host monotonic timestamps:
+     $$T_{\text{outbox-lag}} = t_{\text{claim-start}}(C_{\text{claim}}) - t_{\text{commit-return}}$$
+5. **Conservative Race Classification (`UNAVAILABLE_RACE`):**
+   - If a task is claimed in a batch $C_{\text{claim}}$ whose query start preceded or coincided with the client-observed commit return ($t_{\text{claim-start}}(C_{\text{claim}}) \le t_{\text{commit-return}}$):
+     - The harness cannot establish the required temporal ordering from client-observed timestamps alone.
+     - The harness will **never** claim that the task was necessarily invisible, nor invent or zero-clamp a negative lag value.
+     - The lag for that task will be classified as `UNAVAILABLE_RACE` (unprovable ordering).
+     - Raw timestamps and claim-cycle correlation are preserved in the raw JSONL records for anomaly analysis and excluded from standard lag percentile calculations.
 6. **Unclaimed Tasks:** If a task is not claimed before the benchmark trial window closes, its outbox lag is recorded as `UNCLAIMED` (omitted from percentile statistics and tracked in the timestamp completeness audit).
 
 ### 5.3 Negative-Interval & Overlap Handling Invariants
@@ -213,9 +217,16 @@ Because `outbox_claim_start` is a batch-level operation claiming up to 50 tasks 
 ### 7.3 Diagnostic Event Buffer Architecture (Non-Blocking with Drop Counter)
 To prevent profiling disk I/O from creating critical-path task processing latency:
 1. **Bounded Diagnostic Queue:** Diagnostic event records are pushed to a thread-safe, bounded memory buffer (`queue.Queue(maxsize=50000)`).
-2. **Asynchronous Disk Flusher:** A dedicated background flusher thread drains the queue to the per-trial JSONL artifact file.
-3. **Explicit Drop Accounting:** If the buffer saturates, the enqueue operation is strictly non-blocking (`put_nowait()`). Any dropped event atomically increments an explicit `diagnostic_event_drop_count` counter.
-4. **Transparency Invariant:** If `diagnostic_event_drop_count > 0`, the attribution report will prominently expose the drop count and affected event categories. Under no circumstances will dropped events be silently omitted or task processing blocked.
+2. **Non-Blocking Guarantee:** Event emission uses `queue.Queue.put_nowait()`. It never waits for queue capacity and never performs synchronous disk I/O. It may only briefly contend for the queue's internal Python mutex.
+3. **Asynchronous Disk Flusher:** A dedicated background flusher thread drains the queue to the per-trial JSONL artifact file.
+4. **Per-Event-Type Drop Accounting:** If the queue reaches capacity, the event is immediately discarded without blocking task execution. The harness increments both:
+   - Total drop counter: `diagnostic_event_drop_count`
+   - Per-event-type drop counters: `diagnostic_event_drop_count_by_type[event_name]`
+   Both metrics are recorded in the final trial flush report to make timestamp completeness fully auditable.
+5. **Bounded Drain & Graceful Shutdown:**
+   - On trial completion, the harness signals the flusher to cease accepting new events and await queue exhaustion with an explicit bounded timeout (5.0 seconds).
+   - If unpersisted events remain after 5.0 seconds, the flusher closes the artifact file, terminates, and reports the unpersisted count. A stuck flusher will **never** indefinitely block application or benchmark shutdown.
+6. **Transparency Invariant:** If any drops occur, the attribution report will prominently expose the total count and affected event categories. Under no circumstances will dropped events be silently omitted.
 
 ---
 
