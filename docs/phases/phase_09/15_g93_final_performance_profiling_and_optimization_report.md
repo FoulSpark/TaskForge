@@ -3,7 +3,7 @@
 **Milestone:** Gate G9.3 — Stage 3 (End-to-End Milestone Synthesis)  
 **Author:** TaskForge Platform Hardening Team  
 **Date:** 2026-11-10  
-**Status:** Complete Milestone Synthesis & Closure Report  
+**Status:** Complete Milestone Synthesis & Closure Report (Reconciled)  
 **Production Commit:** `a89858b73f8488e05cbcc2393a61f3080ffc7a38` (Production adoption of event-driven wake-up)  
 **Reconciliation Commit:** `2d3b7f6` (Phase 2C closure)  
 **Frozen Baseline Tag:** `v0.8.0-phase8-freeze` (`da27047f56fe2eec75acdb8502f505542cf61202`)  
@@ -16,11 +16,11 @@
 
 Gate G9.3 was established to replace unmeasured assumptions about platform performance with rigorous, empirical lifecycle attribution. Through a sequence of staged investigations, TaskForge diagnosed end-to-end task turnaround bottlenecks, isolated internal dispatcher scheduling delay, developed and verified a targeted optimization, and established an evidence-based target-lock:
 
-1. **Empirical Lifecycle Attribution (Stage 1B):** Resolved the critical distinction between composite queue wait and actual handler execution. Tasks spent $85\% - 95\%$ of their lifetime resident in Redis sorted sets ($T_{\text{dwell}} \approx 2,000 - 5,000\,\text{ms}$) while workers were idle for $58\% - 78\%$ of queue-backed time, despite actual handler execution requiring only $0.05 - 5.0\,\text{ms}$.
-2. **Dispatcher Scheduling Diagnosis (Stage 2 Phase 2A):** Isolated internal scheduling delays. $74.5\% - 89.9\%$ of worker completions occurred while the dispatcher was asleep in its polling loop, contributing $75\% - 82\%$ ($23 - 24\,\text{ms}$) of total slot replenishment latency.
+1. **Empirical Lifecycle Attribution (Stage 1B):** Resolved the critical distinction between client-observed broker dwell and actual handler execution. Tasks spent $93.65\% - 98.49\%$ of their individual turnaround resident in the broker queue ($T_{\text{broker-dwell}}$ $p50 = 9,250.22 - 22,455.51\,\text{ms}$) while workers were idle for $58.4\% - 78.7\%$ of queue-backed time, despite pure handler execution requiring only $0.013 - 6.239\,\text{ms}$.
+2. **Dispatcher Scheduling Diagnosis (Stage 2 Phase 2A):** Isolated internal scheduling delays. $74.5\% - 89.9\%$ of worker completions occurred while the dispatcher was asleep in its polling loop, contributing $75\% - 82\%$ ($22.9 - 24.0\,\text{ms}$) of total slot replenishment latency ($28.6 - 32.6\,\text{ms}$).
 3. **Targeted Optimization & Adoption (Stage 2 Phase 2B):** Implemented an isolated, lost-wakeup-proof `threading.Event` capacity wake-up signal. Replenishment latency dropped by **$74.5\% - 89.4\%$** ($29 - 34\,\text{ms} \to 3.1 - 8.6\,\text{ms}$), sleep lag dropped by **$94.9\% - 98.7\%$** ($24 - 26\,\text{ms} \to 0.35 - 1.21\,\text{ms}$), and queue starvation collapsed by **$86.4\% - 93.5\%$** ($25\% - 31\% \to 1.7\% - 4.0\%$). Production adoption was hardened and adopted at commit `a89858b`.
-4. **Target-Lock & Batch Dequeue Rejection (Stage 2 Phase 2C):** Rebaselined the adopted dispatcher across 18 trials. Redis server-side execution per `EVALSHA` is only $50 - 62\,\mu\text{s}$. In the standard production configuration ($c=4$), worker capacity is **$91.3\%$ saturated** and dispatcher active-duty is only **$7.5\%$**. **Batch dequeue was formally REJECTED for the production operating envelope**, avoiding unnecessary architectural complexity.
-5. **Identified Scaling Boundary:** A single-threaded dispatcher serializing single-task round-trips exhibits a substantial serialization constraint at the tested $c=20$ configuration (dispatcher duty cycle rises to $74\%$, worker saturation drops to $25\%$), establishing an evidence-based scaling boundary for future high-concurrency architectures.
+4. **Target-Lock & Batch Dequeue Rejection (Stage 2 Phase 2C):** Rebaselined the adopted dispatcher across 18 trials. Redis mean server-reported execution time per `EVALSHA` is only $49.7 - 61.9\,\mu\text{s}$. In the standard production configuration ($c=4$), worker capacity is **$91.3\%$ saturated** and dispatcher active-duty is only **$7.5\%$**. **Batch dequeue was formally REJECTED for the production operating envelope ($c \le 10$)**, avoiding unnecessary architectural complexity.
+5. **Identified Scaling Boundary:** A single-threaded dispatcher serializing single-task round-trips showed a substantial dispatcher-serialization constraint at the tested $c=20$ configuration (dispatcher duty cycle rises to $74.0\%$, worker saturation drops to $24.8\%$). The onset threshold between $c=10$ and $c=20$ remains unmeasured.
 
 ---
 
@@ -51,32 +51,48 @@ The 16-event lifecycle diagnostic profiler was designed with strict non-blocking
 
 ---
 
-## 3. Lifecycle Bottleneck Attribution (Stage 1B)
+## 3. Lifecycle Bottleneck Attribution (Stage 1B Canonical Evidence)
 
-Stage 1B evaluated the complete 16-event task lifecycle:
-1. `api_request_received` $\to$ `task_transaction_commit`: HTTP ingestion and synchronous PostgreSQL persistence.
-2. `task_transaction_commit` $\to$ `outbox_claimed`: Transactional outbox polling delay (conservative commit-return ordering).
-3. `outbox_claimed` $\to$ `redis_enqueue_complete`: Outbox publisher serialization and Redis sorted set insertion.
-4. `redis_enqueue_complete` $\to$ `redis_dequeue_complete`: **Redis Broker Dwell Time ($T_{\text{dwell}}$)**.
-5. `redis_dequeue_complete` $\to$ `handler_start`: Worker thread assignment and lease acquisition.
-6. `handler_start` $\to$ `handler_complete`: Task function execution.
-7. `handler_complete` $\to$ `terminal_commit`: Terminal state write in PostgreSQL.
-8. `terminal_commit` $\to$ `redis_ack_complete`: Delivery ACK and Redis in-flight cleanup.
+Stage 1B evaluated the complete 16-event task lifecycle using unambiguous event boundaries:
+1. `api_request_received` $\to$ `task_transaction_commit`: HTTP ingestion and synchronous PostgreSQL persistence ($T_{\text{api-server}}$).
+2. `task_transaction_commit` $\to$ `outbox_claim_start`: **Eligible Outbox Lag ($T_{\text{outbox-lag}}$)**.
+3. `outbox_claim_start` $\to$ `outbox_claim_commit`: Batch outbox claim query execution duration ($T_{\text{outbox-claim}}$).
+4. `redis_enqueue_start` $\to$ `redis_enqueue_complete`: Isolated Redis sorted set insertion round-trip ($T_{\text{redis-enq}}$).
+5. `redis_enqueue_complete` $\to$ `outbox_published_commit`: Outbox batch commit duration ($T_{\text{outbox-commit}}$).
+6. `redis_enqueue_complete` $\to$ `redis_dequeue_complete`: **Client-Observed Broker Dwell Proxy ($T_{\text{broker-dwell}}$)**.
+7. `lease_claim_start` $\to$ `lease_commit`: Worker lease row-lock transaction in PostgreSQL ($T_{\text{worker-lease}}$).
+8. `handler_start` $\to$ `handler_end`: **Pure Isolated Handler Execution ($T_{\text{handler-exec}}$)**.
+9. `terminal_transaction_start` $\to$ `terminal_commit`: Terminal state persistence in PostgreSQL ($T_{\text{terminal-persist}}$).
+10. `terminal_commit` $\to$ `redis_ack_complete`: Delivery ACK in Redis ($T_{\text{redis-ack}}$).
+11. `api_request_received` $\to$ `terminal_commit`: **Total End-to-End Turnaround ($T_{\text{end-to-end}}$)**.
 
 ```
-Ingestion         Outbox Publishing           Redis Queue Dwell             Execution & Terminal ACK
- [DB Commit] ──> [Outbox Claim] ──> [Enqueue] ────────────────────> [Dequeue] ──> [Handler] ──> [DB Commit] ──> [ACK]
-     │                  │              │                               │              │              │            │
-     └──── 10-20 ms ────┴─── 2-5 ms ───┴──────── 2,000-5,000 ms ───────┴─── 1-3 ms ──┴── 0.05-5 ms ┴── 5-10 ms ─┘
-                                          ▲
-                                          │
-                        (85% - 95% of Total Lifecycle Duration)
+Ingestion              Outbox Lag                Redis Broker Dwell Proxy         Execution & Terminal Commit
+[API Ingress] ──> [Task Commit] ──> [Outbox Claim] ──────────────────────────> [Dequeue] ──> [Handler] ──> [Terminal Commit]
+      │                  │                 │                                      │              │                  │
+      └──── 10-20 ms ────┴──── 71-145 ms ──┴────────── 9,250 - 22,455 ms ─────────┴── 0.01-6 ms ┴──── 50-100 ms ────┘
+                                                            ▲
+                                                            │
+                                  (93.65% - 98.49% of Total Task Turnaround)
 ```
 
-### Empirical Discovery:
-- **Broker Dwell Dominance:** Median queue dwell time ($T_{\text{dwell}}$) was $2,000 - 5,000\,\text{ms}$ under backpressure, while actual handler execution ($T_{\text{exec}}$) was only $0.05 - 1.5\,\text{ms}$ (W-01/W-02) or $5.0\,\text{ms}$ (W-03).
-- **Idle Worker Paradox:** Sampling queue depth $Q(t)$ and active worker occupancy $W(t)$ across 1,000 continuous time-steps revealed that although the Redis queue was consistently non-empty ($Q(t) > 0$), active worker occupancy was zero ($W=0$) for **$58\% - 78\%$** of queue-positive time.
-- **Attribution Finding:** The primary bottleneck in TaskForge was not task execution, database commit latency, or Redis throughput limits, but the **internal scheduling efficiency of `WorkerDispatcher` in replenishing available worker slots**.
+### 3.1 Canonical Stage 1B Metrics (from Commit `61f398f`)
+| Workload | End-to-End Turnaround $p50$ | Client-Observed Broker Dwell $p50$ ($T_{\text{broker-dwell}}$) | Broker Dwell Ratio ($T_{\text{dwell}} / T_{\text{e2e}}$) $p50$ | Eligible Outbox Lag $p50$ ($T_{\text{outbox-lag}}$) | Outbox Lag Ratio ($p50_{\text{outbox}} / p50_{\text{e2e}}$) | Isolated Handler Execution $p50$ ($T_{\text{handler-exec}}$) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **W-01** ($n=500$, $c=10$) | **22,936.6 ms** | **22,455.51 ms** ($p95 = 44,534.61\,\text{ms}$) | **97.79%** ($p95 = 98.93\%$) | **110.91 ms** ($p95 = 188.74\,\text{ms}$) | 0.48% | **0.013 ms ($13\,\mu\text{s}$)** |
+| **W-02** ($n=200$, $c=4$) | **15,670.9 ms** | **15,355.16 ms** ($p95 = 30,344.02\,\text{ms}$) | **98.49%** ($p95 = 99.32\%$) | **71.78 ms** ($p95 = 117.86\,\text{ms}$) | 0.46% | **0.123 ms ($123\,\mu\text{s}$)** |
+| **W-03** ($n=200$, $c=10$) | **9,942.1 ms** | **9,250.22 ms** ($p95 = 17,453.64\,\text{ms}$) | **93.65%** ($p95 = 96.35\%$) | **145.13 ms** ($p95 = 270.23\,\text{ms}$) | 1.46% | **6.239 ms** |
+
+### 3.2 Distinctions and Attribution Findings:
+1. **Client-Observed Broker Dwell Proxy vs. Redis Server Sorted-Set Residence:**
+   - $T_{\text{broker-dwell}}$ ($9.25 - 22.46\,\text{seconds}$) represents the client-observed interval between `redis_enqueue_complete` and `redis_dequeue_complete`. 
+   - This interval serves as a client-observed proxy for queue residence, which includes Redis sorted set dwell, network transport, dispatcher loop scheduling, and client socket reception. It must not be treated as purely server-side ZSET residence.
+2. **Outbox Lag Sub-Intervals:**
+   - Eligible outbox lag ($T_{\text{outbox-lag}} = 71.78 - 145.13\,\text{ms}$) is dominated by outbox publisher polling interval alignment ($100\,\text{ms}$ fixed polling sleep) and batch claim query execution (`SELECT ... FOR UPDATE SKIP LOCKED`).
+   - The isolated Redis enqueue network round-trip ($T_{\text{redis-enq}}$) requires only $2.8 - 8.1\,\text{ms}$ ($p50$). Outbox lag is therefore driven primarily by polling sleep alignment and DB batch claim queries, not Redis write latency.
+3. **The Idle Worker Paradox:**
+   - Continuous timeline reconstruction across 1,000 points revealed that while logical queue depth remained heavily positive ($Q(t) > 0$), active worker occupancy was zero ($W=0$) for **$58.4\% - 78.7\%$** of queue-positive time.
+   - This concentrated platform optimization directly on `WorkerDispatcher`: why were available worker slots starved when tasks were resident in Redis?
 
 ---
 
@@ -139,15 +155,15 @@ The implementation was hardened with 9 permanent deterministic unit tests ([`tes
 
 ### 4.3 Phase 2C — Post-Adoption Rebaseline & Batch Dequeue Rejection
 An 18-trial diagnostic campaign was executed to determine whether sequential single-element dequeue constitutes an active bottleneck after wake-up optimization:
-- Redis server execution per `EVALSHA` is only **$50 - 62\,\mu\text{s}$** (mean server-reported time via `INFO commandstats`).
+- Redis server execution per `EVALSHA` is only **$49.7 - 61.9\,\mu\text{s}$** (mean server-reported time via `INFO commandstats`).
 - Under standard production concurrency ($c=4$):
   * Dequeue round-trip $p50 \approx 2.0\,\text{ms}$.
-  * Replenishment lag $p50 \approx 2.7\,\text{ms}$.
+  * Per-slot replenishment lag $p50 \approx 2.7\,\text{ms}$.
   * Dispatcher active-duty ratio is only **$7.5\%$**.
   * Worker capacity saturation is **$91.3\%$**.
   * Queue starvation is **$1.6\%$**.
 - **Formal Target-Lock Decision:** Batch dequeue was **REJECTED for the production operating envelope ($c \le 10$)**.
-- **High-Concurrency Boundary ($c=20$):** At $c=20$, sequential single-task round-trips showed a substantial dispatcher-serialization constraint: dispatcher duty cycle surged to $74.0\%$, worker saturation dropped to $24.8\%$, and cohort replacement lag reached $73.2\,\text{ms}$. The onset threshold between $c=10$ and $c=20$ remains unmeasured.
+- **High-Concurrency Boundary ($c=20$):** At $c=20$, sequential single-task round-trips showed a substantial dispatcher-serialization constraint: dispatcher duty cycle rose to $74.0\%$, worker saturation dropped to $24.8\%$, and cohort replacement lag reached $73.2\,\text{ms}$. The onset threshold between $c=10$ and $c=20$ remains unmeasured.
 
 ---
 
@@ -160,24 +176,28 @@ All figures represent multi-trial means across 3 paired observations per conditi
 | **Sleep Lag ($T_{\text{sleep-lag}}$)** | W-01 (`noop`, $c=10$) | 23.85 ms | **1.21 ms** | **$-94.94\%$** | Sleep delay collapsed |
 | ($p50$) | W-02 (`prime`, $c=4$) | 25.82 ms | **0.35 ms** | **$-98.66\%$** | Near-instantaneous capacity wake-up |
 | | W-03 (`io`, $c=10$) | 24.14 ms | **1.05 ms** | **$-95.64\%$** | Sub-millisecond signaling |
-| **Replenishment Lag ($T_{\text{replenish}}$)** | W-01 (`noop`, $c=10$) | 33.56 ms | **6.81 – 7.14 ms** | **$-79.2\%$** | Unambiguous 1-to-1 slot turnaround |
+| **Per-Slot Replenishment Lag ($T_{\text{replenish}}$)** | W-01 (`noop`, $c=10$) | 33.56 ms | **6.81 – 7.14 ms** | **$-79.2\%$** | Unambiguous 1-to-1 slot turnaround |
 | ($p50$) | W-02 (`prime`, $c=4$) | 29.36 ms | **2.64 ms** | **$-91.0\%$** | Turnover bounded only by Redis RTT |
 | | W-03 (`io`, $c=10$) | 33.99 ms | **6.46 ms** | **$-81.0\%$** | Immediate replenishment |
 | **Queue Starvation Ratio ($R_{\text{starve}}$)** | W-01 (`noop`, $c=10$) | 28.48% | **3.52% – 3.60%** | **$-87.4\%$** | Idling while queue backed eliminated |
 | | W-02 (`prime`, $c=4$) | 26.78% | **1.30% – 1.74%** | **$-93.5\%$** | Worker capacity continuously fed |
 | | W-03 (`io`, $c=10$) | 25.09% | **3.41% – 3.80%** | **$-86.4\%$** | Capacity starvation $< 4\%$ |
-| **Worker Saturation Ratio ($S_{\text{work}}$)** | W-01 (`noop`, $c=10$) | 44.5% | **78.0% – 78.5%** | **$+76.4\%$** | Available capacity actively utilized |
-| ($W(t) \ge c$ during $Q(t) > 0$) | W-02 (`prime`, $c=4$) | 48.3% | **90.9% – 91.3%** | **$+88.6\%$** | Pool saturated $> 90\%$ of time |
-| | W-03 (`io`, $c=10$) | 41.2% | **79.5%** | **$+93.0\%$** | High concurrency saturation |
+| **Worker Saturation Ratio ($S_{\text{work}}$)** | W-01 (`noop`, $c=10$) | 44.5% | **78.0% – 78.5%** | **$+76.4\%$ rel** (+33.5 pp) | Available capacity actively utilized |
+| ($W(t) \ge c$ during $Q(t) > 0$) | W-02 (`prime`, $c=4$) | 48.3% | **90.9% – 91.3%** | **$+88.6\%$ rel** (+42.6 pp) | Pool saturated $> 90\%$ of time |
+| | W-03 (`io`, $c=10$) | 41.2% | **79.5%** | **$+93.0\%$ rel** (+38.3 pp) | High concurrency saturation |
 | **Throughput (TPS)** | W-01 (`noop`, $c=10$) | 26.35 TPS | **27.40 – 27.42 TPS** | **$+4.0\%$** | Sustained turnover improvement |
 | | W-02 (`prime`, $c=4$) | 24.96 TPS | **28.75 TPS** | **$+15.2\%$** | Compute turnover accelerated |
-| | W-03 (`io`, $c=10$) | 26.29 TPS | **27.81 TPS** | **$+5.8\%$** | I/O turnaround improved |
+| | W-03 (`io`, $c=10$) | 26.29 TPS | **27.81 TPS** | **$+5.8\%$** | I/O turnover improved |
 | **End-to-End Latency ($T_{\text{e2e}}$)** | W-01 (`noop`, $c=10$) | 5,718.77 ms | **5,172.12 ms** | **$-9.56\%$** | Faster task lifecycle |
 | ($p50$) | W-02 (`prime`, $c=4$) | 2,811.45 ms | **2,147.21 ms** | **$-23.63\%$** | Substantial turnaround reduction |
 | | W-03 (`io`, $c=10$) | 2,460.87 ms | **2,297.87 ms** | **$-6.62\%$** | Consistent E2E reduction |
-| **Process CPU Utilization** | All Workloads | — | — | **Neutral ($\pm 3\%$)** | Zero busy-spinning, zero storms |
+| **Process CPU Utilization** | All Workloads | Baseline | Adopted (`a89858b`) | **Neutral ($\pm 3\%$)** | W-01: $-3.53\%$, W-02: $+2.17\%$, W-03: $-0.33\%$ |
 
-*Statistical Qualification:* With three paired observations per workload and concurrency level, these results are descriptive characterizations of performance in the tested environment rather than universal statistical guarantees across arbitrary operating conditions.
+### Methodological Qualifications:
+- **Phase 2B vs. Phase 2C Distinction:** Pre-optimization baseline and initial wake-up deltas were measured during the Phase 2B 18-trial interleaved campaign. Post-optimization production metrics reflect the independent Phase 2C 18-trial campaign conducted under the production-adopted dispatcher (`a89858b`).
+- **Saturation Metrics:** Worker saturation improvements represent relative percentage gains computed from underlying percentage-point shifts (e.g. W-01: $44.5\% \to 78.0\%$, a $+33.5$ percentage-point gain, or $+76.4\%$ relative).
+- **Process CPU Measurement:** Process CPU time was captured via standard library `time.process_time()` across multi-trial means and remained within $\pm 3\%$.
+- **Statistical Scope:** With three paired observations per condition, these figures are descriptive characterizations of performance in the tested environment rather than universal statistical guarantees.
 
 ---
 
@@ -189,11 +209,11 @@ All figures represent multi-trial means across 3 paired observations per conditi
 
 ### 6.2 What Was Rejected:
 - **Batch Dequeue / Prefetching:** Formally **REJECTED** for the production operating envelope ($c \le 10$). Single-element sequential dequeue supplies tasks faster than workers consume them, with $> 90\%$ worker saturation and only $7.5\%$ dispatcher active-duty at $c=4$. Adding batching would introduce lease prefetching hazards, fencing complexity, and partial failure ambiguity for zero measurable throughput gain.
-- **Unmeasured Broker Replacements:** The hypothesis that Redis throughput bounded system capacity was refuted; server-side Lua execution requires only $\sim 50\,\mu\text{s}$.
+- **Speculative Broker Replacements:** In the tested configuration, Redis server-side Lua execution ($50 - 62\,\mu\text{s}$) is not the dominant measured cost. (This does not refute every conceivable broker-throughput saturation hypothesis under alternative topologies or extreme arrival rates, but proves broker script execution is not the limiting factor in this architecture).
 
 ### 6.3 What Remains a Measured Limitation:
 - **High-Concurrency Serialization ($c=20$):** At $c=20$, a single dispatcher thread serializing single-task round-trips incurs $74\%$ duty cycle and drops worker saturation to $25\%$. The exact onset threshold between $c=10$ and $c=20$ remains unmeasured.
-- **Outbox Publisher Polling Lag:** Transactional outbox polling contributes $\sim 2 - 5\,\text{ms}$ of initial lag between PostgreSQL task commit and Redis availability.
+- **Outbox Publisher Polling Lag:** Transactional outbox polling contributes $71.78 - 145.13\,\text{ms}$ ($p50$) between PostgreSQL task commit and Redis availability, driven primarily by outbox polling sleep cycles and batch query execution.
 
 ### 6.4 What Must Not Be Changed Without New Evidence:
 - **Authoritative PostgreSQL State:** PostgreSQL remains the single source of truth for task state and lease ownership.
