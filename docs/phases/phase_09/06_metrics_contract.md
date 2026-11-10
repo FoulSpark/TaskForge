@@ -195,14 +195,19 @@ sequenceDiagram
    - **Score Formula & Boundaries:**
      $$\text{score} = (\text{priority} \times 10^{12}) - \text{seq}$$
      * `priority` $\in [1, 4]$ (`1` = LOW, `2` = MEDIUM, `3` = HIGH, `4` = CRITICAL).
-     * `seq` is generated per-priority via atomic Redis `INCR taskforge:seq:<priority>`, starting at 1.
-     * `seq` is strictly positive: $1 \le \text{seq} \le 10^{12} - 1$. If `seq > 999,999,999,999`, enqueue is rejected.
+     * `seq` is generated per-priority tier via atomic Redis `INCR taskforge:seq:<priority>`, starting at 1.
+     * `seq` is strictly positive: $1 \le \text{seq} \le 10^{12} - 1$.
+     * **Atomic Overflow Guard:** If `seq > 999,999,999,999` ($\text{MAX\_SEQ}$), the Lua enqueue script atomically rejects the operation with an explicit error reply (`"Sequence boundary exceeded for priority tier"`). Enqueue strictly fails closed; sequence numbers can never overflow, wrap around, or corrupt adjacent score bands. (At $10^{12}$ capacity, a tier can ingest 1 trillion tasks before requiring an administrative rollover).
      * Disjoint non-overlapping score intervals:
        - `critical` (priority 4): $[3 \times 10^{12} + 1 \dots 4 \times 10^{12} - 1]$
        - `high` (priority 3): $[2 \times 10^{12} + 1 \dots 3 \times 10^{12} - 1]$
        - `medium` (priority 2): $[1 \times 10^{12} + 1 \dots 2 \times 10^{12} - 1]$
        - `low` (priority 1): $[1 \dots 10^{12} - 1]$
-   - **Dispatch Ordering:** Dequeue executes `ZPOPMAX queue 1`. The highest score is popped first: higher priority tiers always pop before lower tiers; within a tier, smaller `seq` (older submission) yields higher score and pops first (strict FIFO).
+   - **Dispatch Ordering & FIFO Definition:**
+     * Dequeue executes atomic `ZPOPMAX queue 1`. The element with the highest score is popped first.
+     * Higher priority tiers always pop before lower tiers ($4 \times 10^{12} > 3 \times 10^{12} > 2 \times 10^{12} > 10^{12}$).
+     * Within any tier, a smaller `seq` yields a higher score, popping earlier tasks first.
+     * **FIFO Clarification:** In TaskForge, FIFO ordering within a tier strictly reflects **enqueue order** into the ready queue, not original task creation order. Tasks that are retried or re-enqueued receive a new monotonic sequence number at the time of re-enqueue.
    - **Collection Method:** Each priority tier depth is collected using $O(\log N)$ `ZCOUNT queue min_score max_score`:
      * `critical`: `ZCOUNT queue 3000000000001 4000000000000`
      * `high`: `ZCOUNT queue 2000000000001 3000000000000`
@@ -234,14 +239,18 @@ sequenceDiagram
 To prevent database pool starvation and Redis connection exhaustion from aggressive Prometheus scrape intervals:
 1. **Cached Gauge Snapshot:** Telemetry gauges (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`, `db_pool_connections`) are cached in memory with a **5.0-second TTL cache window**.
 2. **Single-Flight Refresh Guard:** A non-blocking thread lock (`threading.Lock`) protects snapshot refresh. When the 5-second TTL expires, exactly one thread executes the backend refresh queries. Concurrent scrape requests immediately receive the last valid cached snapshot without triggering duplicate backend load.
-3. **Cold-Start Fallback:** If the very first scrape occurs before any successful snapshot exists and the backend queries fail, affected gauges are omitted from the scrape response (or exposed with a dedicated freshness indicator), and `taskforge_telemetry_scrape_errors_total` is incremented. Uninitialized gauges will never emit misleading `0` values during cold-start failures.
-4. **Dedicated Telemetry Engine:** Scrapes use a separate, dedicated database engine with `pool_size=1, max_overflow=0` to guarantee application connection pools are never starved by metrics scraping.
+3. **Failed Refresh Preservation:** If a background refresh query fails, times out, or encounters database/Redis errors, the **previous valid snapshot is preserved intact** and continues to be served until a subsequent refresh succeeds. A failed refresh will NEVER clear, zero out, or overwrite a valid existing snapshot.
+4. **Cold-Start Fallback:** If the very first scrape occurs before any successful snapshot exists and the backend queries fail, affected gauges are completely omitted from the scrape exposition (never reporting fabricated `0` values), and `taskforge_telemetry_scrape_errors_total` is incremented.
+5. **Dedicated Telemetry Engine:** Scrapes use a separate, dedicated database engine with `pool_size=1, max_overflow=0` to guarantee application connection pools are never starved by metrics scraping.
 
 ### 5.2 Metric Ownership & Aggregation Rules
 
+* **Authoritative Exporter Pattern:** Shared infrastructure gauges (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`) represent centralized cluster state rather than process-local state. Where possible, scrape jobs should designate a single authoritative exporter for cluster-wide gauges.
+* **Multi-Target Scrape Deduplication:** If multiple application targets expose shared-state gauges, Prometheus alerting and visualization queries must use `max(...) by (priority)` for deduplication. Operators must **never use `sum()`** (which linearly double-counts broker backlog with replica count) and **never use `avg()`** (which computes misleading fractional task counts across targets).
+
 | Metric Category | Owned By | Aggregation Operator across Instances |
 | :--- | :--- | :--- |
-| **Shared-State Gauges** (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`) | Shared Infrastructure (Redis / PostgreSQL) | Use `max(...) by (priority)` or `avg(...)`. Never use `sum()`, which would double-count shared broker backlog across instances. |
+| **Shared-State Gauges** (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`) | Centralized Infrastructure (Redis / PostgreSQL) | Use `max(...) by (priority)` or select a designated single exporter target. Never use `sum()` or `avg()`. |
 | **Process-Local Metrics** (`api_requests_total`, `api_request_duration_seconds`, `rate_limit_exceeded_total`) | Specific API Process | Use `sum(rate(...[5m]))` across instances. |
 | **Worker Execution Metrics** (`task_execution_duration_seconds`, `tasks_completed_total`, `retries_total`) | Specific Worker Process | Use `sum(rate(...[5m]))` across instances. |
 | **Connection Pool Gauges** (`db_pool_connections`) | Specific Process Engine | Use `sum(...) by (pool_state)` to monitor aggregate connection consumption across all running services. |
@@ -260,11 +269,15 @@ TaskForge exposes independent liveness and readiness endpoints:
 
 ### 6.2 Readiness Probe (`GET /health/ready`)
 * **Purpose:** Proves that the API instance has healthy connectivity to all downstream backing stores required to accept task ingestion.
-* **Absolute Request Deadline:** **Strict 1.0-second overall wall-clock deadline**.
-* **Enforceable Asynchronous Probing:**
-  - Probes for PostgreSQL and Redis are executed in separate thread pools via `asyncio.to_thread` wrapped under a global `asyncio.wait_for(check_dependencies(), timeout=1.0)`.
-  - **PostgreSQL Connection Budget:** Psycopg connection timeout `connect_timeout=1` (integer seconds accepted by libpq) and statement timeout `statement_timeout=500`ms.
-  - **Redis Connection Budget:** Redis socket connect timeout `socket_connect_timeout=0.5` and command timeout `socket_timeout=0.5`s.
+* **Response Deadline vs Thread Cancellation Contract:**
+  - **Endpoint Response Deadline:** Enforced via `asyncio.wait_for(check_dependencies(), timeout=1.0)`. Callers always receive a response within 1.0 second.
+  - **Thread Cancellation Reality:** In Python, cancelling a coroutine that awaits `asyncio.to_thread()` does NOT terminate the underlying worker thread running synchronous I/O. During prolonged backing store outages, repeated readiness probes could leak threads if left unbounded.
+* **Bounded Execution & Accumulation Safeguards:**
+  1. **Probe Concurrency Ceiling:** Readiness probing is guarded by an `asyncio.Semaphore(2)` (or dedicated 2-worker thread pool). If 2 probe operations are already in-flight, incoming readiness requests immediately fast-fail with HTTP `503 Service Unavailable` without spawning additional threads or opening new connections.
+  2. **Driver-Level Socket & Statement Deadlines:** To guarantee that abandoned threads terminate cleanly and promptly:
+     - **PostgreSQL Connection Budget:** Psycopg connection timeout `connect_timeout=1` (integer seconds required by libpq) and statement execution timeout `statement_timeout=500`ms.
+     - **Redis Connection Budget:** Redis socket connect timeout `socket_connect_timeout=0.5`s and command execution timeout `socket_timeout=0.5`s.
+  3. **Guaranteed Bounded Lifetime:** Any background probe thread whose awaiting coroutine timed out is guaranteed to abort at the socket level and terminate within $\le 1.0$ second, strictly preventing thread exhaustion under repeated failure conditions.
 * **Failure Responses (HTTP 503 Service Unavailable):**
   - If any dependency fails, times out, or exceeds the 1.0-second global deadline, the probe immediately returns HTTP `503 Service Unavailable`.
 * **Sanitized Problem Details (Zero Credential Leakage):**
