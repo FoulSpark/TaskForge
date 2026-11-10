@@ -1,5 +1,7 @@
-import os
+import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -16,6 +18,16 @@ from taskforge.core.config import get_settings
 from taskforge.core.logging import configure_logging, get_logger
 from taskforge.core.rate_limiter import RateLimitMiddleware
 from taskforge.database.session import engine, init_db
+from taskforge.monitoring.health import (
+    ReadinessProbeCoordinator,
+    ReadinessProbeSaturationError,
+    ReadinessProbeShuttingDownError,
+    check_database as health_check_database,
+    check_redis as health_check_redis,
+    close_probe_redis,
+    get_readiness_coordinator,
+    perform_readiness_checks,
+)
 from taskforge.queue.broker import get_broker
 from taskforge.queue.outbox import OutboxPublisherWorker
 from taskforge.queue.redis_client import create_redis_client
@@ -34,6 +46,9 @@ worker_dispatcher: WorkerDispatcher | None = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global outbox_publisher, worker_dispatcher
+
+    # Initialize dedicated readiness probe coordinator (max 2 workers)
+    app.state.readiness_coordinator = ReadinessProbeCoordinator(max_workers=2)
 
     # Initialize DB schema
     try:
@@ -69,7 +84,10 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Clean shutdown
+    # Clean shutdown: enforce ingress quiescence first (fast-fail new probes)
+    if hasattr(app.state, "readiness_coordinator") and app.state.readiness_coordinator:
+        app.state.readiness_coordinator.shutdown(wait=False)
+
     if worker_dispatcher:
         worker_dispatcher.stop()
     if outbox_publisher:
@@ -80,6 +98,8 @@ async def lifespan(app: FastAPI):
             app.state.redis.close()
         except Exception:
             pass
+
+    close_probe_redis()
 
     engine.dispose()
     logger.info("application_stopping")
@@ -108,26 +128,15 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 
 def check_database() -> bool:
-    try:
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
-        return True
-    except SQLAlchemyError:
-        logger.exception("database_health_check_failed")
-        return False
+    return health_check_database()
 
 
-def check_redis(redis_client) -> bool:
-    if redis_client is None:
-        return False
-    try:
-        return bool(redis_client.ping())
-    except RedisError:
-        logger.exception("redis_health_check_failed")
-        return False
+def check_redis(redis_client=None) -> bool:
+    return health_check_redis(redis_client)
 
 
 @app.get("/health/live", tags=["Health"])
+@app.get("/healthz/live", tags=["Health"])
 async def liveness():
     return {
         "status": "alive",
@@ -136,24 +145,69 @@ async def liveness():
 
 
 @app.get("/health/ready", tags=["Health"])
-def readiness(request: Request):
-    database_ok = check_database()
-    redis_ok = check_redis(getattr(request.app.state, "redis", None))
+@app.get("/healthz/ready", tags=["Health"])
+async def readiness(request: Request):
+    coordinator = get_readiness_coordinator(request.app)
+    redis_client = getattr(request.app.state, "redis", None)
 
-    checks = {
-        "database": "healthy" if database_ok else "unavailable",
-        "redis": "healthy" if redis_ok else "unavailable",
+    try:
+        future = coordinator.submit_probe(perform_readiness_checks, redis_client)
+    except (ReadinessProbeShuttingDownError, ReadinessProbeSaturationError):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "application": settings.app_name,
+                "checks": {
+                    "database": "unavailable",
+                    "redis": "unavailable",
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    try:
+        asyncio_future = asyncio.wrap_future(future)
+        ready, checks = await asyncio.wait_for(asyncio_future, timeout=1.0)
+    except asyncio.TimeoutError:
+        # 1.0s operation deadline exceeded; future slot remains occupied until completion
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "application": settings.app_name,
+                "checks": {
+                    "database": "unavailable",
+                    "redis": "unavailable",
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    except Exception:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "application": settings.app_name,
+                "checks": {
+                    "database": "unavailable",
+                    "redis": "unavailable",
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+    content: dict[str, Any] = {
+        "status": "ready" if ready else "not_ready",
+        "application": settings.app_name,
+        "checks": checks,
     }
-
-    ready = database_ok and redis_ok
+    if not ready:
+        content["timestamp"] = datetime.now(timezone.utc).isoformat()
 
     return JSONResponse(
         status_code=200 if ready else 503,
-        content={
-            "status": "ready" if ready else "not_ready",
-            "application": settings.app_name,
-            "checks": checks,
-        },
+        content=content,
     )
 
 
