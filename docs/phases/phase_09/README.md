@@ -22,5 +22,7 @@ This directory contains the milestone specifications, threat model, trust bounda
 14. [13_phase2c_diagnostic_protocol_proposal.md](13_phase2c_diagnostic_protocol_proposal.md): Stage 2 Phase 2C post-adoption rebaselining protocol.
 15. [14_stage2_phase2c_diagnostic_report.md](14_stage2_phase2c_diagnostic_report.md): Stage 2 Phase 2C sequential dequeue target-lock report (batching rejected).
 16. [15_g93_final_performance_profiling_and_optimization_report.md](15_g93_final_performance_profiling_and_optimization_report.md): Gate G9.3 Stage 3 definitive end-to-end milestone synthesis report.
+17. [16_g94_operational_resilience_scope_and_contract.md](16_g94_operational_resilience_scope_and_contract.md): Gate G9.4 operational resilience and reliability hardening scope and measurement contract.
+
 
 
