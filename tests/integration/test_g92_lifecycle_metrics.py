@@ -346,6 +346,19 @@ def test_terminal_transition_idempotency_all_terminal_states(repo):
     assert TASKS_COMPLETED.labels(task_type="csv_export", status="DEAD_LETTER")._value.get() == d_before + 1
     assert DEAD_LETTER_TOTAL.labels(task_type="csv_export")._value.get() == dlq_count_before + 1
 
+    # 4. FAILED state (explicit verification of FAILED terminal transition idempotency)
+    res_failed = repo.create_task("t_f", "image_resize", {}, TaskPriority.LOW.value)
+    tid_f = res_failed.task.id
+    f_before = TASKS_COMPLETED.labels(task_type="image_resize", status="FAILED")._value.get()
+
+    repo.update_status(tid_f, TaskStatus.RUNNING)
+    repo.update_status(tid_f, TaskStatus.FAILED)
+    assert TASKS_COMPLETED.labels(task_type="image_resize", status="FAILED")._value.get() == f_before + 1
+
+    # Repeated transition on already-FAILED task MUST NOT increment completion counter
+    repo.update_status(tid_f, TaskStatus.FAILED, force=True)
+    assert TASKS_COMPLETED.labels(task_type="image_resize", status="FAILED")._value.get() == f_before + 1
+
 
 def test_repeated_lease_recovery_idempotency(repo):
     """Finding 2.C Verification: A repeated recovery scan cannot count the same transition twice."""
