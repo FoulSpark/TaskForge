@@ -198,7 +198,11 @@ sequenceDiagram
      * `seq` is generated per-priority tier via atomic Redis `INCR taskforge:seq:<priority>`, starting at 1.
      * `seq` is strictly positive: $1 \le \text{seq} \le 10^{12} - 1$.
      * **Atomic Overflow Guard:** If `seq > 999,999,999,999` ($\text{MAX\_SEQ}$), the Lua enqueue script atomically rejects the operation with an explicit error reply (`"Sequence boundary exceeded for priority tier"`). Enqueue strictly fails closed; sequence numbers can never overflow, wrap around, or corrupt adjacent score bands. (At $10^{12}$ capacity, a tier can ingest 1 trillion tasks before requiring an administrative rollover).
-     * **Administrative Rollover Invariant:** Administrative sequence reset (resetting `taskforge:seq:<priority>` back to 0) is permitted **strictly and only when the corresponding priority tier is completely empty** (`ZCOUNT queue min_score max_score == 0`) and **concurrent enqueue operations for that tier are excluded** (e.g. during an ingestion maintenance pause or under a distributed lock). Resetting the counter while tasks remain in the queue would reintroduce sequence numbers already present, violating the FIFO ordering guarantee.
+     * **Administrative Rollover Invariant:** Administrative sequence reset (resetting `taskforge:seq:<priority>` back to 0) is permitted **strictly and only under an enforceable exclusion protocol**:
+       1. Ingestion of new tasks for that priority tier must be formally paused across the cluster (e.g. outbox sweeper dispatch halted and API task creation paused for that tier) and verified that all in-flight enqueue operations have ceased.
+       2. The priority tier must be verified to be completely empty: `ZCOUNT queue min_score max_score == 0`.
+       3. Both tier-emptiness verification and counter reset must take place while enqueue exclusion remains actively enforced.
+       Resetting the counter while tasks remain in the queue or while uncoordinated enqueue operations are active would reintroduce sequence numbers already present, violating the strict FIFO ordering guarantee.
      * Disjoint non-overlapping score intervals:
        - `critical` (priority 4): $[3 \times 10^{12} + 1 \dots 4 \times 10^{12} - 1]$
        - `high` (priority 3): $[2 \times 10^{12} + 1 \dots 3 \times 10^{12} - 1]$
@@ -301,7 +305,11 @@ TaskForge exposes independent liveness and readiness endpoints:
     "timestamp": "2026-11-10T14:00:00Z"
   }
   ```
-* **Executor Lifecycle:** The dedicated readiness executor is instantiated during application startup and cleanly shutdown via the FastAPI lifespan context manager (`executor.shutdown(wait=False, cancel_futures=True)`).
+* **Executor Lifecycle & Shutdown Semantics:**
+  - **Instantiation:** The dedicated readiness executor (`ThreadPoolExecutor(max_workers=2, thread_name_prefix="readiness-probe")`) is created during application startup.
+  - **Ingress Quiescence:** Once application shutdown begins (FastAPI lifespan exit), no new readiness requests are accepted; incoming requests immediately fast-fail with HTTP `503 Service Unavailable`.
+  - **Cancellation of Pending Work:** Any submitted probe futures that have not yet started executing are cancelled via `cancel_futures=True`.
+  - **Running Thread Drain Policy:** For any probe operation actively executing I/O in a worker thread at shutdown, the thread is allowed a finite grace period ($\le 1.0$s) to terminate naturally under its driver-level socket/statement timeouts. The shutdown handler does not block process termination indefinitely; if a thread remains blocked after the grace period, process exit reclaims OS-level thread and socket resources cleanly.
 
 ---
 
