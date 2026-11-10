@@ -198,6 +198,7 @@ sequenceDiagram
      * `seq` is generated per-priority tier via atomic Redis `INCR taskforge:seq:<priority>`, starting at 1.
      * `seq` is strictly positive: $1 \le \text{seq} \le 10^{12} - 1$.
      * **Atomic Overflow Guard:** If `seq > 999,999,999,999` ($\text{MAX\_SEQ}$), the Lua enqueue script atomically rejects the operation with an explicit error reply (`"Sequence boundary exceeded for priority tier"`). Enqueue strictly fails closed; sequence numbers can never overflow, wrap around, or corrupt adjacent score bands. (At $10^{12}$ capacity, a tier can ingest 1 trillion tasks before requiring an administrative rollover).
+     * **Administrative Rollover Invariant:** Administrative sequence reset (resetting `taskforge:seq:<priority>` back to 0) is permitted **strictly and only when the corresponding priority tier is completely empty** (`ZCOUNT queue min_score max_score == 0`) and **concurrent enqueue operations for that tier are excluded** (e.g. during an ingestion maintenance pause or under a distributed lock). Resetting the counter while tasks remain in the queue would reintroduce sequence numbers already present, violating the FIFO ordering guarantee.
      * Disjoint non-overlapping score intervals:
        - `critical` (priority 4): $[3 \times 10^{12} + 1 \dots 4 \times 10^{12} - 1]$
        - `high` (priority 3): $[2 \times 10^{12} + 1 \dots 3 \times 10^{12} - 1]$
@@ -270,16 +271,23 @@ TaskForge exposes independent liveness and readiness endpoints:
 ### 6.2 Readiness Probe (`GET /health/ready`)
 * **Purpose:** Proves that the API instance has healthy connectivity to all downstream backing stores required to accept task ingestion.
 * **Response Deadline vs Thread Cancellation Contract:**
-  - **Endpoint Response Deadline:** Enforced via `asyncio.wait_for(check_dependencies(), timeout=1.0)`. Callers always receive a response within 1.0 second.
-  - **Thread Cancellation Reality:** In Python, cancelling a coroutine that awaits `asyncio.to_thread()` does NOT terminate the underlying worker thread running synchronous I/O. During prolonged backing store outages, repeated readiness probes could leak threads if left unbounded.
-* **Bounded Execution & Accumulation Safeguards:**
-  1. **Probe Concurrency Ceiling:** Readiness probing is guarded by an `asyncio.Semaphore(2)` (or dedicated 2-worker thread pool). If 2 probe operations are already in-flight, incoming readiness requests immediately fast-fail with HTTP `503 Service Unavailable` without spawning additional threads or opening new connections.
-  2. **Driver-Level Socket & Statement Deadlines:** To guarantee that abandoned threads terminate cleanly and promptly:
+  - **HTTP Response Deadline:** The dependency-check operation is bounded by an `asyncio.wait_for(..., timeout=1.0)` timeout. Callers receive an HTTP response or timeout error based on this 1.0-second operation budget (subject to standard network/transport overhead).
+  - **Thread Cancellation Reality:** In Python, cancelling an asyncio coroutine that awaits a thread does NOT terminate the underlying worker thread running synchronous I/O. During prolonged backing store outages, repeated readiness probes could leak threads if submissions to a thread pool are unbounded.
+* **Bounded Execution & Underlying Operation Accounting:**
+  1. **Dedicated Bounded Executor & Permit Release:**
+     - Probing operations execute within a dedicated `ThreadPoolExecutor` constrained to **exactly two worker threads** (`max_workers=2`).
+     - In-flight probe operations are tracked via an atomic concurrency slot counter or an `asyncio.Semaphore(2)` whose permit is **released strictly via the underlying `concurrent.futures.Future`'s completion callback (`future.add_done_callback(...)`)**, and **NEVER by the cancelled coroutine exit**.
+     - An execution slot remains occupied until the underlying synchronous thread actually finishes or aborts its I/O.
+  2. **Fast-Fail on Probe Saturation:**
+     - If both execution slots are occupied by unfinished probes, incoming readiness requests **immediately fast-fail with HTTP `503 Service Unavailable`** without submitting new tasks to the executor queue or spawning additional threads.
+     - Maximum concurrent underlying probe operations is strictly bounded to **two** at all times.
+  3. **Driver-Level Socket & Statement Deadlines:**
      - **PostgreSQL Connection Budget:** Psycopg connection timeout `connect_timeout=1` (integer seconds required by libpq) and statement execution timeout `statement_timeout=500`ms.
      - **Redis Connection Budget:** Redis socket connect timeout `socket_connect_timeout=0.5`s and command execution timeout `socket_timeout=0.5`s.
-  3. **Guaranteed Bounded Lifetime:** Any background probe thread whose awaiting coroutine timed out is guaranteed to abort at the socket level and terminate within $\le 1.0$ second, strictly preventing thread exhaustion under repeated failure conditions.
+  4. **Thread Termination Expectations:**
+     - Timed-out probe threads eventually abort at the OS socket/driver level according to their individual driver timeout configurations. The contract guarantees that unfinished probe operations cannot accumulate beyond the 2-slot capacity, preventing thread exhaustion or connection pool depletion under sustained dependency outages.
 * **Failure Responses (HTTP 503 Service Unavailable):**
-  - If any dependency fails, times out, or exceeds the 1.0-second global deadline, the probe immediately returns HTTP `503 Service Unavailable`.
+  - If any dependency fails, times out, or exceeds the 1.0-second operational deadline, the probe immediately returns HTTP `503 Service Unavailable`.
 * **Sanitized Problem Details (Zero Credential Leakage):**
   - Under no circumstances will database URLs, credentials, hostnames, or raw exception tracebacks be emitted in the 503 response body:
   ```json
@@ -293,6 +301,7 @@ TaskForge exposes independent liveness and readiness endpoints:
     "timestamp": "2026-11-10T14:00:00Z"
   }
   ```
+* **Executor Lifecycle:** The dedicated readiness executor is instantiated during application startup and cleanly shutdown via the FastAPI lifespan context manager (`executor.shutdown(wait=False, cancel_futures=True)`).
 
 ---
 
