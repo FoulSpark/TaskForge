@@ -1,9 +1,10 @@
-# Milestone G9.3 — Performance Profiling, Bottleneck Attribution & Controlled Optimization Proposal
+# Milestone G9.3 — 16-Event Lifecycle Attribution Contract & Performance Profiling Architecture
 
 **Milestone Identifier:** Gate G9.3  
-**Status:** PROPOSED — PENDING ARCHITECTURAL REVIEW & AUTHORIZATION  
+**Status:** AMENDED CONTRACT — FORMALLY AUTHORIZED FOR STAGE 1B IMPLEMENTATION  
 **Baseline Anchor:** `v0.8.0-phase8-freeze` (`da27047f56fe2eec75acdb8502f505542cf61202`)  
 **Observability & Security Provenance:** Commit `ada0b9b`  
+**Controlled Baseline Reference:** Stage 1A-R Reconciliation (`benchmarks/scenarios/g93/stage1a_r_report.json`)  
 **Working Tree:** Clean  
 
 ---
@@ -19,19 +20,20 @@ Milestone G9.3 leverages the observability foundation established in Gate G9.2 (
 
 ---
 
-## 2. G9.0 Baseline Reference & Workload Preservation
+## 2. Workload Definitions & Reference Baselines
 
 All performance evaluations in G9.3 are strictly calibrated against the frozen G9.0 baseline dataset and canonical workloads:
 
 ### 2.1 Frozen Workload Definitions (`benchmarks/scenarios/g90/workload_definitions.json`)
+- **File SHA-256:** `04f2306538868a41514c19f0958e04bf0b0586b3a83989e115231a32e50f0110` (created in commit `1e32386`, unmodified).
 
 | Workload ID | Name | Task Handler | Concurrency | Task Count | Target Metric & Purpose |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **W-01** | Baseline Noop Profiling | `noop` | 10 concurrent clients | 500 tasks (50 warmup) | Raw pipeline latency, outbox sweep rate, and broker dispatch overhead |
+| **W-01** | Baseline Noop Profiling | `noop` | 10 concurrent clients | 500 tasks (50 warmup) | Pipeline latency, outbox sweep rate, and broker dispatch overhead |
 | **W-02** | CPU-Bound Prime Sieve | `compute_prime` ($n=1,000$) | 4 concurrent clients | 200 tasks (20 warmup) | Worker CPU contention, scheduling, and multi-thread threadpool dynamics |
 | **W-03** | I/O Delay Simulation | `io_simulation` (5ms delay) | 10 concurrent clients | 200 tasks (20 warmup) | External latency resilience and worker throughput under waiting states |
 
-### 2.2 Frozen G9.0 Baseline Performance Figures (`benchmarks/scenarios/g90/baseline_performance.json`)
+### 2.2 Historical G9.0 Baseline Figures (`benchmarks/scenarios/g90/baseline_performance.json`)
 
 | Metric | W-01 (Noop, 500 tasks, c=10) | W-02 (Compute, 200 tasks, c=4) | W-03 (I/O, 200 tasks, c=10) |
 | :--- | :--- | :--- | :--- |
@@ -42,167 +44,173 @@ All performance evaluations in G9.3 are strictly calibrated against the frozen G
 | **Execution Overhead ($O_{\text{exec}}$) [p50 / p95 / p99]** | 123.3ms / 344.9ms / 441.4ms | 45.1ms / 97.6ms / 128.8ms | 126.8ms / 296.9ms / 329.9ms |
 | **End-to-End Latency ($L_{\text{e2e}}$) [p50 / p95 / p99]** | 22,823.5ms / 36,216.7ms / 36,939.5ms | 14,540.2ms / 21,425.4ms / 23,623.4ms | 5,271.1ms / 12,591.4ms / 14,711.5ms |
 
-### Key Baseline Observation:
-In burst workload W-01, **Broker Dispatch Delay accounts for >95% of total end-to-end latency** (median 22.5s out of 22.8s). G9.3 will attribute and dissect this composite delay into its discrete component stages.
+### 2.3 Stage 1A-R Reconciled Reference Baseline (`stage1a_r_report.json`)
+Executed across 6 paired alternating trials with clean database isolation between runs:
+- **W-01 (noop):** Duration mean = $33.01\,\text{s}$, Throughput mean = $15.24\,\text{TPS}$, Exec $p50$ mean = $129.57\,\text{ms}$.
+- **W-02 (prime $n=1000$):** Duration mean = $29.75\,\text{s}$, Throughput mean = $7.07\,\text{TPS}$, Exec $p50$ mean = $45.66\,\text{ms}$ ($\Delta = +0.57\,\text{ms}$ vs G9.0).
+- **W-03 (I/O 5ms):** Duration mean = $14.13\,\text{s}$, Throughput mean = $14.39\,\text{TPS}$, Exec $p50$ mean = $125.52\,\text{ms}$ ($\Delta = -1.26\,\text{ms}$ vs G9.0).
+
+*Reconciliation Note:* G9.0 remains the immutable historical benchmark. Stage 1A-R establishes the controlled experimental reference under isolated table resets. Throughput differences reflect database table isolation and polling phase alignment, not application optimizations.
 
 ---
 
-## 3. Bottleneck Attribution Architecture (Six-Stage Dissection)
+## 3. The 16-Event Lifecycle Attribution Contract
 
-To isolate performance bottlenecks definitively, the pipeline is instrumented across six non-overlapping, contiguous stages:
+To overcome the structural deficiencies of contiguous stage summation ($\sum \Delta t_i = L_{\text{e2e}}$) and avoid conflating database transactions with broker operations, Stage 1B formally establishes the **16-Event Lifecycle Attribution Contract**.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as Benchmark Client
-    participant API as FastAPI Ingestion Gateway
-    participant DB as PostgreSQL 16 (Tasks & Outbox)
-    participant Outbox as Outbox Publisher Daemon
-    participant Redis as Redis 7.4 Priority Broker
-    participant Worker as Worker Dispatcher Engine
+    participant Client as Benchmark Client
+    participant API as FastAPI Ingestion
+    participant PG as PostgreSQL
+    participant Outbox as Outbox Publisher
+    participant Redis as Redis Broker
+    participant Worker as Worker Dispatcher
 
-    Note over Client, API: Stage 1: API Ingestion
-    Client->>API: POST /api/v1/tasks
-    API->>DB: INSERT Task & OutboxEvent (PENDING)
-    API-->>Client: HTTP 201 Created
-    Note over Client: Δt1 = t1 - t0 (API Ingestion Latency)
+    rect rgb(245, 245, 255)
+    Note over Client,API: Subsystem A: API Ingestion
+    Client->>API: 1. api_request_received (ingress boundary)
+    API->>PG: 2. task_transaction_commit (DB commit)
+    API-->>Client: 3. api_response_sent (egress boundary)
+    end
 
-    Note over DB, Outbox: Stage 2: Outbox Sweep & Publication
-    Outbox->>DB: SELECT PENDING FOR UPDATE SKIP LOCKED
-    Outbox->>Redis: ZADD priority queue & sequence
-    Outbox->>DB: UPDATE OutboxEvent (PUBLISHED)
-    Note over Outbox: Δt2 = t2 - t1 (Outbox Publication Latency)
+    rect rgb(240, 250, 240)
+    Note over Outbox,Redis: Subsystem B: Outbox Publication
+    Outbox->>PG: 4. outbox_claim_start (claim op start)
+    PG-->>Outbox: 5. outbox_claim_commit (claim commit)
+    Outbox->>Redis: 6. redis_enqueue_start (socket enqueue start)
+    Redis-->>Outbox: 7. redis_enqueue_complete (broker enqueue complete)
+    Outbox->>PG: 8. outbox_published_commit (DB publish commit)
+    end
 
-    Note over Redis, Worker: Stage 3: Broker Queue Dwell
-    Redis-->>Worker: Task awaits worker concurrency slot
-    Note over Worker: Δt3 = t3 - t2 (Broker Dwell / Queue Wait)
-
-    Note over Worker, DB: Stage 4: Dequeue & Lease Claim
-    Worker->>Redis: ZPOPMAX 1
-    Worker->>DB: SELECT Task FOR UPDATE & UPDATE Lease Token
-    Note over Worker: Δt4 = t4 - t3 (Worker Scheduling & Lease Claim)
-
-    Note over Worker: Stage 5: Pure Handler Execution
-    Worker->>Worker: Execute registered task handler (timed_callable)
-    Note over Worker: Δt5 = t5 - t4 (Pure Handler Duration)
-
-    Note over Worker, DB: Stage 6: Terminal Persistence & Delivery ACK
-    Worker->>DB: INSERT TaskResult & UPDATE Task (SUCCESS/FAILED)
-    Worker->>Redis: ZREM in_flight delivery token
-    Note over Worker: Δt6 = t6 - t5 (Terminal Persistence & ACK)
+    rect rgb(255, 245, 240)
+    Note over Worker,Redis: Subsystem C: Worker Dequeue, Lease & Execution
+    Redis-->>Worker: 9. redis_dequeue_complete (broker dequeue complete)
+    Worker->>PG: 10. lease_claim_start (lease op start)
+    PG-->>Worker: 11. lease_commit (lease commit / RUNNING)
+    Worker->>Worker: 12. handler_start (pure handler start)
+    Worker->>Worker: 13. handler_end (pure handler complete)
+    Worker->>PG: 14. terminal_transaction_start (result op start)
+    PG-->>Worker: 15. terminal_commit (terminal DB commit)
+    Worker->>Redis: 16. redis_ack_complete (broker ZREM ACK complete)
+    end
 ```
 
-### Stage Definitions & Attribution Formulas:
+### 3.1 Formal 16-Event Specification
 
-1. **Stage 1 — API Ingestion Latency ($\Delta t_1 = t_1 - t_0$):**
-   - HTTP transport wire time + Starlette middleware chain (`PrometheusHttpMiddleware` $\rightarrow$ `RateLimitMiddleware` $\rightarrow$ `CorrelationIdMiddleware`) + Pydantic schema validation + DB transaction inserting `Task` and `OutboxEvent` (`status = 'PENDING'`).
-2. **Stage 2 — Outbox Sweep & Publication Latency ($\Delta t_2 = t_2 - t_1$):**
-   - Delay between outbox row commit and `OutboxPublisherWorker` polling cycle + `SELECT FOR UPDATE SKIP LOCKED` + Redis `ZADD` enqueue + outbox status update to `PUBLISHED`.
-3. **Stage 3 — Broker Queue Dwell / Queue Wait ($\Delta t_3 = t_3 - t_2$):**
-   - Time the enqueued task spends waiting in Redis priority sorted set until a worker thread becomes available. (Measured via `taskforge_task_queue_wait_seconds`).
-4. **Stage 4 — Worker Scheduling & Lease Acquisition ($\Delta t_4 = t_4 - t_3$):**
-   - Worker thread assignment + PostgreSQL `SELECT ... FOR UPDATE` row lock + 64-bit cryptographic random lease token generation + commit of `RUNNING` status and `TaskAttempt` row.
-5. **Stage 5 — Pure Handler Execution Duration ($\Delta t_5 = t_5 - t_4$):**
-   - Exclusive execution time of the target Python task function, measured via `timed_callable` wrapper without executor submission or lease acquisition overhead. (Measured via `taskforge_task_execution_duration_seconds`).
-6. **Stage 6 — Terminal Persistence & Delivery ACK ($\Delta t_6 = t_6 - t_5$):**
-   - Serialization and commit of `TaskResult` + state transition to `SUCCESS` / `FAILED` in PostgreSQL + Redis `ZREM` ACK on `taskforge:in_flight`.
-
----
-
-## 4. Continuous Measurement & Profiling Harness Improvements
-
-To monitor infrastructure health during benchmarks, G9.3 introduces continuous time-series telemetry sampling (sampled every 250ms into a dedicated run telemetry stream):
-
-1. **Broker Queue Depth over Time:** High-resolution sampling of `taskforge_queue_depth{priority="..."}` via $O(\log N)$ `ZCOUNT` across all 4 tiers.
-2. **Outbox Event Backlog & Lag:** Continuous sampling of `outbox_pending_events` and `outbox_lag_seconds`.
-3. **Publisher Batching Throughput:** Empirical measurement of outbox events published per second and publisher cycle duration.
-4. **Worker Dispatcher Utilization:** Ratio of active worker futures to concurrency ceiling ($\text{active\_tasks} / \text{concurrency}$).
-5. **Application Database Pool Contention:** Direct in-memory sampling of `engine.pool.checkedout()`, `idle()`, and `overflow()`.
-6. **Microsecond Timestamp Tracking:** Per-task recording of timestamps $t_0, t_1, t_2, t_3, t_4, t_5, t_6$ in streaming JSONL run logs.
+| # | Event Name | Subsystem | Semantic Boundary Type | Exact Definition & Location |
+| :-: | :--- | :--- | :--- | :--- |
+| **1** | `api_request_received` | API | **Application-observed response boundary** | Starlette ASGI middleware entry timestamp immediately upon receiving request headers. |
+| **2** | `task_transaction_commit` | API | **Transaction commit completion** | Timestamp captured immediately after `db.commit()` returns for the ingestion transaction inserting `Task` and `OutboxEvent`. |
+| **3** | `api_response_sent` | API | **Application-observed response boundary** | Starlette ASGI middleware exit timestamp immediately after response stream consumption. |
+| **4** | `outbox_claim_start` | Outbox | **Operation start** | Timestamp immediately before executing `SELECT ... FOR UPDATE SKIP LOCKED` on `outbox_events`. |
+| **5** | `outbox_claim_commit` | Outbox | **Transaction commit completion** | Timestamp immediately after batch claim lock is committed in PostgreSQL. |
+| **6** | `redis_enqueue_start` | Outbox | **Operation start** | Client socket boundary timestamp immediately before dispatching Redis `ZADD` command. |
+| **7** | `redis_enqueue_complete` | Outbox | **Operation completion** | Client socket boundary timestamp immediately after Redis `ZADD` command successfully returns. |
+| **8** | `outbox_published_commit` | Outbox | **Transaction commit completion** | Timestamp immediately after `UPDATE outbox_events SET status = 'PUBLISHED'` transaction commit returns. |
+| **9** | `redis_dequeue_complete` | Worker | **Operation completion** | Client socket boundary timestamp immediately after Redis `ZPOPMAX` / `evalsha` dequeue command returns an item. |
+| **10** | `lease_claim_start` | Worker | **Operation start** | Timestamp immediately before executing worker lease acquisition query (`SELECT Task FOR UPDATE`). |
+| **11** | `lease_commit` | Worker | **Transaction commit completion** | Timestamp immediately after lease is acquired, lease token persisted, and `RUNNING` status commit returns. |
+| **12** | `handler_start` | Worker | **Operation start** | In-process monotonic timestamp immediately before target task handler function invocation. |
+| **13** | `handler_end` | Worker | **Operation completion** | In-process monotonic timestamp immediately after target task handler function invocation returns. |
+| **14** | `terminal_transaction_start` | Worker | **Operation start** | Timestamp immediately before opening transaction to persist `TaskResult` and terminal `Task` state. |
+| **15** | `terminal_commit` | Worker | **Transaction commit completion** | Timestamp immediately after terminal transaction commit returns in PostgreSQL. |
+| **16** | `redis_ack_complete` | Worker | **Operation completion** | Client socket boundary timestamp immediately after Redis `ZREM` delivery acknowledgement returns. |
 
 ---
 
-## 5. Controlled Optimization Methodology (One Change Per Experiment)
+## 4. Process Topology & Clock Domain Strategy
 
-Optimizations will be evaluated sequentially under strict single-variable experimental control:
+### 4.1 Process Topology & Clock Source Declaration
 
-```mermaid
-flowchart TD
-    Diag[Diagnostic Baseline Profiling] --> Identify[Identify Primary Bottleneck Stage]
-    Identify --> Hypothesis[Formulate Falsifiable Hypothesis]
-    Hypothesis --> SingleChange[Implement Single Code/Config Change]
-    SingleChange --> Benchmark[Re-run Canonical Workloads W-01, W-02, W-03]
-    Benchmark --> Compare[Before vs After Statistical Comparison]
-    Compare --> VerifyReliability{Regression Suite Pass 222/222?}
-    VerifyReliability -- Yes --> Accept[Accept Optimization & Lock Baseline]
-    VerifyReliability -- No --> Rollback[Reject Change & Rollback]
-    Accept --> NextIteration[Proceed to Next Bottleneck]
-```
+| Component | Execution Topology & Identity | Host Environment | Clock Source | Clock Resolution & Characteristics |
+| :--- | :--- | :--- | :--- | :--- |
+| **FastAPI Ingestion** | Primary process / TestClient runner (PID $P_{\text{bench}}$) | Windows 11 Host | `time.perf_counter_ns()` + `time.time()` | Nanosecond monotonic + Host UTC epoch |
+| **Outbox Publisher** | Background daemon thread within $P_{\text{bench}}$ | Windows 11 Host | `time.perf_counter_ns()` + `time.time()` | Shares host clock with API; zero cross-host skew |
+| **Worker Dispatcher** | Worker dispatcher & thread pool within $P_{\text{bench}}$ | Windows 11 Host | `time.perf_counter_ns()` + `time.time()` | Shares host clock with API; zero cross-host skew |
+| **Redis 7.4 Broker** | Docker container (`localhost:6379`) | Local Docker Linux VM | **Client-side host socket boundaries** | Measured strictly via Python host clock at call boundaries |
+| **PostgreSQL 16 DB** | Docker container (`localhost:5432`) | Local Docker Linux VM | **Host-observed commit returns** | Monotonic timestamps captured immediately after DB commit returns |
 
-### Suspected Bottleneck Candidates for Investigation:
-1. **Candidate A (Outbox Polling Batching & Pacing):**
-   - *Investigation:* `OutboxPublisherWorker` polls every 200ms with a fixed batch limit of 50. In a 500-task burst, this artificially forces $\ge 10$ sequential poll cycles and individual non-pipelined Redis `ZADD` round-trips.
-   - *Hypothesis:* Adaptive polling (immediate drain when batch is full) and pipelined Redis publishing will reduce Stage 2 latency without overloading the broker.
-2. **Candidate B (Worker Dispatcher Queue Polling & Batch Dequeue):**
-   - *Investigation:* `WorkerDispatcher._dispatch_loop` pulls one task at a time via `ZPOPMAX queue 1` with a 100ms sleep on empty.
-   - *Hypothesis:* Multiplexed or batch dequeue when multiple worker slots are idle will reduce Stage 3 queue dwell under burst arrivals.
-3. **Candidate C (Database Transaction & Connection Holding Times):**
-   - *Investigation:* Analyze whether task attempts hold database connections during handler execution.
-   - *Hypothesis:* In-memory connection release during I/O delays or handler execution (where safe) prevents pool starvation during high concurrency.
+### 4.2 Clock Domain Synchronization & Uncertainty Guardrails
+- **PostgreSQL Offset Characterization:** The Stage 1A-R empirical probe demonstrated an observed offset of $-0.422 \pm 0.211\,\text{ms}$ with mean RTT of $0.281\,\text{ms}$. While tight, this observed range is not treated as a guaranteed global bound.
+- **Client-Side Commit Observation:** All database event timestamps are captured on the host immediately after the SQLAlchemy/Psycopg commit call returns. This provides application-observed completion timestamps and eliminates dependency on container clock synchronization.
+- **Micro-Interval Guard ($< 5\,\text{ms}$):** In-process intervals (such as handler execution $T_{\text{handler-exec}}$) are measured exclusively with monotonic nanosecond precision (`time.perf_counter_ns()`). No cross-process or cross-system clock correlation will be asserted for intervals smaller than $5\,\text{ms}$.
 
 ---
 
-## 6. Reliability & Security Guardrails (Non-Negotiable Invariants)
+## 5. Non-Contiguous Interval Attribution & Anomaly Preservation
 
-Every proposed optimization candidate must maintain absolute conformance to the established TaskForge contracts:
-1. **Lease Fencing Invariant:** Mutual exclusion remains governed strictly by 64-bit cryptographic random lease tokens committed in PostgreSQL under row-level locks. No optimization may weaken lease verification.
-2. **Terminal Transition Idempotency:** Terminal transitions (`SUCCESS`, `FAILED`, `CANCELLED`, `DEAD_LETTER`) must remain idempotent.
-3. **At-Least-Once Delivery & Outbox Reliability:** No task may be lost, skipped, or orphaned.
-4. **Security & Tenant Isolation:** API key authentication, scope RBAC, sliding-window rate limiting, and tenant authorization checks must remain fully enforced.
-5. **Telemetry Cardinality Budget:** The Prometheus registry must strictly adhere to the accepted **662 base series / 855 total series** budget.
-6. **Telemetry Failure Isolation:** Metric errors must never interrupt core task execution.
-7. **Regression Suite Integrity:** All 222 repository-wide tests must pass with 0 failures and 0 skips after every candidate evaluation.
+The attribution engine computes discrete intervals without assuming stage contiguity or clamping values to zero:
 
----
+### 5.1 Primary Attribution Intervals
+1. **$T_{\text{api-server}} = t_{\text{task-transaction-commit}} - t_{\text{api-request-received}}$:** Server-side ingestion duration.
+2. **$T_{\text{outbox-lag}} = t_{\text{outbox-claim-start}} - t_{\text{task-transaction-commit}}$:** Outbox backlog residence.
+   - *Visibility Invariant:* If an outbox claim cycle begins before a newly committed task row becomes visible in the snapshot, this is recorded as a *not-yet-eligible batch cycle*, not clamped to zero.
+3. **$T_{\text{outbox-claim}} = t_{\text{outbox-claim-commit}} - t_{\text{outbox-claim-start}}$:** Outbox batch lock & claim transaction time.
+4. **$T_{\text{redis-enq}} = t_{\text{redis-enqueue-complete}} - t_{\text{redis-enqueue-start}}$:** Network round-trip duration for Redis `ZADD`.
+5. **$T_{\text{outbox-commit}} = t_{\text{outbox-published-commit}} - t_{\text{redis-enqueue-complete}}$:** Duration to commit `PUBLISHED` status in PostgreSQL.
+6. **$T_{\text{broker-dwell}} = t_{\text{redis-dequeue-complete}} - t_{\text{redis-enqueue-complete}}$:** Client-observed broker dwell estimate.
+7. **$T_{\text{worker-lease}} = t_{\text{lease-commit}} - t_{\text{lease-claim-start}}$:** Lease acquisition transaction duration in PostgreSQL.
+8. **$T_{\text{handler-exec}} = t_{\text{handler-end}} - t_{\text{handler-start}}$:** Pure in-process task handler execution.
+9. **$T_{\text{terminal-persist}} = t_{\text{terminal-commit}} - t_{\text{terminal-transaction-start}}$:** Terminal result and state commit duration.
+10. **$T_{\text{redis-ack}} = t_{\text{redis-ack-complete}} - t_{\text{terminal-commit}}$:** Broker delivery acknowledgement (`ZREM`) round-trip.
 
-## 7. Acceptance Criteria Framework
-
-Following the principle of establishing measurement validity before declaring optimization targets:
-
-### Step 1: Measurement & Attribution Validity Acceptance
-- **AC-9.3.1 (Telemetry Attribution Fidelity):** The profiling harness accurately captures all six stage timestamps ($t_0$ through $t_6$) for 100% of tasks in W-01, W-02, and W-03 with zero missing timestamps.
-- **AC-9.3.2 (Baseline Reproduction):** Re-running W-01, W-02, and W-03 on the current post-G9.2 baseline (`ada0b9b`) reproduces the G9.0 baseline within expected variance ($\pm 10\%$) while fully observing all G9.2 Prometheus metrics.
-- **AC-9.3.3 (Stage Breakdown Accountability):** Total end-to-end latency equals the sum of the attributed stages ($\sum \Delta t_i \approx L_{\text{e2e}}$) with $< 2\%$ unaccounted residual.
-
-### Step 2: Bottleneck Identification & Attribution Acceptance
-- **AC-9.3.4 (Quantified Bottleneck Identification):** Provide an empirical attribution report establishing the exact percentage contribution of each of the six stages to total latency under W-01, W-02, and W-03.
-- **AC-9.3.5 (Formal Optimization Target Lock):** Based on the empirical breakdown, formulate defensible, measurable optimization hypotheses and targets for review before code changes are executed.
-
-### Step 3: Controlled Optimization Acceptance
-- **AC-9.3.6 (Statistically Significant Improvement):** The accepted optimization demonstrates a statistically significant improvement in throughput ($T$) or tail latency ($p95/p99$) over baseline across a minimum of 3 consecutive runs.
-- **AC-9.3.7 (Zero Regression Invariant):** 100% pass rate across the full 222-test repository regression suite, with zero regressions in lease fencing, idempotency, security, or Prometheus cardinality.
-
----
-
-## 8. Reproducibility & Provenance Standard
-
-- **Host Environment:** Windows 11 Professional (AMD64), 12 logical cores, 16 GB RAM.
-- **Runtimes:** Python 3.12.10 AMD64 (`.venv`), PostgreSQL 16.15 (port 5432), Redis 7.4.12 (port 6379).
-- **Git Provenance Anchor:** Commit `ada0b9b` on branch `phase-9-hardening`.
-- **Workload Definition Integrity:** SHA-256 hash of `workload_definitions.json` validated prior to each run.
-- **Raw Data Provenance:** Every benchmark trial streams raw per-task records to timestamped JSONL files with corresponding SHA-256 checksums recorded in the benchmark scenario output.
-- **Warmup Rigor:** Minimum 50 warmup tasks executed before recorded measurement in every trial.
+### 5.2 Negative-Interval & Overlap Handling Invariants
+- **Preservation of Raw Timestamps:** Raw timestamps are permanently preserved in the raw JSONL records without synthetic modification.
+- **Client-Observed Broker Dwell Anomaly Accounting:** Due to client-side scheduling between Redis command completion and Python timestamp capture, apparent negative intervals ($t_{\text{redis-dequeue-complete}} < t_{\text{redis-enqueue-complete}}$) can theoretically occur. The attribution report will:
+  1. Never clamp negative intervals to zero.
+  2. Report negative observations in a dedicated anomaly vector.
+  3. Quantify their exact frequency and magnitude.
+  4. Designate this interval strictly as the *client-observed broker dwell estimate*.
+- **Publication / Dequeue Race Overlap:** In high-throughput bursts, a worker may dequeue an item from Redis before the outbox publisher commits `status = 'PUBLISHED'` in PostgreSQL:
+  $$\Delta t_{\text{overlap}} = \max\left(0.0, t_{\text{outbox-published-commit}} - t_{\text{redis-dequeue-complete}}\right)$$
+  The attribution report will explicitly quantify the frequency and duration of this concurrency overlap.
+- **Non-Additive Percentiles:** Individual stage percentiles ($p50, p95, p99$) will never be summed to estimate total latency. Total end-to-end latency percentiles will be computed directly from the true per-task end-to-end sample distribution.
 
 ---
 
-## 9. Implementation Sequence & Staging Plan
+## 6. Sampling Overhead Findings & Stage 1B Overhead Commitment
 
-```mermaid
-flowchart TD
-    Proposal[G9.3 Milestone Proposal & Scope Lock] --> Review[Architectural Review & Authorization]
-    Review --> Stage1[Stage 1: Attribution Profiling Harness & Baseline Reproduction]
-    Stage1 --> Stage2[Stage 2: Empirical Bottleneck Attribution Report & Target Lock]
-    Stage2 --> Stage3[Stage 3: Controlled Optimization Iteration 1 — Single Variable]
-    Stage3 --> Stage4[Stage 4: Verification, Benchmarking & Full Regression 222/222]
-    Stage4 --> GateReview[Formal G9.3 Closure Review]
-```
+### 6.1 Stage 1A-R Accepted Overhead Conclusion
+- **Finding:** No material handler-execution overhead was observed in the sampling-enabled trials ($\le 3.12\%$ variance across all workloads).
+- **Qualification:** Because total-system wall-clock duration in W-02 and W-03 exhibited natural run-to-run dispersion (RSD 16%–30%) driven by outbox batch polling phase alignment, the Stage 1A-R data does not prove a sub-0.5% total-system overhead guarantee.
+- **Commitment:** Stage 1B diagnostic profiling overhead will be independently measured and reported across baseline (profiling disabled) and instrumented (profiling enabled) runs.
+
+---
+
+## 7. Stage 1B Implementation Boundaries & Scope Lock
+
+### 7.1 Permitted Scope
+- Capture all 16 lifecycle events around existing operations.
+- Use host monotonic timestamps (`time.perf_counter_ns()`) for durations.
+- Capture UTC timestamps (`time.time()`) for external correlation.
+- Stream diagnostic events to separate JSONL benchmark artifacts in `benchmarks/raw/g93/`.
+- Generate per-task interval distributions, timestamp completeness audits, and negative/overlap reports.
+- Run W-01, W-02 ($n=1,000$), and W-03 against reconciled workload definitions.
+- Measure and report profiling harness overhead.
+
+### 7.2 Prohibited Scope
+- **No changes to production `src/` core algorithms:** Zero alterations to lease acquisition, token generation, renewal, or fencing logic.
+- **No changes to state machines or retry behavior:** Terminal transitions, retry backoffs, and idempotency guards remain completely unaltered.
+- **No changes to outbox semantics:** Outbox transaction boundaries, batching rules, and publishing logic remain unchanged.
+- **No changes to queue mechanics:** Redis priority scoring, queue ordering, and dequeue semantics remain untouched.
+- **No synchronous diagnostic database writes:** Profiling timestamps must never be written to application database tables on the critical path.
+- **No Prometheus metric cardinality expansion:** Existing Prometheus metrics retain their G9.2 definitions; no dynamic task IDs or unbounded labels permitted.
+- **No speculative optimizations:** Optimization code is strictly forbidden until the Stage 1B attribution report is reviewed and target-lock authorization is granted.
+
+---
+
+## 8. Required Stage 1B Deliverables
+
+Upon completion of the Stage 1B profiling run, the following evidence will be submitted:
+1. Final event schema and clock-domain verification.
+2. Raw JSONL artifacts with per-run SHA-256 hashes.
+3. Timestamp completeness report ($100\%$ capture rate across all 16 events).
+4. Negative-interval and concurrency overlap analysis.
+5. Stage-specific $p50 / p95 / p99$ distributions for all 10 discrete intervals.
+6. Per-workload end-to-end distributions calculated directly from per-task samples.
+7. Profiling overhead measurement (profiling enabled vs disabled).
+8. Full regression verification (222 / 222 repository tests passing).
+9. Empirical bottleneck attribution report ranking the primary delay stages.
+10. Falsifiable optimization hypothesis for Stage 2 target lock review.
