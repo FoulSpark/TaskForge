@@ -10,7 +10,7 @@
 **G9.4.2 Implementation & Reconciliation Commits:** `83bbec9`, `0d9877b`, `26cc315`  
 **Frozen Baseline Tag:** `v0.8.0-phase8-freeze` (`da27047f56fe2eec75acdb8502f505542cf61202`)  
 **Execution Environment:** Windows 11 AMD64, Python 3.12.10, PostgreSQL 16 (port 5432), Redis 7.4.12 (port 6379)  
-**Full Regression Suite:** **247 / 247 passed** (0 failures, 0 skips, duration 326.16s)  
+**Full Regression Suite:** **248 / 248 passed** (0 failures, 0 skips, duration 364.02s)  
 **Primary JSON Artifact:** [`benchmarks/scenarios/g94/g943_fencing_report.json`](file:///e:/TaskForge/benchmarks/scenarios/g94/g943_fencing_report.json)  
 
 ---
@@ -39,7 +39,7 @@ Gate G9.4.3 successfully establishes the following critical resilience propertie
 | **G9.4 Net-New Series** | $\le 25$ total net-new runtime series | **Exactly 25 series** ($19_{\text{G9.4.2}} + 6_{\text{G9.4.3}}$) | **COMPLIANT** |
 | **Combined Exposition Ceiling** | $\le 28$ total runtime series | **Exactly 28 series** ($25_{\text{G9.4}} + 3_{\text{legacy}}$) | **COMPLIANT** |
 | **Telemetry Failure Isolation** | Metric crash does not disrupt DB transaction | Verified via monkeypatched exception tests | **VERIFIED** |
-| **Full Regression Suite** | 0 failures, 0 skips | **247 / 247 passed** in 326.16s | **VERIFIED** |
+| **Full Regression Suite** | 0 failures, 0 skips | **248 / 248 passed** in 364.02s | **VERIFIED** |
 
 ---
 
@@ -97,6 +97,23 @@ taskforge_fencing_rejections_created 1.794345751540597e+09
 
 The exposition strictly complies with the Option A contract with zero series overrun.
 
+### 2.3 G9.4.2 Metric Name & Label Taxonomy Confirmation (R1 Reconciliation)
+In accordance with review finding R1:
+1. **Actual Metric Name in Exposition:** The connection pool timeout metric is, and has always been, registered as:
+   `taskforge_db_pool_checkout_timeouts_total` with the single finite label `pool_name` (initialized to `primary`).
+2. **Prometheus Exposition Verification:**
+   ```
+   taskforge_db_pool_checkout_timeouts_total{pool_name="primary"} 0.0
+   taskforge_db_pool_checkout_timeouts_created{pool_name="primary"} 1.7943466600040452e+09
+   ```
+3. **No Metric or Taxonomy Changes:** The metric was neither renamed nor modified in G9.4.3. The errant string `taskforge_db_pool_timeouts_total{reason="queue_full"}` mentioned in the initial review submission text was purely an accidental transcription typographical error in the markdown presentation. An automated audit confirms that `queue_full` does not exist anywhere in the codebase or runtime Prometheus exposition.
+4. **Option A Budget Recalculation:** Recalculating directly from the live scraped exposition confirms:
+   - 3 legacy G9.2 series (`taskforge_db_pool_connections`)
+   - 19 net-new G9.4.2 pool series (including `taskforge_db_pool_checkout_timeouts_total{pool_name="primary"}` and its `_created` timestamp series)
+   - 6 net-new G9.4.3 lease series (4 renewal counter with `status` + 2 global fencing counter)
+   - Net-new G9.4 total: $19 + 6 = \mathbf{25 \le 25}$
+   - Combined total: $25 + 3 = \mathbf{28 \le 28}$
+
 ---
 
 ## 3. Authoritative Fencing Guard Implementation
@@ -150,6 +167,49 @@ The benchmark harness [`benchmarks/scenarios/g94/run_g943_fencing_drills.py`](fi
 1. **Accepted Stale Commits = 0:** Across all 60 tasks, zero stale commits were accepted.
 2. **Exact Guard Accounting:** Every stale attempt reaching the guard triggered an immediate rollback and counter increment ($N_{\text{rejections}} = N_{\text{stale\_attempts}} = 60$).
 3. **Database Audit:** Inspection of PostgreSQL `tasks` and `task_results` verified that all 60 tasks transitioned to `status = 'SUCCESS'` solely with results submitted by Worker B (`return_value = {"authoritative": "worker-B"}`).
+4. **Authoritative Commits Clarification:** The 60 accepted commits in Trials T1–T3 (and 1 in the duplicate drill, totaling 61) are strictly Worker B's authoritative commits. Worker A's 61 attempts were all rejected. There is exactly **one** valid authoritative transition committed per task, not two.
+
+### 4.3 Focused Stale Heartbeat Renewal Drill (R2 Reconciliation)
+A dedicated, reproducible heartbeat drill was executed in [`benchmarks/scenarios/g94/run_g943_reconciliation_drills.py`](file:///e:/TaskForge/benchmarks/scenarios/g94/run_g943_reconciliation_drills.py) and [`tests/integration/test_g943_lease_fencing.py::test_g943_stale_worker_heartbeat_renewal_rejection`](file:///e:/TaskForge/tests/integration/test_g943_lease_fencing.py#L83-L140):
+
+1. **Step 1 (Acquire):** Worker A acquires a 1-second lease (`tok_A = lease-A-0b88...`). Baseline metrics: `failed_renewals = 0.0`, `success_renewals = 0.0`, `fencing_rejections = 0.0`.
+2. **Step 2 (Pause & Takeover):** Worker A pauses. Lease expires (1.1s). Reaper recovers task. Worker B acquires a 30-second lease (`tok_B = lease-B-d3fe...`). Database confirms: active lease token is `tok_B`.
+3. **Step 3 (Stale Renewal Attempt):** Worker A unpauses and calls `repo.renew_lease(task_id, lease_token=tok_A)`.
+   - **PostgreSQL Guard:** Rejects renewal; returns `False`.
+   - **Metric Delta:** `taskforge_lease_renewals_total{status="failed"}` increments by exactly **+1.0** (0.0 $\to$ 1.0).
+   - **No Fencing Conflation:** `taskforge_fencing_rejections_total` remains unchanged ($\Delta = 0.0$).
+   - **Authoritative Integrity:** Active lease token in database remains `tok_B`.
+4. **Step 4 (Valid Renewal Attempt):** Worker B calls `repo.renew_lease(task_id, lease_token=tok_B)`.
+   - **PostgreSQL Guard:** Accepts renewal; updates `lease_expires_at` and commits; returns `True`.
+   - **Metric Delta:** `taskforge_lease_renewals_total{status="success"}` increments by exactly **+1.0** (0.0 $\to$ 1.0).
+
+#### Empirical Metric Trace
+| Step | Action | Return | `failed_renewals` | `success_renewals` | `fencing_rejections` | Authoritative DB Owner |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| Baseline | Worker A acquires lease (1s) | True | 0.0 | 0.0 | 0.0 | Worker A (`tok_A`) |
+| Takeover | Worker B claims expired lease | True | 0.0 | 0.0 | 0.0 | Worker B (`tok_B`) |
+| Stale Renewal | Worker A attempts renewal (`tok_A`) | **False** | **1.0 (+1.0)** | 0.0 | 0.0 (+0.0) | Worker B (`tok_B`) |
+| Valid Renewal | Worker B attempts renewal (`tok_B`) | **True** | 1.0 | **1.0 (+1.0)** | 0.0 | Worker B (`tok_B`) |
+
+### 4.4 Path-Level Fencing Rejection Accounting (R3 Reconciliation)
+To establish comprehensive coverage beyond terminal success, all 5 authoritative state mutation operations were systematically evaluated against stale lease tokens in [`test_g943_all_guarded_paths_stale_token_rejection`](file:///e:/TaskForge/tests/integration/test_g943_lease_fencing.py#L420-L475) and [`benchmarks/scenarios/g94/run_g943_reconciliation_drills.py`](file:///e:/TaskForge/benchmarks/scenarios/g94/run_g943_reconciliation_drills.py):
+
+| Authoritative Operation | Method Guarded | Stale Attempts | Fencing Rejections (`PermissionError`) | Accepted Stale Commits | Metric Delta | Status |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **Terminal success** | `complete_task_success` | 1 | 1 | **0** | +1.0 | **VERIFIED FENCED** |
+| **Terminal failure** | `complete_task_failure` | 1 | 1 | **0** | +1.0 | **VERIFIED FENCED** |
+| **Result persistence** | `record_result` | 1 | 1 | **0** | +1.0 | **VERIFIED FENCED** |
+| **Execution-attempt persistence** | `record_attempt` | 1 | 1 | **0** | +1.0 | **VERIFIED FENCED** |
+| **Guarded state updates** | `update_status` | 1 | 1 | **0** | +1.0 | **VERIFIED FENCED** |
+| **Total Path Drill** | **All 5 Operations** | **5** | **5** | **0** | **+5.0** | **100% COVERAGE** |
+
+#### Cross-Reference to Primary 61-Task Concurrency Drill:
+In the primary benchmark drill ([`run_g943_fencing_drills.py`](file:///e:/TaskForge/benchmarks/scenarios/g94/run_g943_fencing_drills.py)):
+- All 61 stale commit attempts were specifically directed at `complete_task_success` (the most critical state finalization path).
+- Exactly 61 rejections occurred ($N = 61$).
+- Accepted stale commits = strictly 0.
+- Exactly 61 authoritative commits were accepted (Worker B's valid commits).
+- Total accepted transitions across the 61 tasks = **61** (one valid transition per task).
 
 ---
 
@@ -200,13 +260,13 @@ platform win32 -- Python 3.12.10, pytest-8.4.2, pluggy-1.7.0
 rootdir: E:\TaskForge
 configfile: pyproject.toml
 plugins: anyio-4.16.0, cov-6.3.0
-collected 247 items
+collected 248 items
 
-======================= 247 passed in 326.16s (0:05:26) =======================
+======================= 248 passed in 364.02s (0:06:04) =======================
 ```
 
-- **Total Test Count:** Expanded from 241 to **247 items** (+6 integration tests in `tests/integration/test_g943_lease_fencing.py`).
-- **Pass Rate:** **247 / 247 passed (0 failures, 0 skips).**
+- **Total Test Count:** Expanded from 241 to **248 items** (+7 integration tests in `tests/integration/test_g943_lease_fencing.py`).
+- **Pass Rate:** **248 / 248 passed (0 failures, 0 skips).**
 - **Baseline Freeze:** Phase 8 frozen tag `v0.8.0-phase8-freeze` (`da27047`) and production baseline commit `a89858b` remain untouched.
 
 ---
@@ -218,6 +278,9 @@ Gate G9.4.3 has completely fulfilled all acceptance conditions:
 2. Fencing rejections matched stale commit attempts identically ($61/61$, $100.0\%$).
 3. Duplicate handler invocations ($N_{\text{exec}} = 2$) were measured independently and decoupled from authoritative state fencing.
 4. Option A cardinality contract was maintained with exact adherence (25 net-new series, 28 combined series).
-5. Full regression test suite passed with 247 / 247 passed in 326.16s.
+5. All 5 authoritative guarded paths (`complete_task_success`, `complete_task_failure`, `record_result`, `record_attempt`, `update_status`) were verified to reject stale tokens with `PermissionError` and increment telemetry.
+6. Stale heartbeat renewals were proven rejected with `failed_renewals` incrementing and zero fencing conflation.
+7. Full regression test suite passed with 248 / 248 passed in 364.02s.
 
 **Recommendation:** Formally accept and close Gate G9.4.3, and authorize Gate G9.4.4: Broker Reconnection & Transient Outage Recovery Drills (AC-9.4.5).
+

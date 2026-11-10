@@ -7,6 +7,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from taskforge.core.logging import get_logger
 from taskforge.core.state_machine import (
     TaskPriority,
     TaskStatus,
@@ -32,6 +33,8 @@ from taskforge.monitoring.metrics import (
     record_task_submitted,
 )
 from taskforge.monitoring.profiler import record_diagnostic_event
+
+logger = get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -301,16 +304,16 @@ class TaskRepository:
                 if not lease_token or task.lease_token != lease_token:
                     try:
                         record_fencing_rejection()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        logger.debug("Failed to record fencing rejection: %s", exc)
                     raise PermissionError(
                         "Fencing violation: supplied lease token does not match active task lease"
                     )
             elif lease_token is not None:
                 try:
                     record_fencing_rejection()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to record fencing rejection: %s", exc)
                 raise PermissionError(
                     "Fencing violation: caller provided lease token, but task has no active lease"
                 )
@@ -419,24 +422,24 @@ class TaskRepository:
         if not lease_token:
             try:
                 record_fencing_rejection()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record fencing rejection: %s", exc)
             raise PermissionError(
                 "Fencing violation: lease_token must be provided to record execution attempt"
             )
         if not task.lease_token or task.lease_token != lease_token:
             try:
                 record_fencing_rejection()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record fencing rejection: %s", exc)
             raise PermissionError(
                 "Fencing violation: supplied lease token does not match active task lease"
             )
         if not task.lease_expires_at:
             try:
                 record_fencing_rejection()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record fencing rejection: %s", exc)
             raise PermissionError(
                 "Fencing violation: active task lease has no expiration timestamp"
             )
@@ -508,16 +511,16 @@ class TaskRepository:
             if not lease_token or task.lease_token != lease_token:
                 try:
                     record_fencing_rejection()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("Failed to record fencing rejection: %s", exc)
                 raise PermissionError(
                     "Fencing violation: supplied lease token does not match active task lease"
                 )
         elif lease_token is not None:
             try:
                 record_fencing_rejection()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record fencing rejection: %s", exc)
             raise PermissionError(
                 "Fencing violation: caller provided lease token, but task has no active lease"
             )
@@ -553,8 +556,8 @@ class TaskRepository:
         if not lease_token or task.lease_token != lease_token:
             try:
                 record_fencing_rejection()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record fencing rejection: %s", exc)
             raise PermissionError(
                 "Fencing violation: supplied lease token does not match active task lease"
             )
@@ -662,8 +665,8 @@ class TaskRepository:
         if not lease_token or task.lease_token != lease_token:
             try:
                 record_fencing_rejection()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record fencing rejection: %s", exc)
             raise PermissionError(
                 "Fencing violation: supplied lease token does not match active task lease"
             )
@@ -885,8 +888,8 @@ class TaskRepository:
         if not task:
             try:
                 record_lease_renewal("failed")
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to record lease renewal: %s", exc)
             return False
 
         task.lease_expires_at = expires_at
@@ -894,8 +897,8 @@ class TaskRepository:
         self.db.commit()
         try:
             record_lease_renewal("success")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to record lease renewal: %s", exc)
         return True
 
     def release_lease(self, task_id: str, lease_token: str) -> bool:

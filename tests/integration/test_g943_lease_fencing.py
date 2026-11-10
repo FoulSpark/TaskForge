@@ -415,3 +415,66 @@ def test_g943_concurrent_multi_worker_fencing_accounting():
             res = db.scalars(select(TaskResult).where(TaskResult.task_id == tid)).first()
             assert res is not None
             assert res.return_value == {"worker": "B"}, "Authoritative result must strictly be from Worker B"
+
+
+def test_g943_all_guarded_paths_stale_token_rejection():
+    """AC-9.4.4: Verifies that all 5 authoritative state mutation operations strictly reject
+    stale lease tokens, increment taskforge_fencing_rejections_total, and accept 0 stale commits:
+    1. complete_task_success
+    2. complete_task_failure
+    3. record_result
+    4. record_attempt
+    5. update_status
+    """
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+
+        # Baseline rejection counter
+        rejections_start = FENCING_REJECTIONS_TOTAL._value.get()
+
+        operations = [
+            ("complete_task_success", lambda r, tid, tok: r.complete_task_success(tid, lease_token=tok, return_value={"ok": True})),
+            ("complete_task_failure", lambda r, tid, tok: r.complete_task_failure(tid, lease_token=tok, error_message="stale_err")),
+            ("record_result", lambda r, tid, tok: r.record_result(tid, return_value={"stale": True}, lease_token=tok)),
+            ("record_attempt", lambda r, tid, tok: r.record_attempt(tid, worker_id="worker-A", status="RUNNING", lease_token=tok)),
+            ("update_status", lambda r, tid, tok: r.update_status(tid, TaskStatus.RUNNING, {"worker": "A"}, lease_token=tok)),
+        ]
+
+        for op_name, op_func in operations:
+            tid = f"g943-path-{op_name[:8]}-{uuid.uuid4().hex[:6]}"
+            task = Task(
+                id=tid,
+                task_name=f"Path Test {op_name}",
+                task_type="noop",
+                status=TaskStatus.QUEUED.value,
+                priority=TaskPriority.HIGH.value,
+                payload={},
+            )
+            db.add(task)
+            db.commit()
+
+            tok_a = f"lease-A-{uuid.uuid4().hex[:6]}"
+            tok_b = f"lease-B-{uuid.uuid4().hex[:6]}"
+
+            # Worker A acquires short lease
+            repo.acquire_lease(tid, worker_id="worker-A", lease_duration_seconds=1, lease_token=tok_a)
+            repo.update_status(tid, TaskStatus.RUNNING, {"worker_id": "worker-A"}, lease_token=tok_a)
+
+            # Lease expires and Worker B takes over
+            time.sleep(1.1)
+            repo.recover_expired_leases()
+            repo.acquire_lease(tid, worker_id="worker-B", lease_duration_seconds=30, lease_token=tok_b)
+            repo.update_status(tid, TaskStatus.RUNNING, {"worker_id": "worker-B"}, lease_token=tok_b)
+
+            # Worker A attempts guarded operation with stale tok_a -> MUST raise PermissionError
+            before_val = FENCING_REJECTIONS_TOTAL._value.get()
+            with pytest.raises(PermissionError, match="Fencing violation"):
+                op_func(repo, tid, tok_a)
+            after_val = FENCING_REJECTIONS_TOTAL._value.get()
+
+            # Exact increment for each guarded path
+            assert after_val == before_val + 1.0, f"Path {op_name} did not increment fencing rejections"
+
+        total_rejections_delta = FENCING_REJECTIONS_TOTAL._value.get() - rejections_start
+        assert total_rejections_delta == 5.0, f"Expected 5 fencing rejections across all 5 paths, got {total_rejections_delta}"
+

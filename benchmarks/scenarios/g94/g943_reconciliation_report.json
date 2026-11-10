@@ -1,0 +1,82 @@
+{
+  "timestamp_utc": "2026-11-10T21:37:47.281779+00:00",
+  "milestone": "G9.4.3_reconciliation",
+  "r1_exposition_audit": {
+    "timeout_metric_exact_name": "taskforge_db_pool_checkout_timeouts_total",
+    "timeout_series_in_exposition": [
+      "taskforge_db_pool_checkout_timeouts_total{pool_name=\"primary\"} 0.0",
+      "taskforge_db_pool_checkout_timeouts_created{pool_name=\"primary\"} 1.7943466600040452e+09"
+    ],
+    "contains_queue_full_label": false,
+    "legacy_g92_series": 3,
+    "g942_net_new_series": 19,
+    "g943_net_new_series": 6,
+    "total_g94_additions": 25,
+    "total_combined_exposition": 28,
+    "cardinality_compliant": true
+  },
+  "r2_heartbeat_drill": {
+    "task_id": "g943-hb-drill-d61fe80b",
+    "worker_a_token": "lease-A-0b881c5e",
+    "worker_b_token": "lease-B-d3fec3e8",
+    "stale_renewal_rejected": true,
+    "valid_renewal_accepted": true,
+    "metrics": {
+      "failed_renewals_before": 0.0,
+      "failed_renewals_after": 1.0,
+      "failed_renewals_delta": 1.0,
+      "success_renewals_before": 0.0,
+      "success_renewals_after": 1.0,
+      "success_renewals_delta": 1.0,
+      "fencing_rejections_delta": 0.0
+    },
+    "authoritative_owner_unaffected": true
+  },
+  "r3_path_level_drill": {
+    "path_evaluations": [
+      {
+        "operation": "Terminal success (complete_task_success)",
+        "stale_attempts": 1,
+        "rejections": 1,
+        "accepted_stale_commits": 0,
+        "fencing_rejections_metric_delta": 1.0,
+        "status": "VERIFIED_FENCED"
+      },
+      {
+        "operation": "Terminal failure (complete_task_failure)",
+        "stale_attempts": 1,
+        "rejections": 1,
+        "accepted_stale_commits": 0,
+        "fencing_rejections_metric_delta": 1.0,
+        "status": "VERIFIED_FENCED"
+      },
+      {
+        "operation": "Result persistence (record_result)",
+        "stale_attempts": 1,
+        "rejections": 1,
+        "accepted_stale_commits": 0,
+        "fencing_rejections_metric_delta": 1.0,
+        "status": "VERIFIED_FENCED"
+      },
+      {
+        "operation": "Execution-attempt persistence (record_attempt)",
+        "stale_attempts": 1,
+        "rejections": 1,
+        "accepted_stale_commits": 0,
+        "fencing_rejections_metric_delta": 1.0,
+        "status": "VERIFIED_FENCED"
+      },
+      {
+        "operation": "Other guarded state updates (update_status)",
+        "stale_attempts": 1,
+        "rejections": 1,
+        "accepted_stale_commits": 0,
+        "fencing_rejections_metric_delta": 1.0,
+        "status": "VERIFIED_FENCED"
+      }
+    ],
+    "total_stale_attempts": 5,
+    "total_rejections": 5,
+    "total_accepted_stale_commits": 0
+  }
+}
