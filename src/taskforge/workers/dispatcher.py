@@ -128,11 +128,56 @@ class WorkerDispatcher:
         )
 
     def _dispatch_loop(self) -> None:
+        loop_iter = 0
+        sleep_counter = 0
         while not self._stop_event.is_set():
+            loop_iter += 1
+            iter_id = f"iter-{loop_iter}"
+
             with self._active_lock:
-                if self._active_tasks >= self.concurrency:
-                    time.sleep(self.poll_interval)
-                    continue
+                is_saturated = self._active_tasks >= self.concurrency
+                active_at_check = self._active_tasks
+
+            if is_saturated:
+                sleep_counter += 1
+                sleep_id = f"sleep-{sleep_counter}"
+                record_diagnostic_event(
+                    "dispatcher_sleep_start",
+                    metadata={
+                        "sleep_id": sleep_id,
+                        "loop_iter": loop_iter,
+                        "iter_id": iter_id,
+                        "active_tasks": active_at_check,
+                        "concurrency": self.concurrency,
+                    },
+                )
+                time.sleep(self.poll_interval)
+                with self._active_lock:
+                    active_after_sleep = self._active_tasks
+                record_diagnostic_event(
+                    "dispatcher_sleep_end",
+                    metadata={
+                        "sleep_id": sleep_id,
+                        "loop_iter": loop_iter,
+                        "iter_id": iter_id,
+                        "active_tasks": active_after_sleep,
+                        "concurrency": self.concurrency,
+                    },
+                )
+                continue
+
+            with self._active_lock:
+                active_before_deq = self._active_tasks
+
+            record_diagnostic_event(
+                "dispatcher_dequeue_start",
+                metadata={
+                    "loop_iter": loop_iter,
+                    "iter_id": iter_id,
+                    "active_tasks": active_before_deq,
+                    "concurrency": self.concurrency,
+                },
+            )
 
             task_msg = self.broker.dequeue(timeout_seconds=self.poll_interval)
             if not task_msg:
@@ -142,13 +187,31 @@ class WorkerDispatcher:
             if not task_id:
                 continue
 
-            record_diagnostic_event("redis_dequeue_complete", task_id=task_id)
+            record_diagnostic_event(
+                "redis_dequeue_complete",
+                task_id=task_id,
+                metadata={
+                    "loop_iter": loop_iter,
+                    "iter_id": iter_id,
+                },
+            )
 
             with self._active_lock:
                 self._active_tasks += 1
+                active_after_inc = self._active_tasks
                 self._heartbeat.set_active_tasks(self._active_tasks)
 
             self._executor.submit(self._task_wrapper, task_msg)
+            record_diagnostic_event(
+                "dispatcher_task_submitted",
+                task_id=task_id,
+                metadata={
+                    "loop_iter": loop_iter,
+                    "iter_id": iter_id,
+                    "active_tasks": active_after_inc,
+                    "concurrency": self.concurrency,
+                },
+            )
 
     def _task_wrapper(self, task_msg: dict[str, Any]) -> None:
         task_id = task_msg.get("task_id", "")
@@ -210,7 +273,17 @@ class WorkerDispatcher:
                 self._active_leases.pop(task_id, None)
             with self._active_lock:
                 self._active_tasks = max(0, self._active_tasks - 1)
+                active_after_dec = self._active_tasks
                 self._heartbeat.set_active_tasks(self._active_tasks)
+
+            record_diagnostic_event(
+                "worker_slot_released",
+                task_id=task_id,
+                metadata={
+                    "active_tasks": active_after_dec,
+                    "concurrency": self.concurrency,
+                },
+            )
 
     def run_recovery_cycle(
         self,

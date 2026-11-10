@@ -28,6 +28,7 @@ logger = get_logger(__name__)
 
 @dataclass(slots=True)
 class DiagnosticEvent:
+    seq: int
     event_name: str
     task_id: str | None
     batch_id: str | None
@@ -50,6 +51,8 @@ class DiagnosticProfiler:
         self._persisted_count = 0
         self._drop_counter = 0
         self._drops_by_type: dict[str, int] = defaultdict(int)
+        self._seq_counter = 0
+        self._seq_lock = threading.Lock()
         self._lock = threading.Lock()
 
     @classmethod
@@ -78,7 +81,12 @@ class DiagnosticProfiler:
         mono_ts = t_mono_ns if t_mono_ns is not None else time.perf_counter_ns()
         epoch_ts = t_epoch_utc if t_epoch_utc is not None else time.time()
 
+        with self._seq_lock:
+            self._seq_counter += 1
+            seq_val = self._seq_counter
+
         event = DiagnosticEvent(
+            seq=seq_val,
             event_name=event_name,
             task_id=task_id,
             batch_id=batch_id,
@@ -101,6 +109,7 @@ class DiagnosticProfiler:
             self._persisted_count = 0
             self._drop_counter = 0
             self._drops_by_type.clear()
+            self._seq_counter = 0
             self._stop_event.clear()
 
             # Empty queue if any leftover
@@ -177,6 +186,7 @@ class DiagnosticProfiler:
                     continue
 
                 line = json.dumps({
+                    "seq": item.seq,
                     "event": item.event_name,
                     "task_id": item.task_id,
                     "batch_id": item.batch_id,

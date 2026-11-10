@@ -1,105 +1,119 @@
 # Stage 2 Diagnostic Protocol — Dispatcher Scheduling Efficiency Investigation
 
-**Milestone:** Gate G9.3 — Stage 2 (Diagnostic Target-Lock Investigation)  
+**Milestone:** Gate G9.3 — Stage 2 Phase 2A (Diagnostic Target-Lock Investigation)  
 **Author:** TaskForge Platform Hardening Team  
 **Date:** 2026-11-10  
-**Status:** Authorized Diagnostic Protocol (Pre-Implementation Plan)  
+**Status:** Formally Authorized Diagnostic Protocol  
 **Authorized Base Commit:** `61f398f`  
+**Protocol Amendments Commit:** `2533717`  
 **Frozen Baseline Tag:** `v0.8.0-phase8-freeze` (`da27047f56fe2eec75acdb8502f505542cf61202`)  
-**Scope Boundary:** **Strictly Diagnostic Investigation.** No production optimizations, no changes to production semantics, and no worker architecture changes are authorized in this stage.
+**Scope Boundary:** **Strictly Diagnostic Investigation.** Zero production optimizations, zero changes to production state machines, zero modifications to worker concurrency, and zero changes to core queue or delivery semantics.
 
 ---
 
-## 1. Investigation Objective & Primary Hypotheses
+## 1. Investigation Objective & Pre-Registered Decision Rules
 
-The Stage 1B empirical attribution campaign established that queue residence time accounts for $93.6\% - 98.5\%$ ($p50$) of task end-to-end turnaround latency, and that the worker pool was idle ($W = 0$) during $58\% - 78\%$ of queue-positive time. 
+The objective of Stage 2 Phase 2A is to measure the internal scheduling dynamics of `WorkerDispatcher` during queue-positive periods to empirically determine the cause of worker-pool idle gaps ($W=0$ during $58\%-78\%$ of queue-backed time).
 
-The objective of Stage 2 is to conduct a fine-grained diagnostic measurement of `WorkerDispatcher` internal scheduling to distinguish between four distinct operational hypotheses:
+The investigation will evaluate the following four operational hypotheses against **pre-registered diagnostic decision rules**:
 
-- **H1 — Polling Wake-up Delay:** The dispatcher remains asleep in its fixed $200\,\text{ms}$ polling sleep after one or more worker slots become available, delaying task acquisition.
-- **H2 — Sequential Dequeue Overhead:** Single-task sequential dequeue and in-loop Python scheduling materially delay replenishing available worker slots.
-- **H3 — Service-Time Limitation:** Workers remain continuously occupied because database transactions (lease acquisition, state transitions, terminal persistence) genuinely bound slot turnover.
-- **H4 — Queue/Worker State Mismatch:** Client-observed logical queue depth and active worker proxies do not accurately reflect internal dispatcher capacity or Redis queue state.
+- **H1 — Polling Wake-up Delay:**  
+  *Mechanism:* The dispatcher remains asleep in its fixed $200\,\text{ms}$ polling sleep after one or more worker slots become available, delaying task acquisition.  
+  *Pre-Registered Decision Rule:* Supported if median wake-up delay $T_{\text{sleep-lag}} > 50\,\text{ms}$, starvation ratio $R_{\text{starve}} > 30\%$, and a substantial proportion ($> 40\%$) of slot releases occur while the dispatcher is asleep.
+- **H2 — Sequential Dequeue Overhead:**  
+  *Mechanism:* Single-task sequential dequeue and in-loop Python scheduling materially delay replenishing available worker slots.  
+  *Pre-Registered Decision Rule:* Supported if $T_{\text{sleep-lag}}$ is low ($< 10\,\text{ms}$) but total slot replenishment time scales linearly with available capacity and $T_{\text{dequeue-exec}}$ accounts for a material fraction ($> 40\%$) of replenishment lag.
+- **H3 — Service-Time Limitation:**  
+  *Mechanism:* Workers remain continuously occupied because synchronous database transactions (lease acquisition, state transitions, terminal persistence) genuinely bound slot turnover.  
+  *Pre-Registered Decision Rule:* Supported if active worker occupancy $W(t) \ge c$ for $> 80\%$ of queue-positive time and sustained throughput matches illustrative capacity limits.
+- **H4 — Queue/Worker State Mismatch:**  
+  *Mechanism:* Client-observed logical queue depth and active worker proxies do not accurately reflect internal dispatcher capacity or Redis queue state.  
+  *Pre-Registered Decision Rule:* Supported if comparison between internal dispatcher `_active_tasks` and reconstructed occupancy $W(t)$ reveals material divergence, or if logical queue depth remains positive while Redis sorted sets are empty.
+
+*(Note: If multiple hypotheses are supported, their relative percentage contributions to replenishment latency will be reported rather than selecting an exclusive single winner).*
 
 ---
 
-## 2. Diagnostic Event Contract Extension
+## 2. Workload Definitions & Unambiguous Notation Lock
 
-To empirically isolate each component without altering dispatcher behavior, the diagnostic profiler will record the following 5 internal dispatcher events in addition to the frozen 16 lifecycle events:
+Workloads are locked strictly to the historical G9.0 definitions with independent specification of payload parameters and task counts:
 
-| Event Name | Emission Location | Purpose & Scope |
+| Workload ID | Name | Task Payload Parameters | Measured Tasks ($n$) | Warmup Tasks | Concurrency ($c$) |
+| :--- | :--- | :--- | :---: | :---: | :---: |
+| **W-01** | `noop` | `{"key": "value"}` | 500 | 50 | 10 |
+| **W-02** | `compute_heavy` | `{"compute_bound": True, "prime_limit": 1000}` (prime-sieve limit $1,000$) | 200 | 20 | 4 |
+| **W-03** | `io_heavy` | `{"io_bound": True, "size_kb": 10}` (10 KB buffer) | 200 | 20 | 10 |
+
+---
+
+## 3. Extended Diagnostic Event Contract & Correlation Model
+
+To eliminate correlation ambiguity across concurrent worker completions, every diagnostic event is extended with monotonic sequence numbering, loop iteration tracking, and state correlation:
+
+### 3.1 Event Fields Contract
+1. `seq`: Monotonically increasing 64-bit integer assigned by the diagnostic profiler at emission.
+2. `event`: Event type name string.
+3. `task_id`: Task identifier string (when associated with a specific task).
+4. `t_mono_ns`: Host monotonic nanosecond timestamp (`time.perf_counter_ns()`).
+5. `t_epoch_utc`: Host UTC epoch timestamp (`time.time()`).
+6. `metadata`: Key-value payload containing:
+   - `sleep_id`: Unique identifier for each sleep interval (e.g., `sleep-1`, `sleep-2`).
+   - `loop_iter`: Monotonic dispatcher loop iteration counter.
+   - `iter_id`: Unique loop iteration identifier (e.g., `iter-142`).
+   - `active_tasks`: Dispatcher internal `self._active_tasks` count at that exact transition.
+   - `concurrency`: Worker pool concurrency limit.
+
+### 3.2 Five Extended Dispatcher Diagnostic Events
+| Event Name | Emission Point | Captured State & Identifiers |
 | :--- | :--- | :--- |
-| `dispatcher_sleep_start` | `WorkerDispatcher._dispatch_loop()` immediately before `time.sleep(self.poll_interval)` | Captures the instant the dispatcher thread enters a sleep due to worker saturation (`_active_tasks >= concurrency`). |
-| `dispatcher_sleep_end` | `WorkerDispatcher._dispatch_loop()` immediately after `time.sleep()` returns | Captures the instant the dispatcher wakes up from polling sleep. |
-| `worker_slot_released` | `WorkerDispatcher._task_wrapper()` `finally:` block immediately after decrementing `_active_tasks` | Captures the exact instant a worker thread releases its slot in the pool. Records `active_tasks` remaining. |
-| `dispatcher_dequeue_start` | `WorkerDispatcher._dispatch_loop()` immediately before `self.broker.dequeue()` | Captures the start of Redis dequeue invocation, enabling isolation of Redis dequeue execution duration from sleep delay. |
-| `dispatcher_task_submitted` | `WorkerDispatcher._dispatch_loop()` immediately after `self._executor.submit(self._task_wrapper, task_msg)` | Captures the completion of slot replenishment and submission to the thread pool. |
-
-All diagnostic events will be emitted using the existing non-blocking `record_diagnostic_event()` singleton, preserving zero-lock overhead and bounded memory guarantees.
-
----
-
-## 3. Mathematical Definitions of Stage 2 Derived Intervals
-
-The extended event stream enables precise calculation of each candidate delay component:
-
-| Diagnostic Metric | Mathematical Definition | Physical Interpretation |
-| :--- | :--- | :--- |
-| **Wake-up Delay**<br>($T_{\text{sleep-lag}}$) | $t_{\text{dispatcher-sleep-end}} - t_{\text{worker-slot-released}}$<br>(for $t_{\text{sleep-start}} \le t_{\text{slot-released}} \le t_{\text{sleep-end}}$) | Time a worker slot sat empty and available while the dispatcher thread was asleep. |
-| **Redis Dequeue Duration**<br>($T_{\text{dequeue-exec}}$) | $t_{\text{redis-dequeue-complete}} - t_{\text{dispatcher-dequeue-start}}$ | Pure client-observed Redis round-trip latency for executing the `ZPOPMAX` Lua script. |
-| **Loop Scheduling Overhead**<br>($T_{\text{loop-overhead}}$) | $t_{\text{dispatcher-dequeue-start}} - t_{\text{dispatcher-sleep-end}}$ | In-process Python dispatcher overhead between wake-up and initiating dequeue. |
-| **Slot-to-Dispatch Latency**<br>($T_{\text{replenish-lag}}$) | $t_{\text{dispatcher-task-submitted}} - t_{\text{worker-slot-released}}$ | Total interval from worker slot release until a new task is dispatched to the thread pool. |
-| **Starvation Ratio**<br>($R_{\text{starve}}$) | $\frac{\text{Time with } Q > 0 \text{ and } W < c \text{ and Dispatcher Asleep}}{\text{Total Time with } Q > 0}$ | Fraction of queue-positive time where capacity was available but unutilized due to dispatcher sleep. |
+| `dispatcher_sleep_start` | `WorkerDispatcher._dispatch_loop()` immediately before `time.sleep(self.poll_interval)` | `sleep_id`, `loop_iter`, `active_tasks`, `concurrency` |
+| `dispatcher_sleep_end` | `WorkerDispatcher._dispatch_loop()` immediately after `time.sleep()` returns | `sleep_id`, `loop_iter`, `active_tasks`, `concurrency` |
+| `dispatcher_dequeue_start` | `WorkerDispatcher._dispatch_loop()` immediately before calling `broker.dequeue()` | `loop_iter`, `iter_id`, `active_tasks` |
+| `redis_dequeue_complete` | `WorkerDispatcher._dispatch_loop()` immediately upon `broker.dequeue()` return | `task_id`, `loop_iter`, `iter_id` |
+| `dispatcher_task_submitted` | `WorkerDispatcher._dispatch_loop()` immediately after `_executor.submit()` | `task_id`, `loop_iter`, `iter_id`, `active_tasks` |
+| `worker_slot_released` | `WorkerDispatcher._task_wrapper()` `finally:` block immediately after decrementing `_active_tasks` | `task_id`, `active_tasks`, `concurrency` |
 
 ---
 
-## 4. Hypothesis Testing & Disentanglement Criteria
+## 4. Derived Latency Definitions & Event Matching Methodology
 
-The empirical data will be evaluated against the following strict decision thresholds:
+### 4.1 Slot Replenishment Matching Methodology
+Because worker completions occur concurrently across thread pool workers, events are correlated as follows:
+- **Wake-up Delay Matching:** For any `worker_slot_released` event with timestamp $t_{\text{rel}}$ occurring between a `dispatcher_sleep_start` ($t_{\text{start}}$) and `dispatcher_sleep_end` ($t_{\text{end}}$) with matching `sleep_id`:
+  $$T_{\text{sleep-lag}} = t_{\text{end}} - t_{\text{rel}}$$
+- **Awake vs. Asleep Release Categorization:** Every `worker_slot_released` is classified as:
+  - $\text{RELEASE\_DURING\_SLEEP}$ if $\exists \text{ sleep interval } [t_{\text{start}}, t_{\text{end}}] \text{ containing } t_{\text{rel}}$.
+  - $\text{RELEASE\_WHILE\_AWAKE}$ otherwise.
+  The proportion of releases occurring during sleep will be reported explicitly.
+- **Replenishment Lag Matching:** Evaluated via FIFO pairing of chronological `worker_slot_released` events with subsequent `dispatcher_task_submitted` events during queue-positive periods:
+  $$T_{\text{replenish-lag}} = t_{\text{dispatcher-task-submitted}, k} - t_{\text{worker-slot-released}, k}$$
+- **Loop Overhead:**
+  $$T_{\text{loop-overhead}} = t_{\text{dispatcher-dequeue-start}} - t_{\text{dispatcher-sleep-end}}$$
+- **Redis Dequeue Execution Duration:**
+  $$T_{\text{dequeue-exec}} = t_{\text{redis-dequeue-complete}} - t_{\text{dispatcher-dequeue-start}}$$
+- **Starvation Ratio:**
+  $$R_{\text{starve}} = \frac{\text{Duration where } Q(t) > 0 \text{ AND } W(t) < c \text{ AND Dispatcher is Asleep}}{\text{Total Duration where } Q(t) > 0}$$
 
-```
-                            Stage 2 Diagnostic Campaign
-                                         │
-        ┌────────────────────────────────┴────────────────────────────────┐
-        ▼                                                                 ▼
-Is T_sleep-lag dominant?                                          Is T_dequeue-exec dominant?
-(T_sleep-lag p50 > 50ms and R_starve > 30%)                       (T_dequeue-exec > 50ms)
-        │                                                                 │
-        ├─ YES ──> Confirms H1 (Polling Wake-up Delay)                    ├─ YES ──> Confirms Redis Dequeue Contention
-        │          Target: Event-driven wake-up                           │
-        │                                                                 ▼
-        └─ NO ───> Evaluate Sequential Replenishment:            Is W >= c for > 80% of Q > 0?
-                   Does sum(T_replenish) scale with c?                    │
-                   ├─ YES ──> Confirms H2 (Sequential Overhead)           ├─ YES ──> Confirms H3 (Service-Time Bound)
-                   │          Target: Batch Dequeue                       │          Target: DB write optimizations
-                   └─ NO ───> Confirms H4 (State Mismatch)                └─ NO ───> Confirms Dispatcher Inefficiency
-```
-
-1. **Confirmation of H1 (Polling Wake-up Delay):** Confirmed if median wake-up delay $T_{\text{sleep-lag}} > 50\,\text{ms}$ and starvation ratio $R_{\text{starve}} > 30\%$, demonstrating that tasks wait because the dispatcher is sleeping.
-2. **Confirmation of H2 (Sequential Dequeue Overhead):** Confirmed if $T_{\text{sleep-lag}}$ is low ($< 10\,\text{ms}$) but total replenishment time for $k$ available slots scales linearly as $k \times T_{\text{dequeue-exec}}$, leaving slots empty while serial dequeues occur.
-3. **Confirmation of H3 (Service-Time Ceiling):** Confirmed if active worker occupancy $W(t) \ge c$ for $> 80\%$ of queue-positive time, proving workers are genuinely saturated and not starved by the dispatcher.
-4. **Confirmation of H4 (Queue/State Mismatch):** Confirmed if dispatcher logs show `_active_tasks >= concurrency` when proxy worker occupancy $W(t) < c$, indicating internal state drift or stuck tasks.
-
----
-
-## 5. Experimental Campaign Design
-
-1. **Phased Isolation (No Bundling):**
-   - **Phase 2A (Diagnostic Baseline):** Execute uninstrumented vs. dispatch-instrumented trials to measure baseline $T_{\text{sleep-lag}}$, $T_{\text{dequeue-exec}}$, and $R_{\text{starve}}$ across W-01, W-02 ($n=1,000$), and W-03.
-   - **Phase 2B (Wake-up Mechanism Test):** Evaluate event-driven capacity wake-up (`threading.Event` set on task completion) in isolation, without modifying dequeue batching.
-   - **Phase 2C (Batch Dequeue Evaluation):** Evaluate batch prefetching in isolation only after Phase 2B is complete, preventing confounded attribution.
-2. **Statistical Rigor:**
-   - 3 paired interleaved trials per workload.
-   - Database table truncation and Redis flush between trials.
-   - Full regression suite execution (224/224) before and after each phase.
+### 4.2 State Invariant Verification
+The analysis harness must strictly verify that:
+1. Reconstructed logical queue depth $Q(t) \ge 0$ at all sample points.
+2. Active worker proxy count $W(t) \ge 0$ at all sample points.
+3. Event balance at end of measured window: $\sum \text{enqueues} = \sum \text{dequeues} = \sum \text{acks}$.
+4. Direct timestamp-by-timestamp comparison of internal `_active_tasks` vs. proxy $W(t)$.
 
 ---
 
-## 6. Scope & Architecture Invariants
+## 5. Experimental Execution Campaign
 
-The following subsystem boundaries and contracts remain frozen and strictly protected:
-- `v0.8.0-phase8-freeze` (`da27047f56fe2eec75acdb8502f505542cf61202`) remains locked.
-- Task state machine transitions and retry logic in `TaskRepository` remain untouched.
-- Lease timeouts, lease tokens, and fencing protections remain untouched.
-- Redis sorted set priority ordering (ZADD scores $1 \to 3,999,999,999,999$) and ACK delivery token contracts remain untouched.
-- Transactional outbox polling boundaries and synchronous database writes remain untouched.
+1. **Paired Interleaved Design:**
+   Three paired trials per workload, alternating condition:
+   - Trial 1: Baseline Disabled (D1) $\to$ Trial 2: Instrumented Enabled (E1)
+   - Trial 3: Baseline Disabled (D2) $\to$ Trial 4: Instrumented Enabled (E2)
+   - Trial 5: Baseline Disabled (D3) $\to$ Trial 6: Instrumented Enabled (E3)
+2. **Environment & State Hygiene:**
+   - Database tables truncated between trials via `TRUNCATE tasks, task_attempts, task_results, outbox_events, task_events CASCADE;`.
+   - Redis cleared between trials via `FLUSHDB`.
+   - Warmup tasks submitted and completely drained prior to opening the measured burst window.
+3. **Overhead & Regression Assurance:**
+   - Full regression suite (224/224) and focused diagnostic unit tests must pass.
+   - Non-blocking profiler queue ensures zero blocking I/O on dispatcher or worker critical paths.
