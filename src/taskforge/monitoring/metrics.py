@@ -350,5 +350,31 @@ def record_lease_recovery(initiator: Any, recovery_result: Any) -> None:
 
 
 def get_metrics_content() -> bytes:
-    """Generate Prometheus scrape format output."""
-    return generate_latest()
+    """Generate Prometheus scrape format output with single-flight cached gauge updates."""
+    from taskforge.monitoring.collector import get_gauge_snapshot_cache
+
+    cache = get_gauge_snapshot_cache()
+    has_valid_snapshot = cache.collect_and_update()
+
+    raw_output = generate_latest()
+
+    if not has_valid_snapshot:
+        # Cold-start failure: completely omit unavailable backend infrastructure gauges
+        # from exposition (never fabricate zero values for uncollected state)
+        omitted_metrics = {
+            "taskforge_queue_depth",
+            "taskforge_outbox_pending_events",
+            "taskforge_outbox_lag_seconds",
+            "taskforge_active_workers",
+        }
+        lines = raw_output.decode("utf-8").splitlines()
+        filtered_lines = [
+            line for line in lines
+            if not any(
+                line.startswith(m) or line.startswith(f"# HELP {m}") or line.startswith(f"# TYPE {m}")
+                for m in omitted_metrics
+            )
+        ]
+        return ("\n".join(filtered_lines) + "\n").encode("utf-8")
+
+    return raw_output

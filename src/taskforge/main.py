@@ -18,6 +18,7 @@ from taskforge.core.config import get_settings
 from taskforge.core.logging import configure_logging, get_logger
 from taskforge.core.rate_limiter import RateLimitMiddleware
 from taskforge.database.session import engine, init_db
+from taskforge.monitoring.collector import close_dedicated_telemetry_engine
 from taskforge.monitoring.health import (
     ReadinessProbeCoordinator,
     ReadinessProbeSaturationError,
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
             pass
 
     close_probe_redis()
+    close_dedicated_telemetry_engine()
 
     engine.dispose()
     logger.info("application_stopping")
