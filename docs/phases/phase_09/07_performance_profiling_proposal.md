@@ -101,9 +101,9 @@ sequenceDiagram
 
 | # | Event Name | Subsystem | Semantic Boundary Type | Exact Definition & Location |
 | :-: | :--- | :--- | :--- | :--- |
-| **1** | `api_request_received` | API | **Application-observed response boundary** | Starlette ASGI middleware entry timestamp immediately upon receiving request headers. |
+| **1** | `api_request_received` | API | **Operation start / Ingress boundary** | Starlette ASGI middleware entry timestamp immediately upon receiving request headers. |
 | **2** | `task_transaction_commit` | API | **Transaction commit completion** | Timestamp captured immediately after `db.commit()` returns for the ingestion transaction inserting `Task` and `OutboxEvent`. |
-| **3** | `api_response_sent` | API | **Application-observed response boundary** | Starlette ASGI middleware exit timestamp immediately after response stream consumption. |
+| **3** | `api_response_sent` | API | **Operation completion / Egress boundary** | Starlette ASGI middleware exit timestamp immediately after response stream consumption completes. |
 | **4** | `outbox_claim_start` | Outbox | **Operation start** | Timestamp immediately before executing `SELECT ... FOR UPDATE SKIP LOCKED` on `outbox_events`. |
 | **5** | `outbox_claim_commit` | Outbox | **Transaction commit completion** | Timestamp immediately after batch claim lock is committed in PostgreSQL. |
 | **6** | `redis_enqueue_start` | Outbox | **Operation start** | Client socket boundary timestamp immediately before dispatching Redis `ZADD` command. |
@@ -145,8 +145,7 @@ The attribution engine computes discrete intervals without assuming stage contig
 
 ### 5.1 Primary Attribution Intervals
 1. **$T_{\text{api-server}} = t_{\text{task-transaction-commit}} - t_{\text{api-request-received}}$:** Server-side ingestion duration.
-2. **$T_{\text{outbox-lag}} = t_{\text{outbox-claim-start}} - t_{\text{task-transaction-commit}}$:** Outbox backlog residence.
-   - *Visibility Invariant:* If an outbox claim cycle begins before a newly committed task row becomes visible in the snapshot, this is recorded as a *not-yet-eligible batch cycle*, not clamped to zero.
+2. **$T_{\text{outbox-lag}} = t_{\text{claim-start}}(C_{\text{claim}}) - t_{\text{task-transaction-commit}}$:** Outbox backlog residence (governed by Section 5.2).
 3. **$T_{\text{outbox-claim}} = t_{\text{outbox-claim-commit}} - t_{\text{outbox-claim-start}}$:** Outbox batch lock & claim transaction time.
 4. **$T_{\text{redis-enq}} = t_{\text{redis-enqueue-complete}} - t_{\text{redis-enqueue-start}}$:** Network round-trip duration for Redis `ZADD`.
 5. **$T_{\text{outbox-commit}} = t_{\text{outbox-published-commit}} - t_{\text{redis-enqueue-complete}}$:** Duration to commit `PUBLISHED` status in PostgreSQL.
@@ -156,7 +155,19 @@ The attribution engine computes discrete intervals without assuming stage contig
 9. **$T_{\text{terminal-persist}} = t_{\text{terminal-commit}} - t_{\text{terminal-transaction-start}}$:** Terminal result and state commit duration.
 10. **$T_{\text{redis-ack}} = t_{\text{redis-ack-complete}} - t_{\text{terminal-commit}}$:** Broker delivery acknowledgement (`ZREM`) round-trip.
 
-### 5.2 Negative-Interval & Overlap Handling Invariants
+### 5.2 Per-Task Outbox-Lag Eligibility & Correlation Methodology
+Because `outbox_claim_start` is a batch-level operation claiming up to 50 tasks while `task_transaction_commit` is an individual task submission event, outbox lag is governed by the following per-task eligibility rules:
+1. **Task-to-Outbox Correlation:** Every `OutboxEvent` row contains `aggregate_id = task.id` and `payload["task_id"] = task.id`. The benchmark harness correlates each task directly with its outbox lifecycle via this immutable identifier.
+2. **Batch Cycle Sequencing:** Every outbox publisher claim cycle is tracked with a monotonic sequence identifier $C_k$, recording its query execution start $t_{\text{claim-start}}(C_k)$, commit timestamp $t_{\text{claim-commit}}(C_k)$, and the set of claimed task IDs $S(C_k)$.
+3. **Exclusion of Pre-Commit Claim Cycles:** A claim cycle $C_i$ that begins *before* a task's `task_transaction_commit` ($t_{\text{claim-start}}(C_i) \le t_{\text{task-transaction-commit}}$) cannot observe that task under snapshot isolation. Such cycles are structurally non-eligible for that task and are strictly excluded from its lag attribution.
+4. **Lag Calculation for Successfully Claimed Tasks:** If a task is claimed in batch $C_{\text{claim}}$, and $t_{\text{claim-start}}(C_{\text{claim}}) > t_{\text{task-transaction-commit}}$, the idle outbox residence lag is:
+   $$T_{\text{outbox-lag}} = t_{\text{claim-start}}(C_{\text{claim}}) - t_{\text{task-transaction-commit}}$$
+5. **Concurrent Claim Race Handling:** If a task is claimed in a batch $C_{\text{claim}}$ whose query start preceded or was concurrent with the task commit timestamp ($t_{\text{claim-start}}(C_{\text{claim}}) \le t_{\text{task-transaction-commit}}$ due to lock acquisition interleaving):
+   - The harness will **never** invent or zero-clamp a negative lag value.
+   - The lag for that task will be recorded as `UNAVAILABLE_RACE` and reported in a separate anomaly audit, excluding it from standard lag percentiles.
+6. **Unclaimed Tasks:** If a task is not claimed before the benchmark trial window closes, its outbox lag is recorded as `UNCLAIMED` (omitted from percentile statistics and tracked in the timestamp completeness audit).
+
+### 5.3 Negative-Interval & Overlap Handling Invariants
 - **Preservation of Raw Timestamps:** Raw timestamps are permanently preserved in the raw JSONL records without synthetic modification.
 - **Client-Observed Broker Dwell Anomaly Accounting:** Due to client-side scheduling between Redis command completion and Python timestamp capture, apparent negative intervals ($t_{\text{redis-dequeue-complete}} < t_{\text{redis-enqueue-complete}}$) can theoretically occur. The attribution report will:
   1. Never clamp negative intervals to zero.
@@ -198,6 +209,13 @@ The attribution engine computes discrete intervals without assuming stage contig
 - **No synchronous diagnostic database writes:** Profiling timestamps must never be written to application database tables on the critical path.
 - **No Prometheus metric cardinality expansion:** Existing Prometheus metrics retain their G9.2 definitions; no dynamic task IDs or unbounded labels permitted.
 - **No speculative optimizations:** Optimization code is strictly forbidden until the Stage 1B attribution report is reviewed and target-lock authorization is granted.
+
+### 7.3 Diagnostic Event Buffer Architecture (Non-Blocking with Drop Counter)
+To prevent profiling disk I/O from creating critical-path task processing latency:
+1. **Bounded Diagnostic Queue:** Diagnostic event records are pushed to a thread-safe, bounded memory buffer (`queue.Queue(maxsize=50000)`).
+2. **Asynchronous Disk Flusher:** A dedicated background flusher thread drains the queue to the per-trial JSONL artifact file.
+3. **Explicit Drop Accounting:** If the buffer saturates, the enqueue operation is strictly non-blocking (`put_nowait()`). Any dropped event atomically increments an explicit `diagnostic_event_drop_count` counter.
+4. **Transparency Invariant:** If `diagnostic_event_drop_count > 0`, the attribution report will prominently expose the drop count and affected event categories. Under no circumstances will dropped events be silently omitted or task processing blocked.
 
 ---
 
