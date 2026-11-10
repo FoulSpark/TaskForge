@@ -1,0 +1,2603 @@
+{
+  "metadata": {
+    "campaign": "Gate G9.3 Stage 2 Phase 2C Post-Adoption Rebaselining & Sequential Dequeue Investigation",
+    "timestamp_utc": "2026-11-10T17:27:26.149343+00:00",
+    "git_commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
+    "workload_definitions_sha256": "04f2306538868a41514c19f0958e04bf0b0586b3a83989e115231a32e50f0110",
+    "trials_count": 18
+  },
+  "trials": [
+    {
+      "trial_id": "s2c_W-01_c10_t1",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 10,
+      "duration_sec": 20.303,
+      "total_cpu_sec": 25.234,
+      "throughput_tps": 24.63,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c10_t1.jsonl",
+      "raw_events_sha256": "ae9b132e85dbec3c7fe7636857a0bbc86cc24cb2e93a4796359fc4e80518dbbc",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1829,
+        "evalsha_total_usec": 108850,
+        "evalsha_usec_per_call": 59.51,
+        "total_redis_commands": 5176
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 116,
+          "dispatcher_dequeue_start": 825,
+          "outbox_claim_commit": 116,
+          "task_transaction_commit": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_start": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "lease_commit": 500,
+          "dispatcher_sleep_start": 507,
+          "outbox_published_commit": 500,
+          "dispatcher_sleep_end": 507,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 3.14,
+          "saturation_ratio_pct": 78.24,
+          "max_queue_depth": 226,
+          "mean_queue_depth": 112.21,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.71
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 3.9054,
+          "qp_wall_seconds": 19.7561,
+          "active_duty_ratio_pct": 19.77
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 5.525,
+            "p95_ms": 16.751,
+            "p99_ms": 30.032,
+            "max_ms": 61.64,
+            "min_ms": 0.727,
+            "mean_ms": 7.233,
+            "stddev_ms": 5.785,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.05,
+            "p95_ms": 3.702,
+            "p99_ms": 10.329,
+            "max_ms": 31.745,
+            "min_ms": 0.032,
+            "mean_ms": 0.598,
+            "stddev_ms": 2.383,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 380,
+          "matched_replenish_dist": {
+            "p50_ms": 7.823,
+            "p95_ms": 21.391,
+            "p99_ms": 31.398,
+            "max_ms": 63.259,
+            "min_ms": 1.333,
+            "mean_ms": 9.797,
+            "stddev_ms": 6.916,
+            "count": 380
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 76.48,
+            "p95_ms": 95.725,
+            "p99_ms": 97.284,
+            "max_ms": 97.93,
+            "min_ms": 15.65,
+            "mean_ms": 72.026,
+            "stddev_ms": 18.79,
+            "count": 380
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 9.975,
+            "p95_ms": 35.367,
+            "p99_ms": 45.063,
+            "max_ms": 49.484,
+            "min_ms": 1.619,
+            "mean_ms": 13.073,
+            "stddev_ms": 10.25,
+            "count": 110
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 5853.835,
+            "p95_ms": 7242.4,
+            "p99_ms": 7336.863,
+            "max_ms": 7391.167,
+            "min_ms": 615.268,
+            "mean_ms": 5103.454,
+            "stddev_ms": 1935.703,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c10_t2",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 10,
+      "duration_sec": 17.255,
+      "total_cpu_sec": 21.438,
+      "throughput_tps": 28.98,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c10_t2.jsonl",
+      "raw_events_sha256": "7d0d6e57fbac9fdf3560b3fe94327f2e2ee995b730940515ddecf3b14f68f867",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1855,
+        "evalsha_total_usec": 98090,
+        "evalsha_usec_per_call": 52.88,
+        "total_redis_commands": 5218
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 106,
+          "dispatcher_dequeue_start": 852,
+          "outbox_claim_commit": 106,
+          "task_transaction_commit": 500,
+          "redis_enqueue_start": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "lease_commit": 500,
+          "outbox_published_commit": 500,
+          "handler_start": 500,
+          "handler_end": 500,
+          "dispatcher_sleep_start": 465,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "dispatcher_sleep_end": 465,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 3.38,
+          "saturation_ratio_pct": 77.36,
+          "max_queue_depth": 222,
+          "mean_queue_depth": 108.13,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.66
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 3.2786,
+          "qp_wall_seconds": 16.7108,
+          "active_duty_ratio_pct": 19.62
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 4.71,
+            "p95_ms": 14.939,
+            "p99_ms": 21.238,
+            "max_ms": 50.432,
+            "min_ms": 0.699,
+            "mean_ms": 6.145,
+            "stddev_ms": 4.74,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.046,
+            "p95_ms": 3.255,
+            "p99_ms": 7.079,
+            "max_ms": 15.559,
+            "min_ms": 0.026,
+            "mean_ms": 0.473,
+            "stddev_ms": 1.533,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 394,
+          "matched_replenish_dist": {
+            "p50_ms": 6.925,
+            "p95_ms": 19.366,
+            "p99_ms": 31.092,
+            "max_ms": 105.022,
+            "min_ms": 1.08,
+            "mean_ms": 8.76,
+            "stddev_ms": 7.717,
+            "count": 394
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 77.55,
+            "p95_ms": 94.78,
+            "p99_ms": 96.885,
+            "max_ms": 98.24,
+            "min_ms": 15.14,
+            "mean_ms": 72.579,
+            "stddev_ms": 19.019,
+            "count": 394
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 6.816,
+            "p95_ms": 25.605,
+            "p99_ms": 34.368,
+            "max_ms": 38.843,
+            "min_ms": 2.374,
+            "mean_ms": 9.286,
+            "stddev_ms": 7.485,
+            "count": 96
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 4880.65,
+            "p95_ms": 5963.39,
+            "p99_ms": 6046.071,
+            "max_ms": 6129.154,
+            "min_ms": 382.068,
+            "mean_ms": 4234.941,
+            "stddev_ms": 1616.426,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c10_t3",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 10,
+      "duration_sec": 17.489,
+      "total_cpu_sec": 21.953,
+      "throughput_tps": 28.59,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c10_t3.jsonl",
+      "raw_events_sha256": "d728e20b78b48161928f21f494814eec3c6514413ff973601c1f42ae54e5406e",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1740,
+        "evalsha_total_usec": 98082,
+        "evalsha_usec_per_call": 56.37,
+        "total_redis_commands": 4989
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 104,
+          "dispatcher_dequeue_start": 737,
+          "outbox_claim_commit": 104,
+          "task_transaction_commit": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_start": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "lease_commit": 500,
+          "dispatcher_sleep_start": 477,
+          "dispatcher_sleep_end": 477,
+          "outbox_published_commit": 500,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 4.38,
+          "saturation_ratio_pct": 78.49,
+          "max_queue_depth": 221,
+          "mean_queue_depth": 108.1,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.72
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 3.1709,
+          "qp_wall_seconds": 16.9797,
+          "active_duty_ratio_pct": 18.67
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 4.789,
+            "p95_ms": 13.001,
+            "p99_ms": 16.667,
+            "max_ms": 56.289,
+            "min_ms": 0.645,
+            "mean_ms": 5.866,
+            "stddev_ms": 4.319,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.045,
+            "p95_ms": 2.927,
+            "p99_ms": 7.937,
+            "max_ms": 24.424,
+            "min_ms": 0.029,
+            "mean_ms": 0.5,
+            "stddev_ms": 1.937,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 374,
+          "matched_replenish_dist": {
+            "p50_ms": 6.691,
+            "p95_ms": 18.089,
+            "p99_ms": 25.356,
+            "max_ms": 58.388,
+            "min_ms": 1.282,
+            "mean_ms": 8.335,
+            "stddev_ms": 5.605,
+            "count": 374
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 74.705,
+            "p95_ms": 94.855,
+            "p99_ms": 96.625,
+            "max_ms": 97.8,
+            "min_ms": 13.12,
+            "mean_ms": 70.559,
+            "stddev_ms": 19.393,
+            "count": 374
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 8.227,
+            "p95_ms": 19.12,
+            "p99_ms": 32.672,
+            "max_ms": 35.312,
+            "min_ms": 1.225,
+            "mean_ms": 9.482,
+            "stddev_ms": 6.057,
+            "count": 116
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 4981.102,
+            "p95_ms": 6065.557,
+            "p99_ms": 6137.681,
+            "max_ms": 6162.898,
+            "min_ms": 427.645,
+            "mean_ms": 4296.956,
+            "stddev_ms": 1648.932,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-02_c4_t1",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-02",
+      "num_tasks": 200,
+      "concurrency": 4,
+      "duration_sec": 6.848,
+      "total_cpu_sec": 8.344,
+      "throughput_tps": 29.21,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-02_c4_t1.jsonl",
+      "raw_events_sha256": "576ad13cc1f5a2878bbabf9be7ae51254aaa0851f25b6c1239083e57a8840d74",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 717,
+        "evalsha_total_usec": 36048,
+        "evalsha_usec_per_call": 50.28,
+        "total_redis_commands": 2040
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 62,
+          "dispatcher_dequeue_start": 316,
+          "outbox_claim_commit": 62,
+          "task_transaction_commit": 200,
+          "api_request_received": 200,
+          "api_response_sent": 200,
+          "redis_enqueue_start": 200,
+          "redis_enqueue_complete": 200,
+          "redis_dequeue_complete": 200,
+          "lease_claim_start": 200,
+          "dispatcher_task_submitted": 200,
+          "lease_commit": 200,
+          "dispatcher_sleep_start": 218,
+          "outbox_published_commit": 200,
+          "dispatcher_sleep_end": 218,
+          "handler_start": 200,
+          "handler_end": 200,
+          "terminal_transaction_start": 200,
+          "terminal_commit": 200,
+          "redis_ack_complete": 200,
+          "worker_slot_released": 200
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 200,
+          "dequeues_count": 200,
+          "acks_count": 200,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 1.34,
+          "saturation_ratio_pct": 90.75,
+          "max_queue_depth": 92,
+          "mean_queue_depth": 45.99,
+          "max_active_workers": 4,
+          "mean_active_workers": 3.89
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 0.4975,
+          "qp_wall_seconds": 6.5815,
+          "active_duty_ratio_pct": 7.56
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 1.803,
+            "p95_ms": 5.653,
+            "p99_ms": 6.703,
+            "max_ms": 10.842,
+            "min_ms": 0.55,
+            "mean_ms": 2.352,
+            "stddev_ms": 1.649,
+            "count": 200
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.043,
+            "p95_ms": 0.956,
+            "p99_ms": 3.4,
+            "max_ms": 4.518,
+            "min_ms": 0.022,
+            "mean_ms": 0.158,
+            "stddev_ms": 0.538,
+            "count": 200
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 172,
+          "matched_replenish_dist": {
+            "p50_ms": 2.595,
+            "p95_ms": 7.123,
+            "p99_ms": 9.438,
+            "max_ms": 13.595,
+            "min_ms": 0.756,
+            "mean_ms": 3.341,
+            "stddev_ms": 2.148,
+            "count": 172
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 80.655,
+            "p95_ms": 93.848,
+            "p99_ms": 96.136,
+            "max_ms": 97.07,
+            "min_ms": 20.47,
+            "mean_ms": 74.958,
+            "stddev_ms": 17.638,
+            "count": 172
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 1.603,
+            "p95_ms": 4.828,
+            "p99_ms": 7.138,
+            "max_ms": 7.8,
+            "min_ms": 0.671,
+            "mean_ms": 2.127,
+            "stddev_ms": 1.68,
+            "count": 24
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 2052.172,
+            "p95_ms": 2499.083,
+            "p99_ms": 2527.994,
+            "max_ms": 2555.934,
+            "min_ms": 189.25,
+            "mean_ms": 1788.931,
+            "stddev_ms": 658.792,
+            "count": 200
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-02_c4_t2",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-02",
+      "num_tasks": 200,
+      "concurrency": 4,
+      "duration_sec": 7.114,
+      "total_cpu_sec": 8.719,
+      "throughput_tps": 28.11,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-02_c4_t2.jsonl",
+      "raw_events_sha256": "806552d8a520d253135360335eeed197c92f819a9921f5e0e2235fb873bcff7f",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 762,
+        "evalsha_total_usec": 37900,
+        "evalsha_usec_per_call": 49.74,
+        "total_redis_commands": 2131
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 66,
+          "dispatcher_dequeue_start": 361,
+          "outbox_claim_commit": 66,
+          "task_transaction_commit": 200,
+          "api_request_received": 200,
+          "api_response_sent": 200,
+          "redis_enqueue_start": 200,
+          "redis_enqueue_complete": 200,
+          "redis_dequeue_complete": 200,
+          "lease_claim_start": 200,
+          "dispatcher_task_submitted": 200,
+          "dispatcher_sleep_start": 221,
+          "lease_commit": 200,
+          "outbox_published_commit": 200,
+          "dispatcher_sleep_end": 221,
+          "handler_start": 200,
+          "handler_end": 200,
+          "terminal_transaction_start": 200,
+          "terminal_commit": 200,
+          "redis_ack_complete": 200,
+          "worker_slot_released": 200
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 200,
+          "dequeues_count": 200,
+          "acks_count": 200,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 1.23,
+          "saturation_ratio_pct": 91.36,
+          "max_queue_depth": 90,
+          "mean_queue_depth": 44.4,
+          "max_active_workers": 4,
+          "mean_active_workers": 3.91
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 0.5358,
+          "qp_wall_seconds": 6.8189,
+          "active_duty_ratio_pct": 7.86
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 2.062,
+            "p95_ms": 4.832,
+            "p99_ms": 6.766,
+            "max_ms": 7.491,
+            "min_ms": 0.572,
+            "mean_ms": 2.438,
+            "stddev_ms": 1.321,
+            "count": 200
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.047,
+            "p95_ms": 0.17,
+            "p99_ms": 3.279,
+            "max_ms": 19.721,
+            "min_ms": 0.029,
+            "mean_ms": 0.25,
+            "stddev_ms": 1.488,
+            "count": 200
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 175,
+          "matched_replenish_dist": {
+            "p50_ms": 2.732,
+            "p95_ms": 6.488,
+            "p99_ms": 8.707,
+            "max_ms": 20.399,
+            "min_ms": 0.869,
+            "mean_ms": 3.304,
+            "stddev_ms": 2.109,
+            "count": 175
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 82.19,
+            "p95_ms": 93.776,
+            "p99_ms": 96.134,
+            "max_ms": 97.4,
+            "min_ms": 9.93,
+            "mean_ms": 77.177,
+            "stddev_ms": 15.973,
+            "count": 175
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 3.242,
+            "p95_ms": 7.842,
+            "p99_ms": 18.874,
+            "max_ms": 21.632,
+            "min_ms": 1.337,
+            "mean_ms": 4.275,
+            "stddev_ms": 4.273,
+            "count": 21
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 2126.828,
+            "p95_ms": 2460.097,
+            "p99_ms": 2479.524,
+            "max_ms": 2497.944,
+            "min_ms": 186.266,
+            "mean_ms": 1787.066,
+            "stddev_ms": 684.547,
+            "count": 200
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-02_c4_t3",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-02",
+      "num_tasks": 200,
+      "concurrency": 4,
+      "duration_sec": 6.913,
+      "total_cpu_sec": 8.406,
+      "throughput_tps": 28.93,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-02_c4_t3.jsonl",
+      "raw_events_sha256": "db560524c77a78bb3e76fd5ea1d1fecfe874fa80d15840d2919c1f4efffeb497",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 701,
+        "evalsha_total_usec": 37303,
+        "evalsha_usec_per_call": 53.21,
+        "total_redis_commands": 2008
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 64,
+          "dispatcher_dequeue_start": 300,
+          "outbox_claim_commit": 64,
+          "task_transaction_commit": 200,
+          "api_request_received": 200,
+          "api_response_sent": 200,
+          "redis_enqueue_start": 200,
+          "redis_enqueue_complete": 200,
+          "redis_dequeue_complete": 200,
+          "lease_claim_start": 200,
+          "dispatcher_task_submitted": 200,
+          "lease_commit": 200,
+          "dispatcher_sleep_start": 225,
+          "outbox_published_commit": 200,
+          "dispatcher_sleep_end": 225,
+          "handler_start": 200,
+          "handler_end": 200,
+          "terminal_transaction_start": 200,
+          "terminal_commit": 200,
+          "redis_ack_complete": 200,
+          "worker_slot_released": 200
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 200,
+          "dequeues_count": 200,
+          "acks_count": 200,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 1.45,
+          "saturation_ratio_pct": 90.55,
+          "max_queue_depth": 91,
+          "mean_queue_depth": 43.95,
+          "max_active_workers": 4,
+          "mean_active_workers": 3.89
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 0.5203,
+          "qp_wall_seconds": 6.5624,
+          "active_duty_ratio_pct": 7.93
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 2.008,
+            "p95_ms": 5.755,
+            "p99_ms": 6.919,
+            "max_ms": 12.914,
+            "min_ms": 0.523,
+            "mean_ms": 2.471,
+            "stddev_ms": 1.642,
+            "count": 200
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.044,
+            "p95_ms": 0.097,
+            "p99_ms": 3.098,
+            "max_ms": 4.901,
+            "min_ms": 0.031,
+            "mean_ms": 0.147,
+            "stddev_ms": 0.557,
+            "count": 200
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 181,
+          "matched_replenish_dist": {
+            "p50_ms": 2.59,
+            "p95_ms": 6.787,
+            "p99_ms": 9.849,
+            "max_ms": 13.804,
+            "min_ms": 0.657,
+            "mean_ms": 3.155,
+            "stddev_ms": 2.023,
+            "count": 181
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 81.37,
+            "p95_ms": 94.1,
+            "p99_ms": 95.882,
+            "max_ms": 96.81,
+            "min_ms": 30.91,
+            "mean_ms": 78.062,
+            "stddev_ms": 13.746,
+            "count": 181
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 3.151,
+            "p95_ms": 7.569,
+            "p99_ms": 9.398,
+            "max_ms": 9.855,
+            "min_ms": 1.241,
+            "mean_ms": 3.801,
+            "stddev_ms": 2.325,
+            "count": 15
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 1998.017,
+            "p95_ms": 2363.306,
+            "p99_ms": 2389.498,
+            "max_ms": 2409.736,
+            "min_ms": 279.588,
+            "mean_ms": 1728.118,
+            "stddev_ms": 616.832,
+            "count": 200
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-03_c10_t1",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-03",
+      "num_tasks": 200,
+      "concurrency": 10,
+      "duration_sec": 7.151,
+      "total_cpu_sec": 9.016,
+      "throughput_tps": 27.97,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-03_c10_t1.jsonl",
+      "raw_events_sha256": "efc520d62ffda0f89b69db1ec1b18f758d9eb8381422e518c7680803a8cb6a60",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 703,
+        "evalsha_total_usec": 40678,
+        "evalsha_usec_per_call": 57.86,
+        "total_redis_commands": 2016
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 43,
+          "dispatcher_dequeue_start": 302,
+          "outbox_claim_commit": 43,
+          "task_transaction_commit": 200,
+          "api_request_received": 200,
+          "api_response_sent": 200,
+          "redis_enqueue_start": 200,
+          "redis_enqueue_complete": 200,
+          "redis_dequeue_complete": 200,
+          "lease_claim_start": 200,
+          "dispatcher_task_submitted": 200,
+          "lease_commit": 200,
+          "dispatcher_sleep_start": 197,
+          "dispatcher_sleep_end": 197,
+          "outbox_published_commit": 200,
+          "handler_start": 200,
+          "handler_end": 200,
+          "terminal_transaction_start": 200,
+          "terminal_commit": 200,
+          "redis_ack_complete": 200,
+          "worker_slot_released": 200
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 200,
+          "dequeues_count": 200,
+          "acks_count": 200,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 3.85,
+          "saturation_ratio_pct": 79.81,
+          "max_queue_depth": 89,
+          "mean_queue_depth": 41.34,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.68
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 1.2096,
+          "qp_wall_seconds": 6.7701,
+          "active_duty_ratio_pct": 17.87
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 4.351,
+            "p95_ms": 14.294,
+            "p99_ms": 21.183,
+            "max_ms": 25.654,
+            "min_ms": 0.895,
+            "mean_ms": 5.599,
+            "stddev_ms": 4.257,
+            "count": 200
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.045,
+            "p95_ms": 3.371,
+            "p99_ms": 8.015,
+            "max_ms": 9.499,
+            "min_ms": 0.023,
+            "mean_ms": 0.475,
+            "stddev_ms": 1.429,
+            "count": 200
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 152,
+          "matched_replenish_dist": {
+            "p50_ms": 5.973,
+            "p95_ms": 17.311,
+            "p99_ms": 24.74,
+            "max_ms": 33.989,
+            "min_ms": 1.138,
+            "mean_ms": 7.664,
+            "stddev_ms": 5.439,
+            "count": 152
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 76.465,
+            "p95_ms": 94.59,
+            "p99_ms": 96.104,
+            "max_ms": 96.43,
+            "min_ms": 18.25,
+            "mean_ms": 71.702,
+            "stddev_ms": 19.708,
+            "count": 152
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 8.968,
+            "p95_ms": 21.928,
+            "p99_ms": 27.099,
+            "max_ms": 28.017,
+            "min_ms": 1.363,
+            "mean_ms": 9.847,
+            "stddev_ms": 5.922,
+            "count": 38
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 2252.649,
+            "p95_ms": 2652.511,
+            "p99_ms": 2713.316,
+            "max_ms": 2734.8,
+            "min_ms": 442.835,
+            "mean_ms": 2010.755,
+            "stddev_ms": 626.04,
+            "count": 200
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-03_c10_t2",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-03",
+      "num_tasks": 200,
+      "concurrency": 10,
+      "duration_sec": 7.21,
+      "total_cpu_sec": 9.172,
+      "throughput_tps": 27.74,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-03_c10_t2.jsonl",
+      "raw_events_sha256": "bd63ac46778909afae430f6a5e31dbc34eee0dd652a10f915b06fb11654248a1",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 770,
+        "evalsha_total_usec": 40720,
+        "evalsha_usec_per_call": 52.88,
+        "total_redis_commands": 2147
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 44,
+          "dispatcher_dequeue_start": 369,
+          "outbox_claim_commit": 44,
+          "task_transaction_commit": 200,
+          "redis_enqueue_start": 200,
+          "redis_enqueue_complete": 200,
+          "redis_dequeue_complete": 200,
+          "lease_claim_start": 200,
+          "dispatcher_task_submitted": 200,
+          "api_request_received": 200,
+          "api_response_sent": 200,
+          "lease_commit": 200,
+          "outbox_published_commit": 200,
+          "dispatcher_sleep_start": 195,
+          "handler_start": 200,
+          "dispatcher_sleep_end": 195,
+          "handler_end": 200,
+          "terminal_transaction_start": 200,
+          "terminal_commit": 200,
+          "redis_ack_complete": 200,
+          "worker_slot_released": 200
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 200,
+          "dequeues_count": 200,
+          "acks_count": 200,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 4.86,
+          "saturation_ratio_pct": 77.91,
+          "max_queue_depth": 87,
+          "mean_queue_depth": 40.27,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.59
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 1.228,
+          "qp_wall_seconds": 6.7285,
+          "active_duty_ratio_pct": 18.25
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 4.78,
+            "p95_ms": 12.864,
+            "p99_ms": 15.566,
+            "max_ms": 25.956,
+            "min_ms": 0.773,
+            "mean_ms": 5.643,
+            "stddev_ms": 3.774,
+            "count": 200
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.046,
+            "p95_ms": 4.021,
+            "p99_ms": 8.907,
+            "max_ms": 13.237,
+            "min_ms": 0.027,
+            "mean_ms": 0.587,
+            "stddev_ms": 1.714,
+            "count": 200
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 156,
+          "matched_replenish_dist": {
+            "p50_ms": 6.86,
+            "p95_ms": 16.615,
+            "p99_ms": 23.926,
+            "max_ms": 29.424,
+            "min_ms": 1.279,
+            "mean_ms": 8.138,
+            "stddev_ms": 4.937,
+            "count": 156
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 73.2,
+            "p95_ms": 95.057,
+            "p99_ms": 98.043,
+            "max_ms": 99.09,
+            "min_ms": 15.84,
+            "mean_ms": 70.52,
+            "stddev_ms": 19.373,
+            "count": 156
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 6.739,
+            "p95_ms": 16.732,
+            "p99_ms": 22.38,
+            "max_ms": 23.788,
+            "min_ms": 1.812,
+            "mean_ms": 8.038,
+            "stddev_ms": 4.752,
+            "count": 34
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 2228.103,
+            "p95_ms": 2657.117,
+            "p99_ms": 2725.955,
+            "max_ms": 2769.701,
+            "min_ms": 391.228,
+            "mean_ms": 2012.087,
+            "stddev_ms": 621.907,
+            "count": 200
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-03_c10_t3",
+      "series": "Series-1-Post-Adoption-Baseline",
+      "workload_id": "W-03",
+      "num_tasks": 200,
+      "concurrency": 10,
+      "duration_sec": 7.215,
+      "total_cpu_sec": 9.25,
+      "throughput_tps": 27.72,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-03_c10_t3.jsonl",
+      "raw_events_sha256": "255bd62ef0eee80b7c67f0e6124d2dd34cfeff7ab09017bb97c33d601c2a78a2",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 712,
+        "evalsha_total_usec": 41613,
+        "evalsha_usec_per_call": 58.45,
+        "total_redis_commands": 2030
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 44,
+          "dispatcher_dequeue_start": 311,
+          "outbox_claim_commit": 44,
+          "task_transaction_commit": 200,
+          "redis_enqueue_start": 200,
+          "redis_enqueue_complete": 200,
+          "redis_dequeue_complete": 200,
+          "lease_claim_start": 200,
+          "dispatcher_task_submitted": 200,
+          "api_request_received": 200,
+          "api_response_sent": 200,
+          "lease_commit": 200,
+          "outbox_published_commit": 200,
+          "handler_start": 200,
+          "handler_end": 200,
+          "terminal_transaction_start": 200,
+          "dispatcher_sleep_start": 180,
+          "terminal_commit": 200,
+          "dispatcher_sleep_end": 180,
+          "redis_ack_complete": 200,
+          "worker_slot_released": 200
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 200,
+          "dequeues_count": 200,
+          "acks_count": 200,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 2.49,
+          "saturation_ratio_pct": 80.79,
+          "max_queue_depth": 92,
+          "mean_queue_depth": 43.93,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.51
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 1.2374,
+          "qp_wall_seconds": 6.8593,
+          "active_duty_ratio_pct": 18.04
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 4.593,
+            "p95_ms": 12.128,
+            "p99_ms": 16.918,
+            "max_ms": 29.719,
+            "min_ms": 0.944,
+            "mean_ms": 5.617,
+            "stddev_ms": 3.713,
+            "count": 200
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.047,
+            "p95_ms": 4.044,
+            "p99_ms": 9.15,
+            "max_ms": 13.617,
+            "min_ms": 0.028,
+            "mean_ms": 0.634,
+            "stddev_ms": 1.84,
+            "count": 200
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 135,
+          "matched_replenish_dist": {
+            "p50_ms": 6.541,
+            "p95_ms": 16.362,
+            "p99_ms": 24.797,
+            "max_ms": 31.399,
+            "min_ms": 2.005,
+            "mean_ms": 8.034,
+            "stddev_ms": 4.865,
+            "count": 135
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 75.86,
+            "p95_ms": 94.069,
+            "p99_ms": 96.429,
+            "max_ms": 98.16,
+            "min_ms": 18.73,
+            "mean_ms": 69.661,
+            "stddev_ms": 20.692,
+            "count": 135
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 7.623,
+            "p95_ms": 15.745,
+            "p99_ms": 17.89,
+            "max_ms": 18.246,
+            "min_ms": 1.717,
+            "mean_ms": 8.443,
+            "stddev_ms": 4.252,
+            "count": 55
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 2391.06,
+            "p95_ms": 2704.612,
+            "p99_ms": 2746.325,
+            "max_ms": 2793.206,
+            "min_ms": 359.363,
+            "mean_ms": 2119.16,
+            "stddev_ms": 637.041,
+            "count": 200
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c4_t1",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 4,
+      "duration_sec": 17.347,
+      "total_cpu_sec": 21.641,
+      "throughput_tps": 28.82,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c4_t1.jsonl",
+      "raw_events_sha256": "56ba8b09427e86c50fa7bd65dcc04772980d8ed4876336ba04c406544eb57639",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1798,
+        "evalsha_total_usec": 93346,
+        "evalsha_usec_per_call": 51.92,
+        "total_redis_commands": 5105
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 158,
+          "dispatcher_dequeue_start": 795,
+          "outbox_claim_commit": 158,
+          "task_transaction_commit": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_start": 500,
+          "redis_dequeue_complete": 500,
+          "redis_enqueue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "lease_commit": 500,
+          "dispatcher_sleep_start": 561,
+          "outbox_published_commit": 500,
+          "dispatcher_sleep_end": 561,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 1,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 1.32,
+          "saturation_ratio_pct": 91.9,
+          "max_queue_depth": 229,
+          "mean_queue_depth": 113.17,
+          "max_active_workers": 4,
+          "mean_active_workers": 3.91
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 1.2897,
+          "qp_wall_seconds": 17.0171,
+          "active_duty_ratio_pct": 7.58
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 2.044,
+            "p95_ms": 5.642,
+            "p99_ms": 7.961,
+            "max_ms": 10.171,
+            "min_ms": 0.572,
+            "mean_ms": 2.491,
+            "stddev_ms": 1.57,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.044,
+            "p95_ms": 0.081,
+            "p99_ms": 3.024,
+            "max_ms": 4.937,
+            "min_ms": 0.022,
+            "mean_ms": 0.113,
+            "stddev_ms": 0.464,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 461,
+          "matched_replenish_dist": {
+            "p50_ms": 2.604,
+            "p95_ms": 7.058,
+            "p99_ms": 8.694,
+            "max_ms": 10.851,
+            "min_ms": 0.733,
+            "mean_ms": 3.2,
+            "stddev_ms": 1.913,
+            "count": 461
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 82.7,
+            "p95_ms": 94.97,
+            "p99_ms": 96.936,
+            "max_ms": 98.68,
+            "min_ms": 27.87,
+            "mean_ms": 78.325,
+            "stddev_ms": 14.781,
+            "count": 461
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 3.051,
+            "p95_ms": 7.565,
+            "p99_ms": 9.651,
+            "max_ms": 10.21,
+            "min_ms": 0.866,
+            "mean_ms": 3.543,
+            "stddev_ms": 2.264,
+            "count": 35
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 4823.133,
+            "p95_ms": 5912.336,
+            "p99_ms": 5994.633,
+            "max_ms": 6022.949,
+            "min_ms": 199.316,
+            "mean_ms": 4128.095,
+            "stddev_ms": 1691.39,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c4_t2",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 4,
+      "duration_sec": 17.224,
+      "total_cpu_sec": 21.625,
+      "throughput_tps": 29.03,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c4_t2.jsonl",
+      "raw_events_sha256": "33504ad58a8f9520aa3eb1fc78288111831cf568040b5dc14e6215c1d672fd05",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1623,
+        "evalsha_total_usec": 90856,
+        "evalsha_usec_per_call": 55.98,
+        "total_redis_commands": 4754
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 155,
+          "dispatcher_dequeue_start": 620,
+          "outbox_claim_commit": 155,
+          "task_transaction_commit": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_start": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "dispatcher_sleep_start": 559,
+          "lease_commit": 500,
+          "dispatcher_sleep_end": 559,
+          "outbox_published_commit": 500,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 2.02,
+          "saturation_ratio_pct": 90.9,
+          "max_queue_depth": 232,
+          "mean_queue_depth": 115.08,
+          "max_active_workers": 4,
+          "mean_active_workers": 3.9
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 1.2441,
+          "qp_wall_seconds": 16.9401,
+          "active_duty_ratio_pct": 7.34
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 1.915,
+            "p95_ms": 5.515,
+            "p99_ms": 7.423,
+            "max_ms": 9.756,
+            "min_ms": 0.606,
+            "mean_ms": 2.404,
+            "stddev_ms": 1.529,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.044,
+            "p95_ms": 0.09,
+            "p99_ms": 2.071,
+            "max_ms": 6.544,
+            "min_ms": 0.03,
+            "mean_ms": 0.106,
+            "stddev_ms": 0.423,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 462,
+          "matched_replenish_dist": {
+            "p50_ms": 2.557,
+            "p95_ms": 6.817,
+            "p99_ms": 9.209,
+            "max_ms": 11.284,
+            "min_ms": 0.706,
+            "mean_ms": 3.092,
+            "stddev_ms": 1.856,
+            "count": 462
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 81.27,
+            "p95_ms": 94.449,
+            "p99_ms": 95.928,
+            "max_ms": 96.9,
+            "min_ms": 20.34,
+            "mean_ms": 77.851,
+            "stddev_ms": 14.505,
+            "count": 462
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 3.016,
+            "p95_ms": 6.8,
+            "p99_ms": 7.469,
+            "max_ms": 7.735,
+            "min_ms": 0.905,
+            "mean_ms": 3.478,
+            "stddev_ms": 1.927,
+            "count": 34
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 4929.204,
+            "p95_ms": 5902.305,
+            "p99_ms": 5941.974,
+            "max_ms": 5963.944,
+            "min_ms": 204.965,
+            "mean_ms": 4175.856,
+            "stddev_ms": 1667.487,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c4_t3",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 4,
+      "duration_sec": 17.464,
+      "total_cpu_sec": 21.703,
+      "throughput_tps": 28.63,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c4_t3.jsonl",
+      "raw_events_sha256": "bc80aa1d28b41dfbdecc88f8aa00a7c66d80d37bd07345bc2f754d8ccbdafe21",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1631,
+        "evalsha_total_usec": 93264,
+        "evalsha_usec_per_call": 57.18,
+        "total_redis_commands": 4771
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 158,
+          "dispatcher_dequeue_start": 628,
+          "outbox_claim_commit": 158,
+          "task_transaction_commit": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_start": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "dispatcher_sleep_start": 550,
+          "lease_commit": 500,
+          "outbox_published_commit": 500,
+          "dispatcher_sleep_end": 550,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 1.62,
+          "saturation_ratio_pct": 91.01,
+          "max_queue_depth": 229,
+          "mean_queue_depth": 113.83,
+          "max_active_workers": 4,
+          "mean_active_workers": 3.9
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 1.2935,
+          "qp_wall_seconds": 17.2133,
+          "active_duty_ratio_pct": 7.51
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 2.085,
+            "p95_ms": 5.612,
+            "p99_ms": 7.462,
+            "max_ms": 8.09,
+            "min_ms": 0.634,
+            "mean_ms": 2.488,
+            "stddev_ms": 1.464,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.045,
+            "p95_ms": 0.126,
+            "p99_ms": 1.973,
+            "max_ms": 3.318,
+            "min_ms": 0.026,
+            "mean_ms": 0.108,
+            "stddev_ms": 0.327,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 464,
+          "matched_replenish_dist": {
+            "p50_ms": 2.809,
+            "p95_ms": 6.616,
+            "p99_ms": 9.404,
+            "max_ms": 11.021,
+            "min_ms": 0.761,
+            "mean_ms": 3.262,
+            "stddev_ms": 1.807,
+            "count": 464
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 83.06,
+            "p95_ms": 94.655,
+            "p99_ms": 96.275,
+            "max_ms": 98.04,
+            "min_ms": 14.02,
+            "mean_ms": 78.291,
+            "stddev_ms": 15.019,
+            "count": 464
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 2.014,
+            "p95_ms": 5.829,
+            "p99_ms": 6.309,
+            "max_ms": 6.407,
+            "min_ms": 0.938,
+            "mean_ms": 2.579,
+            "stddev_ms": 1.506,
+            "count": 32
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 4935.697,
+            "p95_ms": 5836.575,
+            "p99_ms": 5961.424,
+            "max_ms": 6004.168,
+            "min_ms": 214.74,
+            "mean_ms": 4192.949,
+            "stddev_ms": 1660.525,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c10_t1",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 10,
+      "duration_sec": 18.146,
+      "total_cpu_sec": 23.062,
+      "throughput_tps": 27.55,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c10_t1.jsonl",
+      "raw_events_sha256": "7e381b4b158bed0d9fea3b25121bdfd3389da370e30cfc8d25487f8c724e456c",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1826,
+        "evalsha_total_usec": 101204,
+        "evalsha_usec_per_call": 55.42,
+        "total_redis_commands": 5163
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 110,
+          "dispatcher_dequeue_start": 823,
+          "outbox_claim_commit": 110,
+          "task_transaction_commit": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_start": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "redis_enqueue_complete": 500,
+          "lease_commit": 500,
+          "dispatcher_sleep_start": 486,
+          "outbox_published_commit": 500,
+          "dispatcher_sleep_end": 486,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 1,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 3.25,
+          "saturation_ratio_pct": 78.19,
+          "max_queue_depth": 222,
+          "mean_queue_depth": 107.56,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.71
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 3.3892,
+          "qp_wall_seconds": 17.6556,
+          "active_duty_ratio_pct": 19.2
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 5.107,
+            "p95_ms": 15.472,
+            "p99_ms": 19.071,
+            "max_ms": 63.47,
+            "min_ms": 0.665,
+            "mean_ms": 6.411,
+            "stddev_ms": 5.238,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.046,
+            "p95_ms": 2.187,
+            "p99_ms": 7.638,
+            "max_ms": 14.958,
+            "min_ms": 0.026,
+            "mean_ms": 0.385,
+            "stddev_ms": 1.406,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 371,
+          "matched_replenish_dist": {
+            "p50_ms": 7.253,
+            "p95_ms": 18.665,
+            "p99_ms": 27.364,
+            "max_ms": 67.744,
+            "min_ms": 1.324,
+            "mean_ms": 8.949,
+            "stddev_ms": 6.661,
+            "count": 371
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 76.61,
+            "p95_ms": 94.755,
+            "p99_ms": 97.087,
+            "max_ms": 98.48,
+            "min_ms": 12.39,
+            "mean_ms": 71.728,
+            "stddev_ms": 19.417,
+            "count": 371
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 8.208,
+            "p95_ms": 23.595,
+            "p99_ms": 28.413,
+            "max_ms": 29.826,
+            "min_ms": 2.037,
+            "mean_ms": 10.099,
+            "stddev_ms": 6.435,
+            "count": 119
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 5092.696,
+            "p95_ms": 6145.067,
+            "p99_ms": 6272.148,
+            "max_ms": 6322.718,
+            "min_ms": 458.515,
+            "mean_ms": 4420.445,
+            "stddev_ms": 1658.945,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c10_t2",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 10,
+      "duration_sec": 18.169,
+      "total_cpu_sec": 23.297,
+      "throughput_tps": 27.52,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c10_t2.jsonl",
+      "raw_events_sha256": "0b3e09f5a61346878f88163959f7cb865265750caeeeac9557ae64e18e6fb199",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1869,
+        "evalsha_total_usec": 104165,
+        "evalsha_usec_per_call": 55.73,
+        "total_redis_commands": 5246
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 109,
+          "dispatcher_dequeue_start": 866,
+          "outbox_claim_commit": 109,
+          "task_transaction_commit": 500,
+          "redis_enqueue_start": 500,
+          "redis_dequeue_complete": 500,
+          "redis_enqueue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "lease_commit": 500,
+          "outbox_published_commit": 500,
+          "dispatcher_sleep_start": 489,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "dispatcher_sleep_end": 489,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 1,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 3.18,
+          "saturation_ratio_pct": 80.41,
+          "max_queue_depth": 220,
+          "mean_queue_depth": 108.8,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.68
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 3.2571,
+          "qp_wall_seconds": 17.5398,
+          "active_duty_ratio_pct": 18.57
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 4.65,
+            "p95_ms": 14.252,
+            "p99_ms": 22.97,
+            "max_ms": 52.354,
+            "min_ms": 0.745,
+            "mean_ms": 6.151,
+            "stddev_ms": 5.42,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.046,
+            "p95_ms": 3.224,
+            "p99_ms": 7.369,
+            "max_ms": 17.482,
+            "min_ms": 0.024,
+            "mean_ms": 0.403,
+            "stddev_ms": 1.434,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 390,
+          "matched_replenish_dist": {
+            "p50_ms": 6.387,
+            "p95_ms": 21.122,
+            "p99_ms": 31.429,
+            "max_ms": 52.94,
+            "min_ms": 1.181,
+            "mean_ms": 8.378,
+            "stddev_ms": 6.465,
+            "count": 390
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 75.655,
+            "p95_ms": 94.494,
+            "p99_ms": 97.055,
+            "max_ms": 99.15,
+            "min_ms": 13.27,
+            "mean_ms": 71.307,
+            "stddev_ms": 18.813,
+            "count": 390
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 8.373,
+            "p95_ms": 18.004,
+            "p99_ms": 27.516,
+            "max_ms": 55.979,
+            "min_ms": 1.81,
+            "mean_ms": 10.043,
+            "stddev_ms": 7.037,
+            "count": 100
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 5164.827,
+            "p95_ms": 6280.017,
+            "p99_ms": 6380.372,
+            "max_ms": 6447.358,
+            "min_ms": 382.974,
+            "mean_ms": 4478.444,
+            "stddev_ms": 1662.48,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c10_t3",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 10,
+      "duration_sec": 18.398,
+      "total_cpu_sec": 23.0,
+      "throughput_tps": 27.18,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c10_t3.jsonl",
+      "raw_events_sha256": "6035b4eb535ed0473423566445fcf887c817704118a3a4d75e199d6eee693b5e",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 1606,
+        "evalsha_total_usec": 99378,
+        "evalsha_usec_per_call": 61.88,
+        "total_redis_commands": 4721
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 110,
+          "dispatcher_dequeue_start": 603,
+          "outbox_claim_commit": 110,
+          "task_transaction_commit": 500,
+          "redis_enqueue_start": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "lease_commit": 500,
+          "dispatcher_sleep_start": 492,
+          "dispatcher_sleep_end": 492,
+          "outbox_published_commit": 500,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 4.07,
+          "saturation_ratio_pct": 76.81,
+          "max_queue_depth": 224,
+          "mean_queue_depth": 109.01,
+          "max_active_workers": 10,
+          "mean_active_workers": 9.7
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 3.5996,
+          "qp_wall_seconds": 17.9549,
+          "active_duty_ratio_pct": 20.05
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 5.103,
+            "p95_ms": 15.933,
+            "p99_ms": 26.599,
+            "max_ms": 51.786,
+            "min_ms": 0.742,
+            "mean_ms": 6.832,
+            "stddev_ms": 5.487,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.047,
+            "p95_ms": 3.06,
+            "p99_ms": 7.797,
+            "max_ms": 9.212,
+            "min_ms": 0.03,
+            "mean_ms": 0.417,
+            "stddev_ms": 1.337,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 392,
+          "matched_replenish_dist": {
+            "p50_ms": 6.784,
+            "p95_ms": 22.814,
+            "p99_ms": 33.395,
+            "max_ms": 56.957,
+            "min_ms": 0.905,
+            "mean_ms": 9.271,
+            "stddev_ms": 7.103,
+            "count": 392
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 78.42,
+            "p95_ms": 95.483,
+            "p99_ms": 98.134,
+            "max_ms": 98.7,
+            "min_ms": 13.39,
+            "mean_ms": 73.182,
+            "stddev_ms": 18.974,
+            "count": 392
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 9.48,
+            "p95_ms": 28.705,
+            "p99_ms": 42.651,
+            "max_ms": 45.97,
+            "min_ms": 2.181,
+            "mean_ms": 11.888,
+            "stddev_ms": 8.689,
+            "count": 98
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 5266.771,
+            "p95_ms": 6271.99,
+            "p99_ms": 6357.204,
+            "max_ms": 6373.136,
+            "min_ms": 458.602,
+            "mean_ms": 4550.422,
+            "stddev_ms": 1682.951,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c20_t1",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 20,
+      "duration_sec": 18.906,
+      "total_cpu_sec": 23.047,
+      "throughput_tps": 26.45,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c20_t1.jsonl",
+      "raw_events_sha256": "dda220cb106fc588f1ee0e75627f24d0b5fce1cc9752d98c90e2604de55630a9",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 2358,
+        "evalsha_total_usec": 131570,
+        "evalsha_usec_per_call": 55.8,
+        "total_redis_commands": 6226
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 59,
+          "dispatcher_dequeue_start": 1355,
+          "outbox_claim_commit": 59,
+          "task_transaction_commit": 500,
+          "redis_enqueue_start": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "dispatcher_task_submitted": 500,
+          "lease_commit": 500,
+          "outbox_published_commit": 500,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500,
+          "dispatcher_sleep_start": 144,
+          "dispatcher_sleep_end": 144
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 2.06,
+          "saturation_ratio_pct": 30.5,
+          "max_queue_depth": 6,
+          "mean_queue_depth": 0.89,
+          "max_active_workers": 20,
+          "mean_active_workers": 17.74
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 5.6186,
+          "qp_wall_seconds": 8.0534,
+          "active_duty_ratio_pct": 69.77
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 10.446,
+            "p95_ms": 23.126,
+            "p99_ms": 33.606,
+            "max_ms": 50.36,
+            "min_ms": 0.875,
+            "mean_ms": 11.369,
+            "stddev_ms": 6.421,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.048,
+            "p95_ms": 13.663,
+            "p99_ms": 24.971,
+            "max_ms": 60.821,
+            "min_ms": 0.023,
+            "mean_ms": 2.287,
+            "stddev_ms": 5.681,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 127,
+          "matched_replenish_dist": {
+            "p50_ms": 19.072,
+            "p95_ms": 91.606,
+            "p99_ms": 146.766,
+            "max_ms": 190.196,
+            "min_ms": 0.663,
+            "mean_ms": 29.273,
+            "stddev_ms": 31.204,
+            "count": 127
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 54.68,
+            "p95_ms": 95.42,
+            "p99_ms": 99.597,
+            "max_ms": 100.0,
+            "min_ms": 3.77,
+            "mean_ms": 53.003,
+            "stddev_ms": 29.09,
+            "count": 127
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 72.516,
+            "p95_ms": 219.996,
+            "p99_ms": 257.098,
+            "max_ms": 311.759,
+            "min_ms": 5.78,
+            "mean_ms": 89.252,
+            "stddev_ms": 65.467,
+            "count": 353
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 921.134,
+            "p95_ms": 1069.981,
+            "p99_ms": 1105.384,
+            "max_ms": 1246.239,
+            "min_ms": 425.165,
+            "mean_ms": 913.135,
+            "stddev_ms": 109.827,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c20_t2",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 20,
+      "duration_sec": 19.126,
+      "total_cpu_sec": 24.438,
+      "throughput_tps": 26.14,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c20_t2.jsonl",
+      "raw_events_sha256": "1e71a10acd087c643707b67d0dfa48b6994c1353822da61795f9876886d655b2",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 2500,
+        "evalsha_total_usec": 137592,
+        "evalsha_usec_per_call": 55.04,
+        "total_redis_commands": 6512
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 60,
+          "dispatcher_dequeue_start": 1497,
+          "outbox_claim_commit": 60,
+          "task_transaction_commit": 500,
+          "redis_enqueue_start": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "lease_commit": 500,
+          "outbox_published_commit": 500,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500,
+          "dispatcher_sleep_start": 116,
+          "dispatcher_sleep_end": 116
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 3.39,
+          "saturation_ratio_pct": 24.54,
+          "max_queue_depth": 7,
+          "mean_queue_depth": 0.81,
+          "max_active_workers": 20,
+          "mean_active_workers": 17.45
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 5.2848,
+          "qp_wall_seconds": 7.1491,
+          "active_duty_ratio_pct": 73.92
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 10.115,
+            "p95_ms": 22.744,
+            "p99_ms": 31.22,
+            "max_ms": 47.55,
+            "min_ms": 0.604,
+            "mean_ms": 11.027,
+            "stddev_ms": 6.428,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.047,
+            "p95_ms": 10.987,
+            "p99_ms": 18.681,
+            "max_ms": 32.664,
+            "min_ms": 0.024,
+            "mean_ms": 1.598,
+            "stddev_ms": 4.115,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 104,
+          "matched_replenish_dist": {
+            "p50_ms": 19.038,
+            "p95_ms": 80.534,
+            "p99_ms": 150.825,
+            "max_ms": 202.072,
+            "min_ms": 0.123,
+            "mean_ms": 30.011,
+            "stddev_ms": 29.956,
+            "count": 104
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 51.55,
+            "p95_ms": 92.74,
+            "p99_ms": 99.875,
+            "max_ms": 100.0,
+            "min_ms": 2.59,
+            "mean_ms": 51.678,
+            "stddev_ms": 30.732,
+            "count": 104
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 78.825,
+            "p95_ms": 248.5,
+            "p99_ms": 298.803,
+            "max_ms": 330.922,
+            "min_ms": 3.532,
+            "mean_ms": 99.95,
+            "stddev_ms": 77.477,
+            "count": 376
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 906.392,
+            "p95_ms": 1041.725,
+            "p99_ms": 1090.846,
+            "max_ms": 1166.166,
+            "min_ms": 461.197,
+            "mean_ms": 897.975,
+            "stddev_ms": 100.774,
+            "count": 500
+          }
+        }
+      }
+    },
+    {
+      "trial_id": "s2c_W-01_c20_t3",
+      "series": "Series-2-Concurrency-Scaling",
+      "workload_id": "W-01",
+      "num_tasks": 500,
+      "concurrency": 20,
+      "duration_sec": 19.345,
+      "total_cpu_sec": 24.344,
+      "throughput_tps": 25.85,
+      "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2c\\events_s2c_W-01_c20_t3.jsonl",
+      "raw_events_sha256": "7fb00fd01826c087b583de805b19b9faff5de3a3f60547bc1227f3a6e4c8c748",
+      "unpersisted_records": 0,
+      "dropped_records": 0,
+      "redis_commandstats": {
+        "evalsha_calls": 2390,
+        "evalsha_total_usec": 130422,
+        "evalsha_usec_per_call": 54.57,
+        "total_redis_commands": 6289
+      },
+      "analysis": {
+        "event_counts": {
+          "outbox_claim_start": 59,
+          "dispatcher_dequeue_start": 1387,
+          "outbox_claim_commit": 59,
+          "task_transaction_commit": 500,
+          "api_request_received": 500,
+          "api_response_sent": 500,
+          "redis_enqueue_start": 500,
+          "redis_enqueue_complete": 500,
+          "redis_dequeue_complete": 500,
+          "lease_claim_start": 500,
+          "dispatcher_task_submitted": 500,
+          "lease_commit": 500,
+          "outbox_published_commit": 500,
+          "handler_start": 500,
+          "handler_end": 500,
+          "terminal_transaction_start": 500,
+          "terminal_commit": 500,
+          "dispatcher_sleep_start": 143,
+          "dispatcher_sleep_end": 143,
+          "redis_ack_complete": 500,
+          "worker_slot_released": 500
+        },
+        "invariants": {
+          "min_logical_queue_depth": 0,
+          "min_worker_occupancy": 0,
+          "enqueues_count": 500,
+          "dequeues_count": 500,
+          "acks_count": 500,
+          "balance_verified": true,
+          "duplicate_submissions_count": 0
+        },
+        "starvation_and_occupancy": {
+          "starvation_ratio_pct": 3.84,
+          "saturation_ratio_pct": 19.44,
+          "max_queue_depth": 5,
+          "mean_queue_depth": 0.78,
+          "max_active_workers": 20,
+          "mean_active_workers": 17.83
+        },
+        "dispatcher_active_duty": {
+          "active_in_qp_seconds": 5.7379,
+          "qp_wall_seconds": 7.3275,
+          "active_duty_ratio_pct": 78.31
+        },
+        "dequeue_timing": {
+          "round_trip_dist": {
+            "p50_ms": 10.538,
+            "p95_ms": 24.81,
+            "p99_ms": 33.525,
+            "max_ms": 41.361,
+            "min_ms": 1.815,
+            "mean_ms": 11.78,
+            "stddev_ms": 6.529,
+            "count": 500
+          },
+          "loop_overhead_dist": {
+            "p50_ms": 0.05,
+            "p95_ms": 14.426,
+            "p99_ms": 23.539,
+            "max_ms": 49.765,
+            "min_ms": 0.028,
+            "mean_ms": 2.124,
+            "stddev_ms": 5.483,
+            "count": 500
+          }
+        },
+        "replenishment_matching": {
+          "unambiguous_matched_count": 112,
+          "matched_replenish_dist": {
+            "p50_ms": 20.282,
+            "p95_ms": 101.624,
+            "p99_ms": 203.614,
+            "max_ms": 211.116,
+            "min_ms": 2.674,
+            "mean_ms": 33.308,
+            "stddev_ms": 37.084,
+            "count": 112
+          },
+          "per_interval_deq_ratio_pct_dist": {
+            "p50_ms": 52.365,
+            "p95_ms": 95.191,
+            "p99_ms": 97.696,
+            "max_ms": 99.39,
+            "min_ms": 2.16,
+            "mean_ms": 51.723,
+            "stddev_ms": 27.767,
+            "count": 112
+          },
+          "cohort_first_replenish_dist": {
+            "p50_ms": 68.111,
+            "p95_ms": 224.917,
+            "p99_ms": 276.635,
+            "max_ms": 316.889,
+            "min_ms": 2.464,
+            "mean_ms": 88.056,
+            "stddev_ms": 65.974,
+            "count": 368
+          },
+          "cohort_full_replenish_dist": {
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "min_ms": 0.0,
+            "mean_ms": 0.0,
+            "stddev_ms": 0.0,
+            "count": 0
+          }
+        },
+        "e2e_latency": {
+          "dist": {
+            "p50_ms": 928.308,
+            "p95_ms": 1084.69,
+            "p99_ms": 1158.791,
+            "max_ms": 1232.085,
+            "min_ms": 500.205,
+            "mean_ms": 925.088,
+            "stddev_ms": 105.716,
+            "count": 500
+          }
+        }
+      }
+    }
+  ]
+}
