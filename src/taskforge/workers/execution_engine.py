@@ -170,23 +170,22 @@ def execute_task(
         # Execute handler with timeout enforcement without blocking on executor __exit__
         handler = get_handler(task_type)
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        t_handler_start = time.perf_counter()
+
+        def timed_callable(fn: Any, arg: Any) -> Any:
+            started = time.perf_counter()
+            try:
+                return fn(arg)
+            finally:
+                record_task_execution_duration(task_type, time.perf_counter() - started)
+
         try:
-            future = executor.submit(handler, payload)
+            future = executor.submit(timed_callable, handler, payload)
             result_data = future.result(timeout=timeout_seconds)
-            t_handler_duration = time.perf_counter() - t_handler_start
-            record_task_execution_duration(task_type, t_handler_duration)
         except concurrent.futures.TimeoutError:
-            t_handler_duration = time.perf_counter() - t_handler_start
-            record_task_execution_duration(task_type, t_handler_duration)
             try:
                 executor.shutdown(wait=False, cancel_futures=True)
             except TypeError:
                 executor.shutdown(wait=False)
-            raise
-        except Exception:
-            t_handler_duration = time.perf_counter() - t_handler_start
-            record_task_execution_duration(task_type, t_handler_duration)
             raise
         finally:
             try:

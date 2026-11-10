@@ -306,6 +306,15 @@ class TaskRepository:
         curr_status = TaskStatus(task.status)
         nxt_status = TaskStatus(new_status)
 
+        TERMINAL_STATUS_SET = {
+            TaskStatus.SUCCESS,
+            TaskStatus.DEAD_LETTER,
+            TaskStatus.CANCELLED,
+            TaskStatus.FAILED,
+        }
+        was_terminal = curr_status in TERMINAL_STATUS_SET
+        is_new_terminal_transition = (not was_terminal) and (nxt_status in TERMINAL_STATUS_SET)
+
         if not force:
             validate_transition(curr_status, nxt_status)
 
@@ -340,15 +349,16 @@ class TaskRepository:
         self.db.commit()
         self.db.refresh(task)
 
-        if nxt_status == TaskStatus.CANCELLED:
-            record_task_completed(task.task_type, "CANCELLED")
-        elif nxt_status == TaskStatus.FAILED:
-            record_task_completed(task.task_type, "FAILED")
-        elif nxt_status == TaskStatus.DEAD_LETTER:
-            record_task_dead_letter(task.task_type)
-            record_task_completed(task.task_type, "DEAD_LETTER")
-        elif nxt_status == TaskStatus.SUCCESS:
-            record_task_completed(task.task_type, "SUCCESS")
+        if is_new_terminal_transition:
+            if nxt_status == TaskStatus.CANCELLED:
+                record_task_completed(task.task_type, "CANCELLED")
+            elif nxt_status == TaskStatus.FAILED:
+                record_task_completed(task.task_type, "FAILED")
+            elif nxt_status == TaskStatus.DEAD_LETTER:
+                record_task_dead_letter(task.task_type)
+                record_task_completed(task.task_type, "DEAD_LETTER")
+            elif nxt_status == TaskStatus.SUCCESS:
+                record_task_completed(task.task_type, "SUCCESS")
 
         # Invalidate read cache
         try:
@@ -569,7 +579,14 @@ class TaskRepository:
 
             self.db.commit()
             self.db.refresh(task)
-            record_task_completed(task.task_type, "SUCCESS")
+            was_terminal = curr_status in {
+                TaskStatus.SUCCESS,
+                TaskStatus.DEAD_LETTER,
+                TaskStatus.CANCELLED,
+                TaskStatus.FAILED,
+            }
+            if not was_terminal:
+                record_task_completed(task.task_type, "SUCCESS")
         except Exception:
             self.db.rollback()
             raise
@@ -730,8 +747,15 @@ class TaskRepository:
                 failure_reason = "timeout" if is_timeout else "exception"
                 record_task_retry(task.task_type, failure_reason)
             elif task.status == TaskStatus.DEAD_LETTER.value:
-                record_task_dead_letter(task.task_type)
-                record_task_completed(task.task_type, "DEAD_LETTER")
+                was_terminal = curr_status in {
+                    TaskStatus.SUCCESS,
+                    TaskStatus.DEAD_LETTER,
+                    TaskStatus.CANCELLED,
+                    TaskStatus.FAILED,
+                }
+                if not was_terminal:
+                    record_task_dead_letter(task.task_type)
+                    record_task_completed(task.task_type, "DEAD_LETTER")
         except Exception:
             self.db.rollback()
             raise

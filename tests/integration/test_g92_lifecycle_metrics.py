@@ -1,20 +1,41 @@
+import threading
 import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from prometheus_client import REGISTRY
 
 from taskforge.core.state_machine import TaskPriority, TaskStatus
 from taskforge.database.models import get_utc_now
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
 from taskforge.monitoring.metrics import (
+    ACTIVE_WORKERS,
+    API_REQUEST_DURATION,
+    API_REQUESTS_TOTAL,
+    DB_POOL_CONNECTIONS,
     DEAD_LETTER_TOTAL,
+    FAILURE_REASON_WHITELIST,
+    HTTP_METHOD_WHITELIST,
+    INITIATOR_WHITELIST,
     LEASE_RECOVERIES_TOTAL,
+    OUTBOX_LAG_SECONDS,
+    OUTBOX_PENDING_EVENTS,
+    POOL_STATE_WHITELIST,
+    PRIORITY_WHITELIST,
+    QUEUE_DEPTH,
+    RATE_LIMIT_EXCEEDED_TOTAL,
+    RECOVERY_RESULT_WHITELIST,
     RETRIES_TOTAL,
+    ROUTE_WHITELIST,
+    STATUS_CODE_CLASS_WHITELIST,
+    STATUS_WHITELIST,
     TASK_EXECUTION_DURATION,
     TASK_QUEUE_WAIT,
+    TASK_TYPE_WHITELIST,
     TASKS_COMPLETED,
     TASKS_SUBMITTED,
+    TELEMETRY_SCRAPE_ERRORS_TOTAL,
     normalize_failure_reason,
     normalize_initiator,
     normalize_priority,
@@ -133,7 +154,7 @@ def test_acceptance_3_fencing_duplicate_stale_deliveries_no_metrics(repo):
 
 
 def test_acceptance_4_execution_timing_handler_only(repo):
-    """Acceptance Test 4: Handler duration excludes deserialization, lease renewal, and result persistence."""
+    """Acceptance Test 4: Handler duration measured strictly inside callable thread wrapper, excluding overhead."""
     task_type = "webhook_send"
 
     # Register timed mock handler that runs for exactly 50ms
@@ -165,8 +186,46 @@ def test_acceptance_4_execution_timing_handler_only(repo):
 
     assert count_after == count_before + 1
     duration_recorded = sum_after - sum_before
-    # Recorded duration should strictly reflect the handler execution (~0.05s) and not include external overhead
+    # Recorded duration should strictly reflect the handler execution (~0.05s) and not include external scheduling overhead
     assert sleep_seconds <= duration_recorded < 0.35, f"Unexpected handler duration: {duration_recorded}"
+
+
+def test_acceptance_4_timeout_does_not_record_premature_caller_duration(repo):
+    """Finding 1 Verification: A timed-out task does not record premature elapsed duration from caller."""
+    task_type = "image_resize"
+    handler_unblock = threading.Event()
+
+    def hanging_handler(payload):
+        # Blocks until explicitly unblocked by test teardown
+        handler_unblock.wait(timeout=2.0)
+        return {"hung": False}
+
+    register_handler(task_type)(hanging_handler)
+
+    res = repo.create_task(
+        task_name="hanging_task",
+        task_type=task_type,
+        payload={},
+        priority=TaskPriority.MEDIUM.value,
+        timeout_seconds=1,  # Authoritative 1s timeout
+    )
+    task_id = res.task.id
+
+    metric = TASK_EXECUTION_DURATION.labels(task_type=task_type)
+    count_before = _get_histogram_count(metric)
+
+    # Execute task with timeout - caller times out
+    disp = execute_task(task_id, worker_id="worker-timeout-test", timeout_seconds=1)
+    # The caller caught TimeoutError and scheduled retry
+    assert disp in (ExecutionDisposition.RETRY_DURABLY_SCHEDULED, ExecutionDisposition.TERMINAL_FAILURE_RECORDED)
+
+    # While the thread is still running inside hanging_handler, caller must NOT have recorded a premature duration!
+    count_immediately_after = _get_histogram_count(metric)
+    assert count_immediately_after == count_before, "Caller must not record premature handler duration upon TimeoutError"
+
+    # Unblock handler thread so it can exit cleanly
+    handler_unblock.set()
+    time.sleep(0.1)
 
 
 def test_acceptance_5_retry_accounting_committed_transitions(repo):
@@ -244,6 +303,79 @@ def test_acceptance_6_dead_letter_accounting_exact_once(repo):
     assert completed_dlq_after == completed_dlq_before + 1, "Completed counter with DEAD_LETTER must increment exactly once"
 
 
+def test_terminal_transition_idempotency_all_terminal_states(repo):
+    """Finding 2.B Verification: Repeated updates on already-terminal tasks must NEVER increment completion metrics."""
+    # 1. CANCELLED state
+    res_cancel = repo.create_task("t_c", "report_generate", {}, TaskPriority.LOW.value)
+    tid_c = res_cancel.task.id
+    c_before = TASKS_COMPLETED.labels(task_type="report_generate", status="CANCELLED")._value.get()
+
+    repo.cancel_task(tid_c)
+    assert TASKS_COMPLETED.labels(task_type="report_generate", status="CANCELLED")._value.get() == c_before + 1
+
+    # Repeated update_status(force=True, CANCELLED) on already-CANCELLED task
+    repo.update_status(tid_c, TaskStatus.CANCELLED, force=True)
+    assert TASKS_COMPLETED.labels(task_type="report_generate", status="CANCELLED")._value.get() == c_before + 1
+
+    # 2. SUCCESS state
+    res_success = repo.create_task("t_s", "webhook_send", {}, TaskPriority.LOW.value)
+    tid_s = res_success.task.id
+    s_before = TASKS_COMPLETED.labels(task_type="webhook_send", status="SUCCESS")._value.get()
+
+    repo.update_status(tid_s, TaskStatus.RUNNING)
+    repo.update_status(tid_s, TaskStatus.SUCCESS)
+    assert TASKS_COMPLETED.labels(task_type="webhook_send", status="SUCCESS")._value.get() == s_before + 1
+
+    # Repeated transition on already-SUCCESS task
+    repo.update_status(tid_s, TaskStatus.SUCCESS, force=True)
+    assert TASKS_COMPLETED.labels(task_type="webhook_send", status="SUCCESS")._value.get() == s_before + 1
+
+    # 3. DEAD_LETTER state
+    res_dlq = repo.create_task("t_d", "csv_export", {}, TaskPriority.LOW.value)
+    tid_d = res_dlq.task.id
+    d_before = TASKS_COMPLETED.labels(task_type="csv_export", status="DEAD_LETTER")._value.get()
+    dlq_count_before = DEAD_LETTER_TOTAL.labels(task_type="csv_export")._value.get()
+
+    repo.update_status(tid_d, TaskStatus.RUNNING)
+    repo.update_status(tid_d, TaskStatus.DEAD_LETTER, force=True)
+    assert TASKS_COMPLETED.labels(task_type="csv_export", status="DEAD_LETTER")._value.get() == d_before + 1
+    assert DEAD_LETTER_TOTAL.labels(task_type="csv_export")._value.get() == dlq_count_before + 1
+
+    # Repeated transition on already-DEAD_LETTER task
+    repo.update_status(tid_d, TaskStatus.DEAD_LETTER, force=True)
+    assert TASKS_COMPLETED.labels(task_type="csv_export", status="DEAD_LETTER")._value.get() == d_before + 1
+    assert DEAD_LETTER_TOTAL.labels(task_type="csv_export")._value.get() == dlq_count_before + 1
+
+
+def test_repeated_lease_recovery_idempotency(repo):
+    """Finding 2.C Verification: A repeated recovery scan cannot count the same transition twice."""
+    now = get_utc_now()
+    task_type = "payment_reconcile"
+
+    res = repo.create_task("exp_task_idem", task_type, {}, TaskPriority.HIGH.value, max_retries=1)
+    t = res.task
+    t.status = TaskStatus.RUNNING.value
+    t.lease_token = "lease-tok-rep"
+    t.lease_expires_at = now - timedelta(seconds=90)
+    repo.db.commit()
+
+    requeued_before = LEASE_RECOVERIES_TOTAL.labels(initiator="supervisor", recovery_result="requeued")._value.get()
+
+    # First recovery scan: reaps the task to RETRY_WAIT
+    recovered_1 = repo.recover_expired_leases(initiator="supervisor")
+    assert any(r.task_id == t.id for r in recovered_1)
+
+    requeued_after_1 = LEASE_RECOVERIES_TOTAL.labels(initiator="supervisor", recovery_result="requeued")._value.get()
+    assert requeued_after_1 > requeued_before
+
+    # Immediate second recovery scan: task is in RETRY_WAIT, not RUNNING -> matches 0 tasks
+    recovered_2 = repo.recover_expired_leases(initiator="supervisor")
+    assert not any(r.task_id == t.id for r in recovered_2)
+
+    requeued_after_2 = LEASE_RECOVERIES_TOTAL.labels(initiator="supervisor", recovery_result="requeued")._value.get()
+    assert requeued_after_2 == requeued_after_1, "Repeated recovery scan must not increment recovery metric"
+
+
 def test_acceptance_7_telemetry_isolation(repo, monkeypatch):
     """Acceptance Test 7: Metrics collection failures cannot change task outcomes."""
     task_type = "payment_reconcile"
@@ -306,6 +438,92 @@ def test_acceptance_8_cardinality_label_normalization():
     assert normalize_recovery_result("requeued") == "requeued"
     assert normalize_recovery_result("abandoned") == "abandoned"
     assert normalize_recovery_result("unknown_result") == "requeued"
+
+
+def test_cardinality_ceiling_exhaustive_runtime_exposition():
+    """Finding 2.D Verification: Exhaustive population of all approved taxonomy combinations strictly conforms to 662 base series (855 total)."""
+    # 1. TASKS_SUBMITTED: 6 task_types * 4 priorities = 24
+    for t in list(TASK_TYPE_WHITELIST) + ["other"]:
+        for p in PRIORITY_WHITELIST:
+            TASKS_SUBMITTED.labels(task_type=t, priority=p).inc(0)
+
+    # 2. TASK_QUEUE_WAIT: 6 task_types * 4 priorities = 24 combinations * 12 buckets = 288 series
+    for t in list(TASK_TYPE_WHITELIST) + ["other"]:
+        for p in PRIORITY_WHITELIST:
+            TASK_QUEUE_WAIT.labels(task_type=t, priority=p).observe(0.1)
+
+    # 3. TASK_EXECUTION_DURATION: 6 task_types = 6 combinations * 11 buckets = 66 series
+    for t in list(TASK_TYPE_WHITELIST) + ["other"]:
+        TASK_EXECUTION_DURATION.labels(task_type=t).observe(0.01)
+
+    # 4. TASKS_COMPLETED: 6 task_types * 4 statuses = 24
+    for t in list(TASK_TYPE_WHITELIST) + ["other"]:
+        for s in STATUS_WHITELIST:
+            TASKS_COMPLETED.labels(task_type=t, status=s).inc(0)
+
+    # 5. RETRIES_TOTAL: 6 task_types * 4 failure_reasons = 24
+    for t in list(TASK_TYPE_WHITELIST) + ["other"]:
+        for f in list(FAILURE_REASON_WHITELIST) + ["other"]:
+            RETRIES_TOTAL.labels(task_type=t, failure_reason=f).inc(0)
+
+    # 6. DEAD_LETTER_TOTAL: 6 task_types = 6
+    for t in list(TASK_TYPE_WHITELIST) + ["other"]:
+        DEAD_LETTER_TOTAL.labels(task_type=t).inc(0)
+
+    # 7. QUEUE_DEPTH: 4 priorities = 4
+    for p in PRIORITY_WHITELIST:
+        QUEUE_DEPTH.labels(priority=p).set(0)
+
+    # 8. OUTBOX_PENDING_EVENTS = 1
+    OUTBOX_PENDING_EVENTS.set(0)
+
+    # 9. OUTBOX_LAG_SECONDS = 1
+    OUTBOX_LAG_SECONDS.set(0)
+
+    # 10. LEASE_RECOVERIES_TOTAL: 2 initiators * 2 recovery_results = 4
+    for i in INITIATOR_WHITELIST:
+        for r in RECOVERY_RESULT_WHITELIST:
+            LEASE_RECOVERIES_TOTAL.labels(initiator=i, recovery_result=r).inc(0)
+
+    # 11. API_REQUEST_DURATION: 3 methods * 5 routes = 15 combinations * 10 buckets = 150 series
+    for m in list(HTTP_METHOD_WHITELIST) + ["other"]:
+        for route in list(ROUTE_WHITELIST) + ["other"]:
+            API_REQUEST_DURATION.labels(http_method=m, route=route).observe(0.01)
+
+    # 12. API_REQUESTS_TOTAL: 3 methods * 5 routes * 4 status_code_classes = 60
+    for m in list(HTTP_METHOD_WHITELIST) + ["other"]:
+        for route in list(ROUTE_WHITELIST) + ["other"]:
+            for sc in list(STATUS_CODE_CLASS_WHITELIST) + ["other"]:
+                API_REQUESTS_TOTAL.labels(http_method=m, route=route, status_code_class=sc).inc(0)
+
+    # 13. RATE_LIMIT_EXCEEDED_TOTAL: 5 routes = 5
+    for route in list(ROUTE_WHITELIST) + ["other"]:
+        RATE_LIMIT_EXCEEDED_TOTAL.labels(route=route).inc(0)
+
+    # 14. ACTIVE_WORKERS = 1
+    ACTIVE_WORKERS.set(0)
+
+    # 15. DB_POOL_CONNECTIONS: 3 pool_states = 3
+    for ps in POOL_STATE_WHITELIST:
+        DB_POOL_CONNECTIONS.labels(pool_state=ps).set(0)
+
+    # 16. TELEMETRY_SCRAPE_ERRORS_TOTAL = 1
+    TELEMETRY_SCRAPE_ERRORS_TOTAL.inc(0)
+
+    # Collect actual exported samples from Prometheus client registry
+    all_taskforge_samples = []
+    for metric in REGISTRY.collect():
+        if metric.name.startswith("taskforge_"):
+            for s in metric.samples:
+                all_taskforge_samples.append(s)
+
+    created_samples = [s for s in all_taskforge_samples if s.name.endswith("_created")]
+    base_samples = [s for s in all_taskforge_samples if not s.name.endswith("_created")]
+
+    # Exact equality against documented architectural contract budgets
+    assert len(base_samples) == 662, f"Expected 662 base series, got {len(base_samples)}"
+    assert len(created_samples) == 193, f"Expected 193 _created series, got {len(created_samples)}"
+    assert len(all_taskforge_samples) == 855, f"Expected 855 total series, got {len(all_taskforge_samples)}"
 
 
 def test_stage_7_lease_recovery_instrumentation(repo):
