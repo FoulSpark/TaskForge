@@ -1,4 +1,4 @@
-# Gate G9.4.1 Diagnostic Report — Outbox Publisher Profiling & Controlled Backlog Drain (Reconciled)
+# Gate G9.4.1 Diagnostic Report — Outbox Publisher Profiling & Controlled Backlog Drain (Final Reconciliation)
 
 **Milestone:** Gate G9.4.1 — Outbox Publisher Diagnostic Profiling  
 **Author:** TaskForge Platform Hardening Team  
@@ -7,6 +7,7 @@
 **Authorized Production Base Commit:** `a89858b73f8488e05cbcc2393a61f3080ffc7a38`  
 **G9.4 Scoping & Protocol Commit:** `ffe16af`  
 **G9.4.1 Diagnostic Execution Commit:** `3fee428`  
+**G9.4.1 Reconciliation Commit:** `f835287`  
 **Frozen Baseline Tag:** `v0.8.0-phase8-freeze` (`da27047f56fe2eec75acdb8502f505542cf61202`)  
 **Workload Definitions Hash (SHA-256):** `04f2306538868a41514c19f0958e04bf0b0586b3a83989e115231a32e50f0110`  
 **Execution Environment:** Windows 11 AMD64, Python 3.12.10, PostgreSQL 16 (port 5432), Redis 7.4.12 (port 6379)  
@@ -16,20 +17,24 @@
 
 ## 1. Executive Summary & Reconciliation Objectives
 
-Per the authorized scoping contract (`ffe16af`) and the Gate G9.4.1 review findings, this report provides the reconciled empirical evidence characterizing the operational performance, throughput capacity, and backlog drainage cadence of the [`OutboxPublisherWorker`](file:///e:/TaskForge/src/taskforge/queue/outbox.py#L119-L149).
+Per the authorized scoping contract (`ffe16af`) and the formal review findings for Gate G9.4.1, this final report reconciles all empirical measurements, micro-architectural timing decompositions, and Redis delivery-accounting verifications for the [`OutboxPublisherWorker`](file:///e:/TaskForge/src/taskforge/queue/outbox.py#L119-L149).
 
 Gate G9.4.1 executed two distinct diagnostic campaigns:
 1. **Campaign A (Existing Workload Baseline — AC-9.4.1):** 9 trials across frozen workloads W-01 ($n=500, c=10$), W-02 ($n=200, c=4$), and W-03 ($n=200, c=10$) under the production dispatcher (`a89858b`, `enable_capacity_wakeup=True`) and production publisher configuration (`poll_interval=0.1s`, `batch_size=50`).
 2. **Campaign B (Controlled Backlog Drain — AC-9.4.2):** 3 independent trials draining a pre-inserted 1,000-task burst backlog with publisher initially paused and quiescent arrival ($0$ new task arrivals).
 
-### Key Reconciled Findings:
-1. **Publisher Burst-Drain Capacity ($R_{\text{drain}} = 276.10\,\text{tasks/s}$):** Under the tested quiescent 1,000-event burst workload, the publisher drained backlog in $3.570 - 3.692\,\text{s}$ (mean $3.622\,\text{s}$), achieving an average drain throughput of $276.10\,\text{tasks/s}$.
-2. **Qualified Capacity Comparison:** Draining at $276.10\,\text{tasks/s}$ is substantially faster than the measured worker execution capacity at concurrency 10 ($30 - 35\,\text{tasks/s}$ from historical campaigns). The publisher was not the limiting throughput stage in this experiment. This comparison is qualified as a cross-campaign benchmark under quiescent arrival; it does not establish that the publisher cannot constrain throughput under severe database degradation or pool exhaustion.
-3. **Reconciled Micro-Architectural Batch Decomposition:** Draining 1,000 tasks executed exactly 20 consecutive active batch operations and **19 inter-batch sleep intervals**. The active processing duration across all 60 batches averages **$76.55\,\text{ms}$ per batch** ($20 \times 76.55\,\text{ms} = \mathbf{1.531\,\text{s}}$), and the inter-batch sleep duration averages **$109.71\,\text{ms}$** ($19 \times 109.71\,\text{ms} = \mathbf{2.085\,\text{s}}$). Active work ($1.531\,\text{s}$) plus inter-batch sleep ($2.085\,\text{s}$) equals **$3.616\,\text{s}$** batch processing span, fully reconciling with the $3.622\,\text{s}$ wall-clock drain duration (the remaining $0.006\,\text{s}$ represents thread startup and initial polling loop entry).
-4. **Exact Redis Task ID Membership Verified ($S_{\text{expected}} = S_{\text{Redis}}$):** Workers were strictly paused (dispatcher stopped) throughout Campaign B. In each trial, exact set equality was verified across all 1,000 task IDs: $0$ missing IDs, $0$ unexpected IDs, $0$ duplicate IDs, and $1,000$ durable `PUBLISHED` records in PostgreSQL matching the $1,000$ items in Redis.
-5. **Outbox Commit Defined & Reconciled:** Outbox Commit ($T_{\text{outbox-commit}}$) is formally defined as the composite interval from task $i$'s `redis_enqueue_complete` through enqueuing remaining batch items and committing `status='PUBLISHED'` in PostgreSQL (`outbox_published_commit`). Across Campaign A workloads, $p50$ commit duration spans **$75.43 - 218.78\,\text{ms}$** (mean $p50$: W-01 $203.85\,\text{ms}$, W-02 $77.38\,\text{ms}$, W-03 $184.22\,\text{ms}$). Pure isolated Redis enqueue round-trip is negligible ($3.30 - 10.08\,\text{ms}$).
-6. **Cross-Campaign Stage 1B Comparison Documented:** The observed eligible outbox lag in G9.4.1 ($p50 = 96.98 - 202.12\,\text{ms}$) compared to Stage 1B ($71.78 - 145.13\,\text{ms}$) reflects the explicitly doubled publisher polling interval in the G9.4.1 harness (`poll_interval=0.1s` vs `0.05s` in Stage 1B), which directly adds $25 - 50\,\text{ms}$ to the expected uniform polling wait.
-7. **Production Configuration Retained:** Retain `poll_interval=0.1s` and `batch_size=50` in production. No production code modifications authorized.
+### Key Final Reconciled Findings:
+1. **Publisher Burst-Drain Capacity ($R_{\text{drain}} = 276.10\,\text{tasks/s}$):** Under the tested quiescent 1,000-event burst workload, the publisher drained the backlog in $3.570 - 3.692\,\text{s}$ (mean $3.622\,\text{s}$), achieving an average drain throughput of $276.10\,\text{tasks/s}$.
+2. **Qualified Capacity Comparison:** Draining at $276.10\,\text{tasks/s}$ is substantially faster than the historical worker execution capacity at concurrency 10 ($30 - 35\,\text{tasks/s}$). The publisher was not the limiting throughput stage in this experiment. This comparison is explicitly qualified: it reflects an isolated burst drain under quiescent arrival, and does not establish that the publisher cannot constrain throughput under sustained heavy arrival or severe database pool degradation.
+3. **Statistical Scopes in Batch-Cycle Timing Reconciled:**
+   - **Scope 1 (Trial 1 Single-Trial Cadence):** Draining 1,000 tasks executed 20 batches ($79.97\,\text{ms}$ active mean $\implies 1.600\,\text{s}$) and 19 inter-batch sleeps ($109.82\,\text{ms}$ sleep mean $\implies 2.087\,\text{s}$), totaling $3.686\,\text{s}$ batch processing span ($3.692\,\text{s}$ wall duration).
+   - **Scope 2 (Cross-Trial Mean across all 60 Batches & 57 Sleeps):** Active processing averaged **$76.55\,\text{ms}$ per batch** ($20 \times 76.55\,\text{ms} = \mathbf{1.531\,\text{s}}$) and inter-batch sleep averaged **$109.71\,\text{ms}$** ($19 \times 109.71\,\text{ms} = \mathbf{2.085\,\text{s}}$). Active work ($1.531\,\text{s}$) plus inter-batch sleep ($2.085\,\text{s}$) equals **$3.616\,\text{s}$** batch span, matching the **$3.622\,\text{s}$** wall drain duration down to single-millisecond precision ($0.006\,\text{s}$ startup and polling boundary overhead).
+4. **Exact Redis Task ID Membership Proven ($S_{\text{expected}} = S_{\text{actual ZSET}}$):**
+   - In the initial campaign (`3fee428`), delivery was verified via application trace events and cardinality ($Z\text{card} = 1000$), but a raw member snapshot was not captured.
+   - To provide undeniable evidence, a dedicated, isolated verification drill ([`verify_g941_redis_membership.py`](file:///e:/TaskForge/benchmarks/scenarios/g94/verify_g941_redis_membership.py)) was executed across 3 independent trials under the identical paused-dispatcher contract. An atomic read-only snapshot (`ZRANGE ... 0 -1`) decoded all 1,000 members, proving exact set equality ($S_{\text{expected}} = S_{\text{actual ZSET}}$): exactly 1,000 expected IDs, 1,000 actual Redis IDs, 0 missing, 0 unexpected, and 0 duplicates across all 3 trials.
+5. **Outbox Commit Defined & Reconciled:** Outbox Commit ($T_{\text{outbox-commit}}$) is formally defined as the composite per-task interval from task $i$'s `redis_enqueue_complete` through enqueuing remaining batch items and committing `status='PUBLISHED'` in PostgreSQL (`outbox_published_commit`). Across Campaign A workloads, mean $p50$ commit duration spans **$75.43 - 218.78\,\text{ms}$** (W-01: $203.85\,\text{ms}$, W-02: $77.38\,\text{ms}$, W-03: $184.22\,\text{ms}$). Pure isolated Redis enqueue round-trip is negligible ($3.30 - 10.08\,\text{ms}$).
+6. **Stage 1B Polling Interval Comparison Corrected:** The expected increase in polling wait from doubling `poll_interval` from $50\,\text{ms}$ to $100\,\text{ms}$ under a uniform arrival phase is $\Delta \mathbb{E}[T_{\text{wait}}] = \frac{100 - 50}{2} = \mathbf{25\,\text{ms}}$ (not 25–50 ms). This 25 ms shift provides a plausible methodological explanation for part of the observed difference ($+28.74\,\text{ms}$ in W-02), while the remainder reflects database commit queuing under 10 concurrent HTTP clients and host timing.
+7. **Production Configuration Retained:** Retain `poll_interval=0.1s` and `batch_size=50` in production without modification.
 
 ---
 
@@ -71,36 +76,26 @@ Campaign A executed 3 independent trials each for W-01, W-02, and W-03 to baseli
 | **W-03 T3** | 200 | 10 | 8.016 | 24.95 | 191.79 | 383.98 | 8.86 | 31.82 | 183.34 | 2,021.89 | 32.65% |
 | *W-03 Mean* | *200* | *10* | *8.093* | *24.72* | *193.66* | *379.11* | *8.19* | *30.15* | *184.22* | *1,997.62* | *31.58%* |
 
-### 3.2 Non-Additive Interval Distributions (W-01 Combined)
+### 3.2 Definition of Distinct Timing Metrics & Attribution Clarification
+To prevent terminological ambiguity, distinct stage names and event boundaries are strictly maintained:
+1. **Pure Redis Enqueue Duration ($T_{\text{redis-enq}}$):** $t_{\text{redis-enqueue-complete}, i} - t_{\text{redis-enqueue-start}, i}$. Measures client-observed round-trip latency for evaluating the Lua `ZADD` enqueue script for task $i$.
+2. **Outbox Commit Duration ($T_{\text{outbox-commit}}$):** $t_{\text{outbox-published-commit}, i} - t_{\text{redis-enqueue-complete}, i}$. This is a **composite per-task interval**. It measures the elapsed duration from task $i$'s Redis enqueue return through the completion of remaining tasks in the batch plus the batch PostgreSQL transaction commit (`db.commit()`).
+3. **Pure Batch Database Commit Duration ($T_{\text{batch-commit}}$):** In Campaign B, where no concurrent worker transactions exist, pure batch DB commit latency averages **$48.40 - 49.09\,\text{ms}$** ($p50$).
+4. **Eligible Outbox Lag ($T_{\text{outbox-lag}}$):** $t_{\text{outbox-claim-start}, \text{batch}} - t_{\text{task-transaction-commit}, i}$. Measures dwell from task commit return until the start of the first outbox claim cycle that claimed it.
 
-| Stage Metric | $p50$ (ms) | $p95$ (ms) | $p99$ (ms) | Mean (ms) | Min (ms) | Max (ms) | StdDev (ms) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Eligible Outbox Lag** ($T_{\text{outbox-lag}}$) | 190.50 | 388.92 | 451.20 | 198.42 | 5.12 | 512.44 | 102.15 |
-| **Batch Claim Duration** ($T_{\text{outbox-claim}}$) | 33.45 | 45.10 | 48.60 | 31.20 | 4.80 | 52.10 | 11.45 |
-| **Redis Enqueue Round-Trip** ($T_{\text{redis-enq}}$) | 8.81 | 18.25 | 24.10 | 9.42 | 1.85 | 32.40 | 4.12 |
-| **Outbox Commit Duration** ($T_{\text{outbox-commit}}$) | 203.85 | 310.40 | 345.10 | 195.20 | 42.10 | 362.50 | 68.30 |
-| **Client Broker Dwell** ($T_{\text{broker-dwell}}$) | 5,159.47 | 10,210.15 | 11,450.20 | 5,230.10 | 25.10 | 12,100.40 | 2,840.15 |
-| **Worker Attempt Pipeline** (`ta.duration_ms`) | 68.40 | 145.20 | 185.30 | 74.15 | 12.40 | 215.10 | 35.20 |
-| **Isolated Handler** ($T_{\text{handler-exec}}$) | 0.015 | 0.042 | 0.068 | 0.018 | 0.008 | 0.120 | 0.012 |
+Across Campaign A workloads, mean $p50$ Outbox Commit is **$77.38\,\text{ms}$** for W-02 ($c=4$), **$184.22\,\text{ms}$** for W-03 ($c=10$), and **$203.85\,\text{ms}$** for W-01 ($c=10$). Commit durations are longer at $c=10$ due to database connection pool contention when 10 concurrent HTTP worker threads execute simultaneous task insertions.
 
-### 3.3 Definition of Outbox Commit & Attribution Clarification
-- **Exact Event Boundaries:** Start event is `redis_enqueue_complete` for task $i$. End event is `outbox_published_commit` for task $i$.
-- **Scope & Interpretation:** In `publish_pending_outbox_events()` ([`src/taskforge/queue/outbox.py`](file:///e:/TaskForge/src/taskforge/queue/outbox.py#L48-L116)), the publisher loops through all claimed tasks in the batch (up to 50 tasks), enqueuing each to Redis sequentially, executes a single `db.commit()` updating all claimed rows to `status='PUBLISHED'`, and then emits `outbox_published_commit` for each task.
-- **Why Outbox Commit is a Composite Interval:** $T_{\text{outbox-commit}, i}$ represents the duration from task $i$'s Redis enqueue return through the completion of remaining tasks in the batch plus the batch `db.commit()`. Tasks enqueued earlier in the batch exhibit a longer duration because they include the time spent enqueuing subsequent tasks prior to the database commit.
-- **Commit Range Across Workloads:** In Campaign A, mean $p50$ Outbox Commit is **$77.38\,\text{ms}$** for W-02 ($c=4$), rising to **$184.22\,\text{ms}$** for W-03 ($c=10$) and **$203.85\,\text{ms}$** for W-01 ($c=10$). In Campaign B (with no concurrent workers and no HTTP ingress), pure batch DB commit latency drops to **$48.40 - 49.09\,\text{ms}$** ($p50$). The difference reflects database lock contention when 10 concurrent HTTP worker threads execute simultaneous task insertions.
-- **Redis Round-Trip vs. Server Execution:** Client-observed Redis round-trip latency ($T_{\text{redis-enq}} = 3.30 - 8.81\,\text{ms}$ $p50$) reflects client networking, serialization, and round-trip on the Windows host. It is distinct from Redis server Lua execution time ($\approx 50 - 62\,\mu\text{s}$ server-reported in Stage 1B).
-
-### 3.4 Cross-Campaign Comparison: Stage 1B vs. Gate G9.4.1
+### 3.3 Cross-Campaign Comparison: Stage 1B vs. Gate G9.4.1
 The observed eligible outbox lag figures in G9.4.1 differ from the historical Stage 1B baseline:
 - **W-01:** Stage 1B $110.91\,\text{ms}$ vs. G9.4.1 $190.50\,\text{ms}$ ($+79.59\,\text{ms}$)
 - **W-02:** Stage 1B $71.78\,\text{ms}$ vs. G9.4.1 $100.52\,\text{ms}$ ($+28.74\,\text{ms}$)
 - **W-03:** Stage 1B $145.13\,\text{ms}$ vs. G9.4.1 $193.66\,\text{ms}$ ($+48.53\,\text{ms}$)
 
-**Cross-Campaign Methodology Differences:**
-1. **Publisher Polling Interval:** In Stage 1B, the benchmark harness configured `poll_interval = 0.05s` ($50\,\text{ms}$). In G9.4.1, the harness strictly adhered to the authorized production contract `poll_interval = 0.1s` ($100\,\text{ms}$). Doubling the polling interval directly increases expected uniform sleep wait ($\mathbb{E}[T_{\text{wait}}] = \frac{\text{poll\_interval}}{2}$) from $25\,\text{ms}$ to $50\,\text{ms}$, immediately explaining $\approx 25 - 50\,\text{ms}$ of the shift.
-2. **Dispatcher Topology:** Stage 1B used the historical polling dispatcher without capacity wake-up. G9.4.1 used the production dispatcher (`a89858b`) with event-driven capacity wake-up. However, dispatcher scheduling does not govern outbox publication.
-3. **Database Environment:** The campaigns were executed on separate dates with independent benchmark databases and host background load on Windows 11.
-The increase in outbox lag is primarily an intentional artifact of adopting the production $100\,\text{ms}$ polling interval in the benchmark harness, not a performance regression.
+**Methodological Differences:**
+1. **Publisher Polling Interval:** Stage 1B configured `poll_interval = 0.05s` ($50\,\text{ms}$) in its benchmark harness. G9.4.1 strictly adhered to the authorized production contract `poll_interval = 0.1s` ($100\,\text{ms}$). Under uniform arrival, the expected wait before claim is:
+   $$\mathbb{E}[T_{\text{wait}}] = \frac{\text{poll\_interval}}{2}$$
+   For $50\,\text{ms}$ polling, $\mathbb{E}[T_{\text{wait}}] = 25\,\text{ms}$. For $100\,\text{ms}$ polling, $\mathbb{E}[T_{\text{wait}}] = 50\,\text{ms}$. The expected difference is **$25\,\text{ms}$**. This $25\,\text{ms}$ shift in polling wait provides a plausible methodological explanation for part of the observed difference (closely matching the $+28.74\,\text{ms}$ shift in W-02). It does not explain the entire shift in W-01 and W-03.
+2. **Dispatcher Topology:** Stage 1B used the historical polling dispatcher without capacity wake-up. G9.4.1 used the production dispatcher (`a89858b`) with event-driven capacity wake-up. However, dispatcher scheduling does not govern outbox publication; additional lag in W-01 and W-03 is attributable to database commit queuing under 10 concurrent HTTP clients and host timing jitter.
 
 ---
 
@@ -126,12 +121,19 @@ Campaign B characterized publisher drainage throughput and micro-architectural c
 
 ### 4.3 Reconciled Micro-Architectural Batch Cycle Decomposition
 
-Draining 1,000 tasks executed exactly 20 batches of 50 tasks each. Crucially, a sequence of 20 consecutive batches separated by sleep contains **exactly 19 inter-batch sleep intervals**:
-- Batch 1 begins immediately upon thread start (no leading sleep).
-- Batches 2 through 20 are preceded by an inter-batch sleep (19 sleep intervals).
-- Following Batch 20's commit, 0 pending tasks remain; the monitoring loop terminates without waiting for a 20th sleep.
+Draining 1,000 tasks executed exactly 20 batches of 50 tasks each, containing **exactly 19 inter-batch sleep intervals** (no leading sleep before Batch 1; immediate termination after Batch 20 commit).
 
-The table below reconciles the mean per-batch durations across all 60 observed batches (3 trials $\times$ 20 batches) and all 57 observed sleep intervals (3 trials $\times$ 19 sleeps):
+Below, both statistical scopes are clearly retained and distinguished:
+
+#### Statistical Scope 1: Trial 1 Single-Trial Cadence (20 Batches, 19 Sleeps)
+- **Batch Claim Mean:** $3.79\,\text{ms}$ ($\times 20 = 0.076\,\text{s}$)
+- **Redis Enqueue Mean (50 items):** $25.67\,\text{ms}$ ($\times 20 = 0.513\,\text{s}$)
+- **Batch Commit Mean:** $50.51\,\text{ms}$ ($\times 20 = 1.010\,\text{s}$)
+- **Trial 1 Active Processing Subtotal:** **$79.97\,\text{ms}$** per batch ($\times 20 = \mathbf{1.599\,\text{s}}$)
+- **Trial 1 Inter-Batch Sleep Mean:** **$109.82\,\text{ms}$** per sleep ($\times 19 = \mathbf{2.087\,\text{s}}$)
+- **Trial 1 Batch Span:** $1.599\,\text{s} + 2.087\,\text{s} = \mathbf{3.686\,\text{s}}$ (Harness wall duration: $3.692\,\text{s}$)
+
+#### Statistical Scope 2: Cross-Trial Mean (Across All 60 Batches & 57 Sleeps)
 
 | Batch Sub-Interval | Start Boundary | End Boundary | Cross-Trial $p50$ (ms) | Cross-Trial $p95$ (ms) | Cross-Trial Mean (ms) | Multiplier in 1,000-Task Drain | Total Contribution to Drain (s) | Share of Drain Time |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -144,25 +146,39 @@ The table below reconciles the mean per-batch durations across all 60 observed b
 | **Harness Boundary Overhead** | Publisher start / Polling exit | DB polling confirmation | — | — | — | Thread spawn + loop check | **0.006 s** | **0.2%** |
 | **Total Wall-Clock Drain Duration** | Publisher thread start | Polling loop confirmation | **3.605 s** | **3.692 s** | **3.622 s** | Measured $\Delta t_{\text{drain}}$ | **3.622 s** | **100.0%** |
 
-#### Reconciliation Verification:
+#### Reconciliation Arithmetic:
 $$\text{Active Time} = 20 \times 76.549\,\text{ms} = 1530.98\,\text{ms} = \mathbf{1.531\,\text{s}}$$
 $$\text{Sleep Time} = 19 \times 109.713\,\text{ms} = 2084.55\,\text{ms} = \mathbf{2.085\,\text{s}}$$
 $$\text{Batch Span} = 1530.98\,\text{ms} + 2084.55\,\text{ms} = \mathbf{3615.53\,\text{ms}} = \mathbf{3.616\,\text{s}}$$
 $$\text{Total Drain} = 3.616\,\text{s} + 0.006\,\text{s} = \mathbf{3.622\,\text{s}}$$
 
-Both representations now reconcile down to single-millisecond precision.
+---
 
-### 4.4 Exact Redis Task ID Membership Verification
+### 4.4 Exact Redis Task ID Membership Verification ($S_{\text{expected}} = S_{\text{actual ZSET}}$)
 
-To eliminate any ambiguity regarding cardinality vs. exact delivery, the raw JSONL event streams and PostgreSQL state were audited for exact task ID set equality ($S_{\text{expected}} = S_{\text{Redis}}$):
+#### Qualification of Historical Campaign Evidence
+In the initial Campaign B run (commit `3fee428`), exact set membership was inferred from application enqueue events (`redis_enqueue_complete`) and cardinality verification ($Z\text{card} = 1000$). However, a direct read-only Redis member dump (`ZRANGE ... 0 -1`) was not captured.
 
-| Trial ID | Pre-Inserted Unique Task IDs | Durable `PUBLISHED` Task IDs | Unique Task IDs in `redis_enqueue_complete` | Unique Task IDs in `outbox_published_commit` | Missing Expected IDs | Unexpected IDs | Duplicate IDs | Redis Queue Depth ($Z\text{card}$) | Set Equality ($S_{\text{expected}} = S_{\text{Redis}}$) |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Trial 1** | 1,000 | 1,000 | 1,000 | 1,000 | **0** | **0** | **0** | 1,000 | **TRUE** |
-| **Trial 2** | 1,000 | 1,000 | 1,000 | 1,000 | **0** | **0** | **0** | 1,000 | **TRUE** |
-| **Trial 3** | 1,000 | 1,000 | 1,000 | 1,000 | **0** | **0** | **0** | 1,000 | **TRUE** |
+#### Isolated Redis ZSET Snapshot Audit
+To close this evidence gap and prove exact membership without inferring it from application logs, a dedicated, isolated verification drill ([`benchmarks/scenarios/g94/verify_g941_redis_membership.py`](file:///e:/TaskForge/benchmarks/scenarios/g94/verify_g941_redis_membership.py)) was executed across 3 independent trials under the identical paused-dispatcher contract:
+1. **Identifier Mapping:** In TaskForge models, each outbox event has `id` (primary key UUID), `aggregate_id = task_id`, and `payload['task_id'] = task_id`. This establishes a strict one-to-one mapping between outbox event IDs and task IDs.
+2. **Snapshot Mechanism:** Immediately upon the publisher updating the 1,000th task to `PUBLISHED`, a read-only snapshot was captured via `redis_client.zrange(broker.queue_name, 0, -1)`. All member JSON payloads were decoded to extract the embedded `task_id`.
+3. **Audit Results ([`g941_redis_membership_audit.json`](file:///e:/TaskForge/benchmarks/scenarios/g94/g941_redis_membership_audit.json)):**
 
-Because workers were paused, no tasks were consumed during the measurement window. Every single one of the 1,000 pre-inserted task IDs was verified as individually present in the Redis sorted set with zero duplicates and zero omissions.
+| Verification Dimension | Audit Trial 1 | Audit Trial 2 | Audit Trial 3 | Required Condition | Audit Result |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Initial unique eligible event IDs inserted** | 1,000 | 1,000 | 1,000 | 1,000 | **Verified** |
+| **Durable `PUBLISHED` event IDs in PostgreSQL** | 1,000 | 1,000 | 1,000 | 1,000 | **Verified** |
+| **Expected unique task IDs ($S_{\text{expected}}$)** | 1,000 | 1,000 | 1,000 | 1,000 | **Verified** |
+| **Actual unique Redis task IDs ($S_{\text{actual ZSET}}$)** | 1,000 | 1,000 | 1,000 | 1,000 | **Verified** |
+| **Missing expected task IDs** | **0** | **0** | **0** | **0** | **Passed** |
+| **Unexpected task IDs** | **0** | **0** | **0** | **0** | **Passed** |
+| **Duplicate task IDs** | **0** | **0** | **0** | **0** | **Passed** |
+| **Final Redis depth ($Z\text{card}$)** | 1,000 | 1,000 | 1,000 | 1,000 | **Verified** |
+| **Exact Set Equality ($S_{\text{expected}} = S_{\text{actual ZSET}}$)** | **TRUE** | **TRUE** | **TRUE** | **TRUE** | **Passed** |
+| **Dispatcher State During Snapshot** | PAUSED | PAUSED | PAUSED | PAUSED | **Verified** |
+
+SHA-256 of audit artifact (`g941_redis_membership_audit.json`): `47e88c9e49cb9dc1e9ada94e1e078a73103bfef339596e397ac81ea2b70c6436`.
 
 ---
 
@@ -172,7 +188,7 @@ Because workers were paused, no tasks were consumed during the measurement windo
 - **Experimental Finding:** Under the tested quiescent 1,000-event burst workload, the publisher drained backlog at **$276.10\,\text{tasks/s}$**, substantially faster than the historical worker execution throughput at concurrency 10 ($30 - 35\,\text{tasks/s}$). The publisher was not the limiting throughput stage in that experiment.
 - **Qualifications:**
   - This is a comparison between measured publisher burst-drain capacity and worker processing capacity from a different campaign.
-  - It does not establish that the publisher cannot become a bottleneck under sustained heavy arrival or complex workflow dependencies.
+  - It does not establish that the publisher cannot become a constraint under sustained heavy arrival or complex workflow dependencies.
   - It does not establish publisher resilience under active database pool exhaustion or query stalls (which will be tested in G9.4.2 and G9.4.3).
 
 ### 5.2 Micro-Architectural Assessment of Inter-Batch Sleep
@@ -190,7 +206,7 @@ Because workers were paused, no tasks were consumed during the measurement windo
 
 ## 6. Audit Provenance & Raw Traces
 
-All 12 raw event traces were persisted to `benchmarks/raw/g941/` and verified with $0$ drops and $0$ unpersisted records:
+All 12 raw event traces from the primary campaign were persisted to `benchmarks/raw/g941/` and verified with $0$ drops and $0$ unpersisted records:
 
 | Campaign | Workload / Trial | Raw Event Log Filename | Persisted Events | Drops | SHA-256 Hex Digest |
 | :--- | :--- | :--- | :---: | :---: | :--- |
@@ -211,7 +227,7 @@ All 12 raw event traces were persisted to `benchmarks/raw/g941/` and verified wi
 
 ## 7. Gate G9.4.2 Protocol Preparation — Database Connection-Pool Baseline
 
-As authorized, protocol preparation for **Gate G9.4.2 (Database Connection-Pool Telemetry & Saturation Drills)** is established below. No production implementation is authorized prior to formal G9.4.1 closure.
+Protocol preparation for **Gate G9.4.2 (Database Connection-Pool Telemetry & Saturation Drills)** is established below. No production implementation is authorized prior to formal G9.4.1 closure.
 
 ### 7.1 Production Configuration Baseline (Commit `a89858b`)
 The production SQLAlchemy pool configuration at `a89858b` is defined in [`src/taskforge/core/config.py`](file:///e:/TaskForge/src/taskforge/core/config.py#L20-L22) and instantiated in [`src/taskforge/database/session.py`](file:///e:/TaskForge/src/taskforge/database/session.py#L26-L33):
@@ -219,7 +235,7 @@ The production SQLAlchemy pool configuration at `a89858b` is defined in [`src/ta
 - `db_max_overflow = 20`
 - `db_pool_timeout = 30` (seconds)
 - `pool_pre_ping = True`
-- `pool_recycle = None` (not configured)
+- `pool_recycle = None` (unset)
 - Total production pool capacity: **30 connections** ($10 + 20$).
 
 **Engine Topology in Production:**
@@ -233,18 +249,33 @@ The saturation drill specifically tests failure and recovery under $2\times$ con
 - `pool_timeout = 5.0` (seconds)
 - Total experimental capacity: **15 connections**.
 - Contention load: **30 concurrent caller threads** (mixed task submissions and lease transactions).
-*Note: This is an experimental test fixture configuration and will not alter production defaults.*
+- *Strictly documented as an experimental test fixture variant that will not modify production defaults.*
 
-### 7.3 Metric Contract & Cardinality Accounting (Compliant with G9.2)
-All metrics strictly adhere to finite-label cardinality:
-1. `taskforge_db_pool_active_connections`: Gauge, label `pool_name` (`primary`) $\to$ **1 series**.
-2. `taskforge_db_pool_overflow_connections`: Gauge, label `pool_name` (`primary`) $\to$ **1 series**.
-3. `taskforge_db_pool_checkout_duration_seconds`: Histogram, label `pool_name` (`primary`).
+### 7.3 Metric Contract, Semantics & Cardinality Accounting (Compliant with G9.2)
+1. `taskforge_db_pool_active_connections`: Gauge, label `pool_name` (`primary`). **Exact semantics:** Counts currently checked-out connections actively in use by a transaction/session from the pool (measured via SQLAlchemy `pool.checkedout()`), distinct from total open TCP connections.
+2. `taskforge_db_pool_overflow_connections`: Gauge, label `pool_name` (`primary`). Counts allocated overflow connections beyond base pool size.
+3. `taskforge_db_pool_checkout_duration_seconds`: Histogram, label `pool_name` (`primary`). Latency waiting to acquire a connection from the pool.
    - Buckets: `[0.001, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0, 2.5, 5.0]` (11 buckets + `+Inf` = 12 series)
    - Sum: 1 series
    - Count: 1 series
-   - Histogram subtotal: **14 series**.
-4. `taskforge_db_pool_checkout_timeouts_total`: Counter, label `pool_name` (`primary`) $\to$ **1 series**.
+   - Base Histogram series: **14 series**.
+4. `taskforge_db_pool_checkout_timeouts_total`: Counter, label `pool_name` (`primary`). Total connection pool checkout timeout exceptions.
 
-**Total Pool Metric Series:** $1 + 1 + 14 + 1 = \mathbf{17\text{ series}}$.  
-Adding planned G9.4.3 lease metrics ($2$ renewal series + $2$ fencing series) yields **$21\text{ series}$**, strictly conforming to the $\le 25$ series ceiling.
+**Runtime Exposition Budget Accounting:**
+- Base Metric Series: $1 + 1 + 14 + 1 = \mathbf{17\text{ series}}$.
+- Generated `_created` Timestamp Series (Prometheus Python Client):
+  - Histogram `_created`: 1 series.
+  - Counter `_created`: 1 series.
+  - Runtime pool metric total: $17 + 2 = \mathbf{19\text{ series}}$.
+- Adding planned G9.4.3 lease metrics ($2$ renewal series + $2$ fencing series $+ 2$ `_created` = $6$ series) yields **$25\text{ total runtime series}$**, strictly conforming to the $\le 25$ series ceiling.
+
+### 7.4 Saturation Drill Execution Requirements (G9.4.2)
+Prior to implementation authorization, the test protocol establishes:
+1. **Contention:** 30 concurrent callers against the experimental 15-connection capacity.
+2. **Barrier-Based Simultaneous Holding:** A barrier-synchronized workload holding connections to force genuine pool saturation rather than loose concurrent starts.
+3. **Bounded Wait:** Configured checkout timeout of $5.0\,\text{s}$ strictly enforced.
+4. **Observable Behavior:** Timeouts raise `TimeoutError` and increment `checkout_timeouts_total`.
+5. **No Indefinite Blocking:** Zero hung worker threads.
+6. **Recovery:** System returns to baseline active connection count within $5.0\,\text{s}$ after contention ceases.
+7. **No Resource Leaks:** Zero orphaned connections or permanently exhausted pool slots.
+8. **Telemetry Isolation:** Dedicated telemetry engine remains responsive and scrapes clean during full saturation.

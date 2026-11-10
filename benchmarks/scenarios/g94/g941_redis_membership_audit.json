@@ -1,0 +1,120 @@
+{
+  "audit_timestamp_utc": "2026-11-10T19:51:29.002791+00:00",
+  "milestone": "G9.4.1_redis_membership_verification",
+  "trials": [
+    {
+      "trial_id": "Audit-T1",
+      "burst_count": 1000,
+      "drain_duration_s": 3.893,
+      "dispatcher_state": "PAUSED_THROUGHOUT",
+      "initial_unique_eligible_event_ids": 1000,
+      "durable_published_event_ids": 1000,
+      "expected_unique_task_ids": 1000,
+      "actual_redis_raw_member_count": 1000,
+      "actual_unique_redis_task_ids": 1000,
+      "missing_task_ids_count": 0,
+      "unexpected_task_ids_count": 0,
+      "duplicate_redis_task_ids_count": 0,
+      "final_redis_depth_zcard": 1000,
+      "exact_set_equality_s_expected_eq_s_redis": true,
+      "sample_mappings": [
+        {
+          "event_id": "394c928d-02a5-42cb-bb3e-65411e20908b",
+          "task_id": "62fdc40c-540b-4886-a49c-7a467461d59c"
+        },
+        {
+          "event_id": "b1569382-355d-4947-8d1d-a0aeb9e398f1",
+          "task_id": "deff0b95-6344-47ef-8536-1de45204a313"
+        },
+        {
+          "event_id": "e39fc1ea-ea0c-4443-89e3-78f42007a6f9",
+          "task_id": "27a16a01-ecc0-46b1-903f-1f8bc822f99d"
+        },
+        {
+          "event_id": "4501eea9-35d3-4693-b59c-82757ca25def",
+          "task_id": "356e8afe-f6db-4c98-8067-f7218e8e5778"
+        },
+        {
+          "event_id": "5bdb4f25-a475-4229-9c90-8ea094702db2",
+          "task_id": "4006fdf6-142c-4267-8776-afe01faa95c9"
+        }
+      ]
+    },
+    {
+      "trial_id": "Audit-T2",
+      "burst_count": 1000,
+      "drain_duration_s": 3.926,
+      "dispatcher_state": "PAUSED_THROUGHOUT",
+      "initial_unique_eligible_event_ids": 1000,
+      "durable_published_event_ids": 1000,
+      "expected_unique_task_ids": 1000,
+      "actual_redis_raw_member_count": 1000,
+      "actual_unique_redis_task_ids": 1000,
+      "missing_task_ids_count": 0,
+      "unexpected_task_ids_count": 0,
+      "duplicate_redis_task_ids_count": 0,
+      "final_redis_depth_zcard": 1000,
+      "exact_set_equality_s_expected_eq_s_redis": true,
+      "sample_mappings": [
+        {
+          "event_id": "90ab4185-19e7-4e87-8fe8-bb06817666b8",
+          "task_id": "a10fea91-78e9-43a8-af02-1823e68269cc"
+        },
+        {
+          "event_id": "9858e9e8-8da2-49c4-95ac-6a4ee1e16180",
+          "task_id": "9ce7db33-40b0-429c-bfe1-4a87aaf77e2d"
+        },
+        {
+          "event_id": "0ced3d10-76f7-4d3f-aab8-c55036a57890",
+          "task_id": "818ea768-f186-49e4-ac94-2fe7fab6d77d"
+        },
+        {
+          "event_id": "05f654d8-05a4-4bc1-bc32-081be9f451fa",
+          "task_id": "dd1975b9-7526-4595-91bb-2fa9d647bd4a"
+        },
+        {
+          "event_id": "d4982131-e996-4d9f-98b7-135fa9bfdd1c",
+          "task_id": "94a626fb-cdc4-479d-bc84-c80c17f9be14"
+        }
+      ]
+    },
+    {
+      "trial_id": "Audit-T3",
+      "burst_count": 1000,
+      "drain_duration_s": 4.305,
+      "dispatcher_state": "PAUSED_THROUGHOUT",
+      "initial_unique_eligible_event_ids": 1000,
+      "durable_published_event_ids": 1000,
+      "expected_unique_task_ids": 1000,
+      "actual_redis_raw_member_count": 1000,
+      "actual_unique_redis_task_ids": 1000,
+      "missing_task_ids_count": 0,
+      "unexpected_task_ids_count": 0,
+      "duplicate_redis_task_ids_count": 0,
+      "final_redis_depth_zcard": 1000,
+      "exact_set_equality_s_expected_eq_s_redis": true,
+      "sample_mappings": [
+        {
+          "event_id": "02f4ccf1-3db1-476e-96c3-11a33edee011",
+          "task_id": "770605c4-16d1-4d1e-babb-478a206dc78d"
+        },
+        {
+          "event_id": "4fa6d6d7-a0b7-447a-afdb-64bd233abce1",
+          "task_id": "1a40daab-ef03-4d37-8128-85bbafe83d78"
+        },
+        {
+          "event_id": "621abe49-2fe6-470d-9b83-2541370f4d50",
+          "task_id": "ae1e4059-6849-4ee7-96db-da678886fff2"
+        },
+        {
+          "event_id": "569c2930-b3d2-4a8c-9d0b-8f23e6c65b04",
+          "task_id": "0806f63d-0631-4d45-be37-9bdc62c4fe34"
+        },
+        {
+          "event_id": "5320e28d-4cea-4d38-8030-41d349789013",
+          "task_id": "55e75e0a-bd3c-4c00-9b3c-12fdd3b8eb45"
+        }
+      ]
+    }
+  ]
+}
