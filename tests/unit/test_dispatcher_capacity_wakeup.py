@@ -203,3 +203,110 @@ def test_capacity_wakeup_fallback_timeout():
 
     assert waited is False # Timed out
     assert 0.08 <= (t1 - t0) <= 0.15
+
+
+def test_capacity_wakeup_default_enabled():
+    """Verify that WorkerDispatcher defaults to enable_capacity_wakeup=True in production configuration."""
+    broker = MemoryBroker()
+    disp_default = WorkerDispatcher(broker=broker)
+    assert disp_default.enable_capacity_wakeup is True
+
+    disp_disabled = WorkerDispatcher(broker=broker, enable_capacity_wakeup=False)
+    assert disp_disabled.enable_capacity_wakeup is False
+
+
+def test_capacity_wakeup_worker_exception_signals_event(monkeypatch):
+    """Verify that worker exceptions in handler/pipeline still execute finally block,
+    decrement active tasks, and set capacity event promptly."""
+    broker = MemoryBroker()
+    dispatcher = WorkerDispatcher(
+        worker_id="test-wakeup-error",
+        concurrency=1,
+        broker=broker,
+        poll_interval=0.5,
+        enable_capacity_wakeup=True,
+    )
+
+    # Monkeypatch execute_task to raise an error
+    def failing_execute(*args, **kwargs):
+        raise RuntimeError("simulated handler explosion")
+
+    monkeypatch.setattr("taskforge.workers.dispatcher.execute_task", failing_execute)
+
+    broker.enqueue("failing-task-1", 1, {"payload": "err"})
+    broker.enqueue("normal-task-2", 1, {"payload": "ok"})
+
+    dispatcher.start()
+
+    # The failing task should execute, raise, hit finally, set capacity event,
+    # and immediately wake the dispatcher to dequeue the second task.
+    start = time.perf_counter()
+    while time.perf_counter() - start < 0.4:
+        if broker.get_queue_depth() == 0:
+            break
+        time.sleep(0.01)
+
+    dur = time.perf_counter() - start
+    dispatcher.stop(grace_period_seconds=0.1)
+
+    assert broker.get_queue_depth() == 0
+    # Both tasks dequeued in < 0.3s without waiting for 0.5s polling timeout
+    assert dur < 0.35, f"Took too long to process after failure: {dur:.3f}s"
+
+
+def test_capacity_wakeup_high_contention_simultaneous_completions():
+    """Verify high-contention scenario: multiple workers finish simultaneously via a barrier
+    while the dispatcher is saturated. Verify all released capacity is utilized and no queued
+    task is left starved."""
+    broker = MemoryBroker()
+    concurrency = 4
+    dispatcher = WorkerDispatcher(
+        worker_id="test-wakeup-contention",
+        concurrency=concurrency,
+        broker=broker,
+        poll_interval=0.5, # Long 0.5s sleep if wakeup fails
+        enable_capacity_wakeup=True,
+    )
+
+    # Fill queue with 8 tasks (4 initial + 4 subsequent)
+    for i in range(8):
+        broker.enqueue(f"contention-task-{i}", 1, {"idx": i})
+
+    barrier = threading.Barrier(concurrency)
+    completed_tasks = []
+    lock = threading.Lock()
+
+    # Simulate workers holding slots until released together
+    orig_wrapper = dispatcher._task_wrapper
+
+    def controlled_wrapper(task_msg):
+        task_idx = task_msg.get("payload", {}).get("idx", 0)
+        if task_idx < concurrency:
+            # First batch of 4 tasks wait on barrier to release simultaneously
+            try:
+                barrier.wait(timeout=1.0)
+            except threading.BrokenBarrierError:
+                pass
+        with lock:
+            completed_tasks.append(task_idx)
+        orig_wrapper(task_msg)
+
+    dispatcher._task_wrapper = controlled_wrapper
+
+    t0 = time.perf_counter()
+    dispatcher.start()
+
+    # Wait for all 8 tasks to be completed
+    while time.perf_counter() - t0 < 1.0:
+        if len(completed_tasks) == 8 and broker.get_queue_depth() == 0:
+            break
+        time.sleep(0.02)
+
+    total_dur = time.perf_counter() - t0
+    dispatcher.stop(grace_period_seconds=0.1)
+
+    assert broker.get_queue_depth() == 0
+    assert len(completed_tasks) == 8
+    # 8 tasks processed with simultaneous releases must finish well under 2 * poll_interval (1.0s)
+    assert total_dur < 0.7, f"Contention processing took too long: {total_dur:.3f}s"
+

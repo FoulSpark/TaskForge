@@ -35,7 +35,7 @@ class WorkerDispatcher:
         broker: MessageBroker | None = None,
         poll_interval: float = 0.2,
         execution_mode: str = "thread",
-        enable_capacity_wakeup: bool = False,
+        enable_capacity_wakeup: bool = True,
     ):
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:6]}"
         self.concurrency = concurrency
@@ -215,7 +215,16 @@ class WorkerDispatcher:
                 active_after_inc = self._active_tasks
                 self._heartbeat.set_active_tasks(self._active_tasks)
 
-            self._executor.submit(self._task_wrapper, task_msg)
+            try:
+                self._executor.submit(self._task_wrapper, task_msg)
+            except Exception:
+                with self._active_lock:
+                    self._active_tasks = max(0, self._active_tasks - 1)
+                    self._heartbeat.set_active_tasks(self._active_tasks)
+                if self.enable_capacity_wakeup:
+                    self._capacity_event.set()
+                raise
+
             record_diagnostic_event(
                 "dispatcher_task_submitted",
                 task_id=task_id,

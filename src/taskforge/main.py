@@ -72,7 +72,11 @@ async def lifespan(app: FastAPI):
         outbox_publisher.start()
 
         worker_dispatcher = WorkerDispatcher(
-            worker_id="taskforge-worker-main", concurrency=4, broker=broker, poll_interval=0.1
+            worker_id="taskforge-worker-main",
+            concurrency=4,
+            broker=broker,
+            poll_interval=0.1,
+            enable_capacity_wakeup=True,
         )
         worker_dispatcher.start()
 
