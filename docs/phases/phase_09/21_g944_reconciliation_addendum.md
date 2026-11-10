@@ -196,3 +196,4 @@ Gate G9.4.4 adds 0 new series. The exposition remains exactly 25 net-new and 28 
 ## 7. Disposition
 
 All blocking findings (R1–R3) and the retry timing requirement have been reconciled with empirical evidence, mathematical proofs, and un-mocked OS transport verification. Gate G9.4.4 is submitted for formal closure.
+

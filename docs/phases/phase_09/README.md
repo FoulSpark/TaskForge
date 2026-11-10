@@ -23,6 +23,13 @@ This directory contains the milestone specifications, threat model, trust bounda
 15. [14_stage2_phase2c_diagnostic_report.md](14_stage2_phase2c_diagnostic_report.md): Stage 2 Phase 2C sequential dequeue target-lock report (batching rejected).
 16. [15_g93_final_performance_profiling_and_optimization_report.md](15_g93_final_performance_profiling_and_optimization_report.md): Gate G9.3 Stage 3 definitive end-to-end milestone synthesis report.
 17. [16_g94_operational_resilience_scope_and_contract.md](16_g94_operational_resilience_scope_and_contract.md): Gate G9.4 operational resilience and reliability hardening scope and measurement contract.
+18. [17_g941_outbox_publisher_diagnostic_report.md](17_g941_outbox_publisher_diagnostic_report.md): Gate G9.4.1 outbox publisher diagnostic and burst drain profiling report.
+19. [18_g942_connection_pool_resilience_report.md](18_g942_connection_pool_resilience_report.md): Gate G9.4.2 database connection pool telemetry and saturation report.
+20. [19_g943_lease_fencing_resilience_report.md](19_g943_lease_fencing_resilience_report.md): Gate G9.4.3 worker lease renewal telemetry and multi-worker fencing report.
+21. [20_g944_broker_outage_recovery_report.md](20_g944_broker_outage_recovery_report.md): Gate G9.4.4 broker reconnection and transient outage recovery report.
+22. [21_g944_reconciliation_addendum.md](21_g944_reconciliation_addendum.md): Gate G9.4.4 final evidence reconciliation addendum (R1–R3).
+23. [22_g94_operational_resilience_and_reliability_synthesis.md](22_g94_operational_resilience_and_reliability_synthesis.md): Gate G9.4 definitive operational resilience synthesis and closure report.
+
 
 
 
