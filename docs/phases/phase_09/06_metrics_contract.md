@@ -4,7 +4,7 @@
 
 Milestone G9.2 establishes end-to-end operational visibility into TaskForge runtime behavior without degrading throughput, leaking sensitive credentials, or introducing memory leaks via unbounded Prometheus label cardinality.
 
-This contract provides an exact mathematical per-instance cardinality budget, locks metric names and types, defines lifecycle measurement semantics and timestamp boundaries, establishes timeout budgets for health checks, and guarantees telemetry failure isolation.
+This contract provides an exact mathematical per-instance cardinality budget, locks metric names and types, defines lifecycle measurement semantics and timestamp boundaries, aligns queue depth with the Redis Sorted Set (`ZSET`) architecture, establishes enforceable timeout budgets for health checks, and guarantees telemetry failure isolation.
 
 ---
 
@@ -31,7 +31,12 @@ Every metric label must adhere to a strict finite whitelist. Any runtime value n
    - Fallback: `other` (any custom, legacy, or unregistered task type)
 2. **`priority` (Max 4 values):**
    - Whitelist: `critical`, `high`, `medium`, `low`
-   - Normalization: Integer priorities are mapped deterministically (`3` $\to$ `critical`, `2` $\to$ `high`, `1` $\to$ `medium`, `0` $\to$ `low`)
+   - Canonical Integer Mapping (matching `TaskPriority` enum in `src/taskforge/core/state_machine.py`):
+     * `4` $\to$ `critical`
+     * `3` $\to$ `high`
+     * `2` $\to$ `medium`
+     * `1` $\to$ `low`
+   - Fallback: `medium` (default system priority when integer is invalid or out of range)
 3. **`status` (Max 4 terminal values):**
    - Whitelist: `SUCCESS`, `FAILED`, `CANCELLED`, `DEAD_LETTER`
 4. **`http_method` (Max 3 values):**
@@ -91,11 +96,22 @@ To prevent cardinality explosion, `http_status` is explicitly excluded from the 
 | 13 | `taskforge_rate_limit_exceeded_total` | Counter | `route` (5) | 5 | 1 | **5** |
 | 14 | `taskforge_active_workers` | Gauge | None | 1 | 1 | **1** |
 | 15 | `taskforge_db_pool_connections` | Gauge | `pool_state` (3) | 3 | 1 | **3** |
-| **TOTAL** | **Per-Instance Series Ceiling** | — | — | — | — | **661** |
+| 16 | `taskforge_telemetry_scrape_errors_total` | Counter | None | 1 | 1 | **1** |
+| **SUBTOTAL** | **Base Metric Time-Series Ceiling** | — | — | — | — | **662** |
 
-### Deployment-Wide Series Budget:
-* **Per Application Instance:** A single TaskForge API instance or unified process produces a mathematical maximum of **661 time-series**.
-* **Cluster Deployment ($N$ Targets):** In a distributed deployment with $N$ scraped instances (e.g. 2 API pods + 2 worker pods = 4 targets), Prometheus scrapes each target independently, producing $4 \times 661 = 2,644$ series. When Prometheus federates or queries without `instance` labels, metric aggregations collapse back to the canonical 661-series dimension space.
+### Prometheus Client `_created` Series Accounting:
+The official Python `prometheus_client` library by default emits a `_created` timestamp series for every counter and histogram time-series.
+* **Base Metric Values:** **662 series** (guaranteed when `PROMETHEUS_DISABLE_CREATED_SERIES=true` is set).
+* **With Default Python `_created` Timestamps:**
+  - Counter `_created` series: $24 + 24 + 24 + 6 + 4 + 60 + 5 + 1 = 148$ series.
+  - Histogram `_created` series: $24 + 6 + 15 = 45$ series.
+  - Gauge series: 0 (gauges never emit `_created`).
+  - Total series with `_created` enabled: $662 + 148 + 45 = \mathbf{855\text{ series}}$.
+* **Per-Instance Budget Ceiling:** The per-instance series budget is formally locked at **662 base series** (or **855 series** under default Python client runtime behavior).
+
+### Cluster Deployment Multiplication ($N$ Targets):
+In a distributed deployment with $N$ scraped instances (e.g. 2 API pods + 2 worker pods = 4 targets):
+* Total scraped series across cluster: $4 \times 662 = \mathbf{2,648\text{ series}}$ (or $4 \times 855 = 3,420$ with `_created`).
 
 ---
 
@@ -176,12 +192,22 @@ sequenceDiagram
    - **Trigger Event:** Incremented exactly once when retry budget is exhausted and transition to `DEAD_LETTER` commits.
 7. **`taskforge_queue_depth` (Redis Architecture Alignment):**
    - **Actual Redis Structure:** TaskForge ready queue is a single Redis Sorted Set (`ZSET`) at `self.queue_name` (e.g. `taskforge:queue:tasks`).
-   - **Score Formula:** $\text{score} = (\text{priority} \times 10^{12}) - \text{seq}$, yielding disjoint bands:
-     * `critical` (priority 4): $[3 \times 10^{12} + 1 \dots 4 \times 10^{12}]$
-     * `high` (priority 3): $[2 \times 10^{12} + 1 \dots 3 \times 10^{12}]$
-     * `medium` (priority 2): $[1 \times 10^{12} + 1 \dots 2 \times 10^{12}]$
-     * `low` (priority 1): $[1 \dots 10^{12}]$
-   - **Collection Method:** Each priority tier depth is collected using $O(\log N)$ `ZCOUNT queue min_score max_score`. Total ready tasks equals `ZCARD queue`.
+   - **Score Formula & Boundaries:**
+     $$\text{score} = (\text{priority} \times 10^{12}) - \text{seq}$$
+     * `priority` $\in [1, 4]$ (`1` = LOW, `2` = MEDIUM, `3` = HIGH, `4` = CRITICAL).
+     * `seq` is generated per-priority via atomic Redis `INCR taskforge:seq:<priority>`, starting at 1.
+     * `seq` is strictly positive: $1 \le \text{seq} \le 10^{12} - 1$. If `seq > 999,999,999,999`, enqueue is rejected.
+     * Disjoint non-overlapping score intervals:
+       - `critical` (priority 4): $[3 \times 10^{12} + 1 \dots 4 \times 10^{12} - 1]$
+       - `high` (priority 3): $[2 \times 10^{12} + 1 \dots 3 \times 10^{12} - 1]$
+       - `medium` (priority 2): $[1 \times 10^{12} + 1 \dots 2 \times 10^{12} - 1]$
+       - `low` (priority 1): $[1 \dots 10^{12} - 1]$
+   - **Dispatch Ordering:** Dequeue executes `ZPOPMAX queue 1`. The highest score is popped first: higher priority tiers always pop before lower tiers; within a tier, smaller `seq` (older submission) yields higher score and pops first (strict FIFO).
+   - **Collection Method:** Each priority tier depth is collected using $O(\log N)$ `ZCOUNT queue min_score max_score`:
+     * `critical`: `ZCOUNT queue 3000000000001 4000000000000`
+     * `high`: `ZCOUNT queue 2000000000001 3000000000000`
+     * `medium`: `ZCOUNT queue 1000000000001 2000000000000`
+     * `low`: `ZCOUNT queue 1 1000000000000`
    - **Scope Restriction:** Does NOT count in-flight leased items in `taskforge:in_flight` or pending outbox rows in PostgreSQL.
 8. **`taskforge_outbox_pending_events`:**
    - **Definition:** Instantaneous count of rows in PostgreSQL `outbox_events` with `status = 'PENDING'`.
@@ -197,16 +223,28 @@ sequenceDiagram
     - **Prohibition:** O(N) `KEYS` commands are strictly forbidden in production collectors.
 12. **`taskforge_db_pool_connections`:**
     - **Definition:** Read from SQLAlchemy connection pool (`pool.checkedout()`, `pool.checkedin()`, `pool.overflow()`).
+13. **`taskforge_telemetry_scrape_errors_total`:**
+    - **Trigger Event:** Incremented whenever a background gauge snapshot refresh query fails, times out, or encounters database/Redis unavailability.
 
 ---
 
-## 5. Gauge Snapshot Caching & Scrape Performance
+## 5. Gauge Snapshot Caching, Single-Flight Refresh & Metric Ownership
 
+### 5.1 Gauge Snapshot Cache & Single-Flight Concurrency
 To prevent database pool starvation and Redis connection exhaustion from aggressive Prometheus scrape intervals:
 1. **Cached Gauge Snapshot:** Telemetry gauges (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`, `db_pool_connections`) are cached in memory with a **5.0-second TTL cache window**.
-2. **Freshness Guarantee:** If a scrape occurs within 5 seconds of the last poll, the cached snapshot is emitted immediately without issuing database queries.
-3. **Dedicated Telemetry Connections:** Scrapes use a separate, dedicated database engine with `pool_size=1, max_overflow=0` to guarantee application connection pools are never starved by metrics scraping.
-4. **Error Telemetry:** If a scrape query fails or times out, the previous cached snapshot is returned, and an internal Prometheus counter `taskforge_telemetry_scrape_errors_total` is incremented.
+2. **Single-Flight Refresh Guard:** A non-blocking thread lock (`threading.Lock`) protects snapshot refresh. When the 5-second TTL expires, exactly one thread executes the backend refresh queries. Concurrent scrape requests immediately receive the last valid cached snapshot without triggering duplicate backend load.
+3. **Cold-Start Fallback:** If the very first scrape occurs before any successful snapshot exists and the backend queries fail, affected gauges are omitted from the scrape response (or exposed with a dedicated freshness indicator), and `taskforge_telemetry_scrape_errors_total` is incremented. Uninitialized gauges will never emit misleading `0` values during cold-start failures.
+4. **Dedicated Telemetry Engine:** Scrapes use a separate, dedicated database engine with `pool_size=1, max_overflow=0` to guarantee application connection pools are never starved by metrics scraping.
+
+### 5.2 Metric Ownership & Aggregation Rules
+
+| Metric Category | Owned By | Aggregation Operator across Instances |
+| :--- | :--- | :--- |
+| **Shared-State Gauges** (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`) | Shared Infrastructure (Redis / PostgreSQL) | Use `max(...) by (priority)` or `avg(...)`. Never use `sum()`, which would double-count shared broker backlog across instances. |
+| **Process-Local Metrics** (`api_requests_total`, `api_request_duration_seconds`, `rate_limit_exceeded_total`) | Specific API Process | Use `sum(rate(...[5m]))` across instances. |
+| **Worker Execution Metrics** (`task_execution_duration_seconds`, `tasks_completed_total`, `retries_total`) | Specific Worker Process | Use `sum(rate(...[5m]))` across instances. |
+| **Connection Pool Gauges** (`db_pool_connections`) | Specific Process Engine | Use `sum(...) by (pool_state)` to monitor aggregate connection consumption across all running services. |
 
 ---
 
@@ -223,14 +261,14 @@ TaskForge exposes independent liveness and readiness endpoints:
 ### 6.2 Readiness Probe (`GET /health/ready`)
 * **Purpose:** Proves that the API instance has healthy connectivity to all downstream backing stores required to accept task ingestion.
 * **Absolute Request Deadline:** **Strict 1.0-second overall wall-clock deadline**.
-* **Enforcement Architecture:**
-  - Probes for PostgreSQL and Redis are executed with an overall `asyncio.wait_for(probe_dependencies(), timeout=1.0)` wrapper.
-  - **PostgreSQL Connection Budget:** SQLAlchemy connect timeout `connect_timeout=0.5` and statement timeout `statement_timeout=500`ms.
+* **Enforceable Asynchronous Probing:**
+  - Probes for PostgreSQL and Redis are executed in separate thread pools via `asyncio.to_thread` wrapped under a global `asyncio.wait_for(check_dependencies(), timeout=1.0)`.
+  - **PostgreSQL Connection Budget:** Psycopg connection timeout `connect_timeout=1` (integer seconds accepted by libpq) and statement timeout `statement_timeout=500`ms.
   - **Redis Connection Budget:** Redis socket connect timeout `socket_connect_timeout=0.5` and command timeout `socket_timeout=0.5`s.
 * **Failure Responses (HTTP 503 Service Unavailable):**
   - If any dependency fails, times out, or exceeds the 1.0-second global deadline, the probe immediately returns HTTP `503 Service Unavailable`.
 * **Sanitized Problem Details (Zero Credential Leakage):**
-  - Under no circumstances will database URLs, credentials, hostnames, or raw exception tracebacks be emitted in the 503 response body. The response format is strictly sanitized:
+  - Under no circumstances will database URLs, credentials, hostnames, or raw exception tracebacks be emitted in the 503 response body:
   ```json
   {
     "status": "not_ready",
