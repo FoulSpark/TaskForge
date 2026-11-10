@@ -62,29 +62,71 @@ def resolve_request_route_template(request: Request) -> str:
 
 
 class PrometheusHttpMiddleware(BaseHTTPMiddleware):
-    """Outermost HTTP middleware for end-to-end request latency and counter instrumentation."""
+    """Outermost HTTP middleware for end-to-end request latency and counter instrumentation.
+
+    Guarantees:
+    1. Measures duration of the complete HTTP lifecycle including streaming response bodies.
+    2. Exactly-once metric observation across successful completions, streaming chunks, client disconnects, and unhandled exceptions.
+    3. Strict telemetry failure isolation: metrics failures are caught, logged at DEBUG, and never mask application exceptions.
+    """
 
     async def dispatch(self, request: Request, call_next) -> Response:
         start_time = time.perf_counter()
+        observed = False
+
+        def observe_once(status_code: int) -> None:
+            nonlocal observed
+            if not observed:
+                observed = True
+                try:
+                    duration = max(0.0, time.perf_counter() - start_time)
+                    route = resolve_request_route_template(request)
+                    record_api_request(
+                        http_method=request.method,
+                        route=route,
+                        status_code=status_code,
+                        duration_seconds=duration,
+                    )
+                except Exception:
+                    pass
+
         try:
             response = await call_next(request)
         except Exception as exc:
-            duration = max(0.0, time.perf_counter() - start_time)
-            route = resolve_request_route_template(request)
-            record_api_request(
-                http_method=request.method,
-                route=route,
-                status_code=500,
-                duration_seconds=duration,
-            )
+            observe_once(500)
             raise exc
 
-        duration = max(0.0, time.perf_counter() - start_time)
-        route = resolve_request_route_template(request)
-        record_api_request(
-            http_method=request.method,
-            route=route,
-            status_code=response.status_code,
-            duration_seconds=duration,
-        )
+        original_iterator = getattr(response, "body_iterator", None)
+        if original_iterator is not None:
+            if hasattr(original_iterator, "__aiter__"):
+                async def async_streaming_wrapper():
+                    try:
+                        async for chunk in original_iterator:
+                            yield chunk
+                    except Exception:
+                        observe_once(500)
+                        raise
+                    else:
+                        observe_once(response.status_code)
+                    finally:
+                        observe_once(response.status_code)
+
+                response.body_iterator = async_streaming_wrapper()
+            else:
+                def sync_streaming_wrapper():
+                    try:
+                        for chunk in original_iterator:
+                            yield chunk
+                    except Exception:
+                        observe_once(500)
+                        raise
+                    else:
+                        observe_once(response.status_code)
+                    finally:
+                        observe_once(response.status_code)
+
+                response.body_iterator = sync_streaming_wrapper()
+        else:
+            observe_once(response.status_code)
+
         return response

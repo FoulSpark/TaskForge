@@ -67,6 +67,17 @@ def _get_metric_sample_count(metric_family_name: str) -> float:
     return total
 
 
+def _get_counter_sum(metric_family_name: str) -> float:
+    """Helper to sum all counter values across all label combinations."""
+    total = 0.0
+    for metric in REGISTRY.collect():
+        if metric.name == metric_family_name:
+            for sample in metric.samples:
+                if not sample.name.endswith("_created"):
+                    total += sample.value
+    return total
+
+
 # ==============================================================================
 # Category 1: AC-9 — Outermost Middleware Ordering & 429 Rejection Visibility
 # ==============================================================================
@@ -359,6 +370,111 @@ def test_unhandled_exception_records_5xx_and_propagates():
         http_method="GET", route="other", status_code_class="5xx"
     )._value.get()
     assert after_5xx == before_5xx + 1.0
+
+
+def test_streaming_response_duration_measures_complete_lifecycle():
+    """
+    Verify that for streaming responses:
+    1. The observed latency duration reflects the complete response body streaming lifecycle
+       (not terminating prematurely at response header creation / time-to-first-byte).
+    2. Exactly one duration observation and one request counter increment occur.
+    """
+    import asyncio
+    from starlette.applications import Starlette
+    from starlette.responses import StreamingResponse
+    from starlette.routing import Route
+    from taskforge.api.middleware import PrometheusHttpMiddleware
+
+    async def slow_stream_generator():
+        for i in range(3):
+            await asyncio.sleep(0.05)
+            yield f"chunk_{i}\n".encode("utf-8")
+
+    test_app = Starlette(routes=[Route("/stream", lambda r: StreamingResponse(slow_stream_generator()))])
+    test_app.add_middleware(PrometheusHttpMiddleware)
+
+    hist_child = API_REQUEST_DURATION.labels(http_method="GET", route="other")
+    before_count = get_histogram_count(hist_child)
+    before_sum = hist_child._sum.get()
+    before_reqs = API_REQUESTS_TOTAL.labels(http_method="GET", route="other", status_code_class="2xx")._value.get()
+
+    with TestClient(test_app) as client:
+        resp = client.get("/stream")
+        assert resp.status_code == 200
+        assert "chunk_0" in resp.text and "chunk_2" in resp.text
+
+    after_count = get_histogram_count(hist_child)
+    after_sum = hist_child._sum.get()
+    after_reqs = API_REQUESTS_TOTAL.labels(http_method="GET", route="other", status_code_class="2xx")._value.get()
+
+    # Exactly one observation
+    assert after_count == before_count + 1.0, f"Expected 1 observation, got {after_count - before_count}"
+    assert after_reqs == before_reqs + 1.0, f"Expected 1 request counter increment, got {after_reqs - before_reqs}"
+
+    # Measured duration must cover full stream lifetime (>= 0.15s), not just header creation (~0.001s)
+    delta_duration = after_sum - before_sum
+    assert delta_duration >= 0.14, (
+        f"Expected measured streaming duration >= 0.14s, got {delta_duration:.4f}s"
+    )
+
+
+def test_streaming_response_exception_observe_exactly_once():
+    """
+    Verify that an exception occurring during streaming produces exactly one observation
+    and cannot produce duplicate metrics.
+    """
+    from starlette.applications import Starlette
+    from starlette.responses import StreamingResponse
+    from starlette.routing import Route
+    from taskforge.api.middleware import PrometheusHttpMiddleware
+
+    async def failing_stream_generator():
+        yield b"chunk_1\n"
+        raise RuntimeError("STREAM_ABORTED_MID_STREAM")
+
+    test_app = Starlette(routes=[Route("/failing-stream", lambda r: StreamingResponse(failing_stream_generator()))])
+    test_app.add_middleware(PrometheusHttpMiddleware)
+
+    hist_child = API_REQUEST_DURATION.labels(http_method="GET", route="other")
+    before_count = get_histogram_count(hist_child)
+    before_reqs = API_REQUESTS_TOTAL.labels(http_method="GET", route="other", status_code_class="2xx")._value.get()
+
+    with pytest.raises(RuntimeError, match="STREAM_ABORTED_MID_STREAM"):
+        with TestClient(test_app, raise_server_exceptions=True) as client:
+            client.get("/failing-stream")
+
+    after_count = get_histogram_count(hist_child)
+    after_reqs = API_REQUESTS_TOTAL.labels(http_method="GET", route="other", status_code_class="2xx")._value.get()
+
+    # Invariant: exactly one observation occurred despite stream crash (no duplicate metrics)
+    assert after_count == before_count + 1.0
+    assert after_reqs == before_reqs + 1.0
+
+
+def test_telemetry_failure_does_not_mask_original_application_exception(monkeypatch):
+    """
+    Verify that if metric observation fails while processing an application exception,
+    the original application exception propagates unharmed without being masked.
+    """
+    from starlette.applications import Starlette
+    from starlette.routing import Route
+    from taskforge.api.middleware import PrometheusHttpMiddleware
+
+    def broken_metric_record(*args, **kwargs):
+        raise ZeroDivisionError("METRIC_CRASH_SIMULATION")
+
+    monkeypatch.setattr("taskforge.api.middleware.record_api_request", broken_metric_record)
+
+    def crashing_endpoint(request):
+        raise ValueError("CRITICAL_BUSINESS_EXCEPTION")
+
+    test_app = Starlette(routes=[Route("/app-crash", crashing_endpoint)])
+    test_app.add_middleware(PrometheusHttpMiddleware)
+
+    # Must raise the ORIGINAL application exception, not the metric recording exception
+    with pytest.raises(ValueError, match="CRITICAL_BUSINESS_EXCEPTION"):
+        with TestClient(test_app, raise_server_exceptions=True) as client:
+            client.get("/app-crash")
 
 
 # ==============================================================================
