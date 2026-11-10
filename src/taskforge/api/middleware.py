@@ -92,9 +92,9 @@ class PrometheusHttpMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-        except Exception as exc:
+        except Exception:
             observe_once(500)
-            raise exc
+            raise
 
         original_iterator = getattr(response, "body_iterator", None)
         if original_iterator is not None:
