@@ -229,12 +229,43 @@ sequenceDiagram
     - **Labels:** `initiator` (`supervisor` vs `operator`) $\times$ `recovery_result` (`requeued` if restored to `QUEUED`, `abandoned` if max retries exceeded).
 11. **`taskforge_active_workers` (Bounded Discovery):**
     - **Discovery Implementation:** Workers maintain heartbeats in a dedicated Redis sorted set `taskforge:workers:active` (member = `worker_id`, score = Unix epoch timestamp).
-    - **Collection Method:** The collector prunes stale entries using `ZREMRANGEBYSCORE taskforge:workers:active -inf (now - 15)` and reads `ZCARD taskforge:workers:active`.
-    - **Prohibition:** O(N) `KEYS` commands are strictly forbidden in production collectors.
-12. **`taskforge_db_pool_connections`:**
-    - **Definition:** Read from SQLAlchemy connection pool (`pool.checkedout()`, `pool.checkedin()`, `pool.overflow()`).
+    - **Collection Method & Complexity:**
+      * Stale worker pruning executes `ZREMRANGEBYSCORE taskforge:workers:active -inf (now - 15.0)` with time complexity $O(\log N + M)$, where $M$ is the number of removed members.
+      * Pruning threshold uses an authoritative 15-second cutoff ($\text{now} - 15.0$). Because active workers emit heartbeats every 5.0 seconds, this guarantees active workers are never prematurely removed.
+      * Active worker count is read via `ZCARD taskforge:workers:active` with time complexity $O(1)$.
+      * Queue depth queries execute `ZCOUNT queue min_score max_score` with time complexity $O(\log N)$.
+    - **Prohibition:** $O(N)$ `KEYS` commands are strictly forbidden in production collectors.
+12. **`taskforge_db_pool_connections` (Application Engine Ownership):**
+    - **Definition:** Read strictly from the *application* SQLAlchemy connection pool (`engine.pool.checkedout()`, `engine.pool.checkedin()`, `engine.pool.overflow()`), NOT the dedicated telemetry engine (`pool_size=1, max_overflow=0`).
+    - **Isolation Invariant:** The telemetry collector reads these connection state attributes in-memory without borrowing or checking out any connections from the application pool.
+    - **Labels:** `pool_state` (`checked_out`, `idle`, `overflow`).
+    - **Aggregation:** Emitted per process; aggregated across instances using `sum(...) by (pool_state)`.
 13. **`taskforge_telemetry_scrape_errors_total`:**
-    - **Trigger Event:** Incremented whenever a background gauge snapshot refresh query fails, times out, or encounters database/Redis unavailability.
+    - **Trigger Event:** Incremented whenever a background gauge snapshot refresh query fails, times out, or encounters database/Redis unavailability. Incremented exactly once per failed refresh attempt (never multiplied by the number of waiting concurrent scrapes).
+
+---
+
+### 4.3 HTTP Request Telemetry & Middleware Ordering
+
+1. **`taskforge_api_request_duration_seconds`:**
+   - **Definition:** Measures request-response lifecycle duration in seconds for HTTP endpoints.
+   - **Labels:** `http_method` (`GET`, `POST`, `other`) $\times$ `route` (normalized route template).
+   - **Buckets:** `[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 1.0]` (7 explicit thresholds; 10 series per label combination including `+Inf`, `_sum`, `_count`).
+2. **`taskforge_api_requests_total`:**
+   - **Definition:** Total count of completed HTTP requests.
+   - **Labels:** `http_method` $\times$ `route` $\times$ `status_code_class` (`2xx`, `4xx`, `5xx`, `other`).
+3. **`taskforge_rate_limit_exceeded_total`:**
+   - **Definition:** Total count of requests rejected due to rate limit exhaustion (HTTP 429).
+   - **Labels:** `route`.
+4. **Middleware Ordering & Rate-Limit Integration Invariant:**
+   - `PrometheusHttpMiddleware` wraps `RateLimitMiddleware` as the outer middleware layer.
+   - When `RateLimitMiddleware` rejects a request with HTTP 429, the response bubbles through `PrometheusHttpMiddleware`, ensuring:
+     * `taskforge_rate_limit_exceeded_total[route]` increments exactly once.
+     * `taskforge_api_requests_total[http_method, route, status_code_class="4xx"]` increments exactly once.
+     * `taskforge_api_request_duration_seconds[http_method, route]` records the rejection latency.
+5. **Framework Route Normalization (Zero Cardinality Leakage):**
+   - Route labels strictly use framework route templates (e.g. `request.scope.get("route").path` yielding `/api/v1/tasks/{id}`) rather than raw request URLs (`/api/v1/tasks/4a8f90...`).
+   - If a request does not match an approved framework route template, it is normalized to fallback `"other"`. Raw IDs, query parameters, and dynamic paths are strictly excluded from label values.
 
 ---
 
@@ -242,11 +273,39 @@ sequenceDiagram
 
 ### 5.1 Gauge Snapshot Cache & Single-Flight Concurrency
 To prevent database pool starvation and Redis connection exhaustion from aggressive Prometheus scrape intervals:
-1. **Cached Gauge Snapshot:** Telemetry gauges (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`, `db_pool_connections`) are cached in memory with a **5.0-second TTL cache window**.
-2. **Single-Flight Refresh Guard:** A non-blocking thread lock (`threading.Lock`) protects snapshot refresh. When the 5-second TTL expires, exactly one thread executes the backend refresh queries. Concurrent scrape requests immediately receive the last valid cached snapshot without triggering duplicate backend load.
-3. **Failed Refresh Preservation:** If a background refresh query fails, times out, or encounters database/Redis errors, the **previous valid snapshot is preserved intact** and continues to be served until a subsequent refresh succeeds. A failed refresh will NEVER clear, zero out, or overwrite a valid existing snapshot.
-4. **Cold-Start Fallback:** If the very first scrape occurs before any successful snapshot exists and the backend queries fail, affected gauges are completely omitted from the scrape exposition (never reporting fabricated `0` values), and `taskforge_telemetry_scrape_errors_total` is incremented.
+1. **Cached Gauge Snapshot:** Telemetry gauges (`queue_depth`, `outbox_pending_events`, `outbox_lag_seconds`, `active_workers`) are cached in memory with a **5.0-second TTL cache window**.
+2. **Single-Flight Refresh Guard & Operation Semantics:**
+   - **Single-Flight Guarantee:**
+     $$\boxed{\text{Concurrent refresh operations per process} \le 1}$$
+   - A non-blocking thread lock (`threading.Lock().acquire(blocking=False)`) guards the refresh cycle. When the 5-second TTL expires, exactly one thread initiates and executes the refresh operation across all backend collectors (PostgreSQL outbox pending count, outbox lag, Redis queue depth ZCOUNTs, worker discovery ZREMRANGEBYSCORE/ZCARD).
+   - A **refresh operation** is defined as the single cohesive execution cycle that runs these queries against PostgreSQL and Redis.
+   - Concurrent scrape requests arriving during an in-flight refresh operation immediately receive the last valid cached snapshot without triggering duplicate backend load.
+   - Backend query count during warm-cache expiry equals the queries required by that *single refresh operation* (not arbitrarily hardcoded to one single SQL query, as multiple queries across DB and Redis constitute the refresh operation).
+3. **Failed Refresh Preservation & Error Accounting:**
+   - If a background refresh query fails, times out, or encounters database/Redis errors:
+     1. The **previous valid snapshot is preserved intact** and continues to be served until a subsequent refresh succeeds.
+     2. A failed refresh will NEVER clear, zero out, or overwrite a valid existing snapshot.
+     3. Valid gauge values will NEVER be replaced with fabricated zeros.
+     4. `taskforge_telemetry_scrape_errors_total` is incremented **exactly once per failed refresh attempt** (never multiplied by the number of waiting concurrent scrapes).
+4. **Cold-Start Fallback:** If the very first scrape occurs before any successful snapshot exists and the backend queries fail, affected backend gauges are completely omitted from the scrape exposition (never reporting fabricated `0` values), and `taskforge_telemetry_scrape_errors_total` is incremented once.
 5. **Dedicated Telemetry Engine:** Scrapes use a separate, dedicated database engine with `pool_size=1, max_overflow=0` to guarantee application connection pools are never starved by metrics scraping.
+6. **Application Connection Pool Gauges (`taskforge_db_pool_connections`):**
+   - The gauge `taskforge_db_pool_connections{pool_state="..."}` describes the **application database pool** (`engine.pool`), NOT the dedicated telemetry engine (`pool_size=1, max_overflow=0`).
+   - The telemetry collector reads the application engine's pool statistics directly in-memory (`pool.size()`, `pool.checkedout()`, `pool.overflow()`, `pool.checkedin()`) without checking out or borrowing connections from the application pool.
+   - This process-local gauge is collected in-memory during `/metrics` generation (or cached alongside process metrics), preserving G9.2.1 aggregation semantics (`sum(...) by (pool_state)`).
+7. **Redis Command Complexities & Priority Intervals:**
+   - Bounded discovery and queue depth queries strictly enforce the following command complexities:
+     | Command | Complexity | Purpose |
+     | :--- | :--- | :--- |
+     | `ZCOUNT` | $O(\log N)$ | Tiered queue depth count over score intervals |
+     | `ZCARD` | $O(1)$ | Active worker set cardinality count |
+     | `ZREMRANGEBYSCORE` | $O(\log N + M)$ | Pruning expired worker heartbeats ($M = \text{removed members}$) |
+   - **Queue Depth Score Intervals:** Queue-depth queries execute `ZCOUNT` using the exact disjoint score intervals established in G9.2.1:
+     * **Critical:** $3 \times 10^{12}+1$ through $4 \times 10^{12}-1$ (`[3000000000001, 4000000000000]`)
+     * **High:** $2 \times 10^{12}+1$ through $3 \times 10^{12}-1$ (`[2000000000001, 3000000000000]`)
+     * **Medium:** $10^{12}+1$ through $2 \times 10^{12}-1$ (`[1000000000001, 2000000000000]`)
+     * **Low:** $1$ through $10^{12}-1$ (`[1, 1000000000000]`)
+   - **Worker Expiry Threshold:** `ZREMRANGEBYSCORE taskforge:workers:active -inf (now - 15.0)` uses an authoritative 15-second cutoff ($\text{now} - 15.0$). Workers emit heartbeats every 5.0 seconds; this cutoff prevents active workers from being removed.
 
 ### 5.2 Metric Ownership & Aggregation Rules
 
@@ -264,36 +323,45 @@ To prevent database pool starvation and Redis connection exhaustion from aggress
 
 ## 6. Health Check Contracts & Enforceable Timeout Deadlines
 
-TaskForge exposes independent liveness and readiness endpoints:
+TaskForge exposes independent liveness and readiness endpoints with dual route paths:
 
-### 6.1 Liveness Probe (`GET /health/live`)
+### 6.1 Liveness Probe (`GET /health/live` & `GET /healthz/live`)
 * **Purpose:** Proves process event loop responsiveness to container orchestrators.
+* **Dual Route Aliases:** Both `/health/live` and `/healthz/live` are registered and expose identical semantics.
 * **Dependencies:** None. Zero database queries and zero Redis commands.
 * **Response:** Always HTTP 200 `{"status": "alive", "application": "TaskForge"}`.
-* **Liveness Semantics:** If the Python asyncio event loop is deadlocked or running a runaway CPU loop, HTTP requests will not be processed and will time out at the orchestrator/load balancer level, triggering a container restart.
+* **Liveness Semantics:** Even during complete downstream outages of PostgreSQL and Redis, liveness probes continue to return HTTP 200 immediately. If the Python asyncio event loop is deadlocked or running a runaway CPU loop, HTTP requests will not be processed and will time out at the orchestrator/load balancer level, triggering a container restart.
 
-### 6.2 Readiness Probe (`GET /health/ready`)
+### 6.2 Readiness Probe (`GET /health/ready` & `GET /healthz/ready`)
 * **Purpose:** Proves that the API instance has healthy connectivity to all downstream backing stores required to accept task ingestion.
-* **Response Deadline vs Thread Cancellation Contract:**
-  - **HTTP Response Deadline:** The dependency-check operation is bounded by an `asyncio.wait_for(..., timeout=1.0)` timeout. Callers receive an HTTP response or timeout error based on this 1.0-second operation budget (subject to standard network/transport overhead).
-  - **Thread Cancellation Reality:** In Python, cancelling an asyncio coroutine that awaits a thread does NOT terminate the underlying worker thread running synchronous I/O. During prolonged backing store outages, repeated readiness probes could leak threads if submissions to a thread pool are unbounded.
-* **Bounded Execution & Underlying Operation Accounting:**
-  1. **Dedicated Bounded Executor & Permit Release:**
-     - Probing operations execute within a dedicated `ThreadPoolExecutor` constrained to **exactly two worker threads** (`max_workers=2`).
-     - In-flight probe operations are tracked via an atomic concurrency slot counter or an `asyncio.Semaphore(2)` whose permit is **released strictly via the underlying `concurrent.futures.Future`'s completion callback (`future.add_done_callback(...)`)**, and **NEVER by the cancelled coroutine exit**.
+* **Dual Route Aliases:** Both `/health/ready` and `/healthz/ready` are registered and expose identical semantics.
+* **Shutdown and Ingress Race Safety (Atomic Lifecycle Boundary):**
+  - An atomic lifecycle synchronization boundary (guarded by state lock) coordinates the shutdown state and probe executor submission.
+  - Once application shutdown begins (FastAPI lifespan exit), the shutdown state transitions atomically to quiescence.
+  - No new readiness probes may be accepted or submitted to the executor after shutdown begins; incoming requests immediately fast-fail with HTTP `503 Service Unavailable`, preventing `RuntimeError: cannot schedule new futures after shutdown`.
+* **Bounded Execution & Underlying Inflight Probe Capacity:**
+  1. **Capacity Reservation Invariant:**
+     $$\boxed{0 \le \text{inflight probe futures} \le 2}$$
+     - Probing operations execute within a dedicated `ThreadPoolExecutor` constrained to **exactly two worker threads** (`max_workers=2, thread_name_prefix="readiness-probe"`).
+     - The two slots strictly represent **actual submitted, unfinished underlying futures in the executor**, not merely active HTTP requests.
+     - Slot reservation is acquired atomically before future submission.
+     - The execution slot is released **strictly via the underlying `concurrent.futures.Future`'s completion callback (`future.add_done_callback(...)`)**, and **NEVER by coroutine exit or cancellation**.
      - An execution slot remains occupied until the underlying synchronous thread actually finishes or aborts its I/O.
   2. **Fast-Fail on Probe Saturation:**
-     - If both execution slots are occupied by unfinished probes, incoming readiness requests **immediately fast-fail with HTTP `503 Service Unavailable`** without submitting new tasks to the executor queue or spawning additional threads.
+     - If both execution slots are occupied by unfinished futures (${\text{inflight}} = 2$), incoming readiness requests **immediately fast-fail with HTTP `503 Service Unavailable`** without submitting new tasks to the executor queue or spawning additional threads.
      - Maximum concurrent underlying probe operations is strictly bounded to **two** at all times.
-  3. **Driver-Level Socket & Statement Deadlines:**
-     - **PostgreSQL Connection Budget:** Psycopg connection timeout `connect_timeout=1` (integer seconds required by libpq) and statement execution timeout `statement_timeout=500`ms.
-     - **Redis Connection Budget:** Redis socket connect timeout `socket_connect_timeout=0.5`s and command execution timeout `socket_timeout=0.5`s.
+  3. **Sequential Dependency Execution & Driver-Level Deadlines:**
+     - Health checks for downstream dependencies execute **sequentially** within the probe worker thread:
+       1. **PostgreSQL Check:** Psycopg connection timeout `connect_timeout=1` (integer seconds required by libpq) and statement execution timeout `statement_timeout=500`ms.
+       2. **Redis Check:** Redis socket connect timeout `socket_connect_timeout=0.5`s and command execution timeout `socket_timeout=0.5`s.
+     - **Cumulative Execution vs 1.0s Coroutine Deadline:** Under simultaneous failure or network blackholing of both backends, sequential execution can take up to $1.0\text{s} + 0.5\text{s} + 0.5\text{s} = 2.0\text{s}$, exceeding the 1.0-second coroutine deadline (`asyncio.wait_for(..., timeout=1.0)`).
+     - This behavior is architecturally sound and safe: the caller coroutine times out independently at 1.0s and returns HTTP 503 to the client, while the underlying future continues executing in its worker thread and retaining its reserved slot until completion, preventing thread accumulation under sustained dependency degradation.
   4. **Thread Termination Expectations:**
      - Timed-out probe threads eventually abort at the OS socket/driver level according to their individual driver timeout configurations. The contract guarantees that unfinished probe operations cannot accumulate beyond the 2-slot capacity, preventing thread exhaustion or connection pool depletion under sustained dependency outages.
 * **Failure Responses (HTTP 503 Service Unavailable):**
   - If any dependency fails, times out, or exceeds the 1.0-second operational deadline, the probe immediately returns HTTP `503 Service Unavailable`.
 * **Sanitized Problem Details (Zero Credential Leakage):**
-  - Under no circumstances will database URLs, credentials, hostnames, or raw exception tracebacks be emitted in the 503 response body:
+  - Under no circumstances will database URLs, credentials, hostnames, ports, or raw exception tracebacks be emitted in the 503 response body:
   ```json
   {
     "status": "not_ready",
@@ -308,8 +376,8 @@ TaskForge exposes independent liveness and readiness endpoints:
 * **Executor Lifecycle & Shutdown Semantics:**
   - **Instantiation:** The dedicated readiness executor (`ThreadPoolExecutor(max_workers=2, thread_name_prefix="readiness-probe")`) is created during application startup.
   - **Ingress Quiescence:** Once application shutdown begins (FastAPI lifespan exit), no new readiness requests are accepted; incoming requests immediately fast-fail with HTTP `503 Service Unavailable`.
-  - **Cancellation of Pending Work:** Any submitted probe futures that have not yet started executing in the executor queue are cancelled via `executor.shutdown(wait=False, cancel_futures=True)`.
-  - **Running Thread Drain & Lifespan Non-Blocking Contract:** For any probe operation actively executing I/O in a worker thread at shutdown, the FastAPI lifespan teardown handler grants a bounded grace period ($\le 1.0$s) awaiting natural thread completion under driver-level socket/statement timeouts. The application lifespan handler does not block indefinitely waiting on worker threads.
+  - **Cancellation of Pending Work:** With the strict two-slot reservation system, unbounded executor queues are eliminated. Any pending, not-yet-running futures in the bounded queue may be cancelled via `executor.shutdown(wait=False, cancel_futures=True)`.
+  - **Running Thread Drain & Lifespan Non-Blocking Contract:** Running probe operations are NOT killed by `shutdown(wait=False)`. The FastAPI lifespan teardown handler grants a bounded grace period ($\le 1.0$s) awaiting natural thread completion under driver-level socket/statement timeouts. The application lifespan handler does not block indefinitely waiting on worker threads.
   - **Python Interpreter Shutdown Limitations & Supervisor Backstop:**
     * In standard CPython, worker threads spawned by `ThreadPoolExecutor` are joined during interpreter shutdown (`atexit` / runtime teardown). `shutdown(wait=False)` returns immediately from the function call, but it cannot abort running threads, and the Python runtime itself will attempt to join non-daemon worker threads before process termination.
     * Consequently, if an underlying database or Redis thread remains blocked indefinitely at the OS socket/driver level beyond the configured driver timeouts, graceful Python interpreter termination can be stalled.
@@ -332,3 +400,45 @@ TaskForge exposes independent liveness and readiness endpoints:
    - If a metric recording operation fails, the system must NOT attempt to increment an error metric through the same failing metrics path.
 4. **No Transaction Coupling:**
    - Metrics updates are in-memory operations and must never participate in database transactions or hold row locks.
+
+---
+
+## 8. Gate G9.2.3 Acceptance Criteria & Verification Matrix
+
+### 8.1 Acceptance Criteria Definition (AC-1 through AC-11)
+
+| Criterion | Subsystem | Description & Pass Condition |
+| :--- | :--- | :--- |
+| **AC-1** | Health Probes | **Liveness Independence & Route Aliasing:** Verify that both `/health/live` and `/healthz/live` return HTTP 200 `{"status": "alive", "application": "TaskForge"}` without executing any database or Redis queries, even during total downstream backing store outages. |
+| **AC-2** | Health Probes | **Readiness Concurrency Ceiling & Fast-Fail Saturation:** Verify that the dedicated readiness executor strictly enforces $0 \le \text{inflight probe futures} \le 2$. When two probe operations are actively executing in threads, a concurrent 3rd probe request immediately fast-fails with HTTP 503 without submitting to the executor queue or spawning additional threads. |
+| **AC-3** | Health Probes | **Slot Persistence on Coroutine Cancellation:** Verify that cancelling an awaiting readiness probe coroutine (via client disconnect or timeout) does NOT release the concurrency permit; the slot remains occupied until the underlying worker thread's future completes. |
+| **AC-4** | Health Probes | **Sanitized Problem Details Schema:** Verify that readiness failures emit HTTP 503 with standardized schema (`status="not_ready"`, application name, dependency checks breakdown) and assert complete absence of database URLs, credentials, hostnames, ports, and exception tracebacks. |
+| **AC-5** | Gauge Cache | **Warm Cache Single-Flight Refresh:** Establish an initial valid snapshot, expire the 5.0s TTL, and issue 50 concurrent scrape requests. Verify that exactly 1 refresh operation executes backend queries, while all other 49 scrapes receive the prior valid snapshot without initiating duplicate backend operations. |
+| **AC-6** | Gauge Cache | **Stale Snapshot Preservation on Failure:** Simulate a backend failure during gauge refresh. Verify that the previous valid snapshot remains intact and served, valid values are never replaced with zero, and `taskforge_telemetry_scrape_errors_total` increments exactly once per failed refresh attempt (not once per waiting scrape). |
+| **AC-7** | Gauge Cache | **Cold-Start Gauge Omission:** In a cold-start state where no prior snapshot exists and backend queries fail, verify that affected infrastructure gauges are completely omitted from the Prometheus exposition (never reported as fabricated zeros), and `taskforge_telemetry_scrape_errors_total` increments once. |
+| **AC-8** | HTTP Telemetry | **Route Template Normalization:** Issue 100 requests with distinct UUID path parameters to `/api/v1/tasks/{id}`. Verify that Prometheus metrics collapse to exactly 1 route-label combination (`route="/api/v1/tasks/{id}"`), preventing cardinality explosion. |
+| **AC-9** | HTTP Telemetry | **Rate-Limit Rejection Telemetry:** Issue requests that trigger HTTP 429 rejections from `RateLimitMiddleware`. Verify that `PrometheusHttpMiddleware` observes the response as `status_code_class="4xx"` and increments `taskforge_rate_limit_exceeded_total` exactly once per rejection. |
+| **AC-10** | Regression | **Full Repository Regression Invariant:** Execute the complete repository-wide test suite. Verify that all 193 existing tests (165 Phase 8 baseline + 14 G9.1 + 14 G9.2.2) plus all new G9.2.3 integration tests pass with 0 failures and 0 skips. |
+| **AC-11** | Health Probes | **Shutdown and Readiness Submission Race:** Initiate application shutdown while readiness requests are arriving. Verify that no new probe is submitted after shutdown begins (fast-failing with HTTP 503), preventing `RuntimeError: cannot schedule new futures after shutdown`, and verify that already-running probe futures retain their slots until natural completion. |
+
+### 8.2 Mandatory Implementation Boundaries
+The following boundaries are strictly mandatory during G9.2.3 implementation:
+1. **Core Semantics Preservation:** Do not modify queue scoring, enqueue/dequeue Lua scripts, lease semantics, recovery behavior, or worker execution semantics.
+2. **Metric Definition Integrity:** Do not alter the G9.2.2 metric definitions, label taxonomies, or lifecycle accounting invariants.
+3. **Resource Bound Invariant:** Do not introduce unbounded threads, unbounded executor queues, or Redis $O(N)$ `KEYS` commands.
+4. **Fault Isolation:** Do not allow telemetry failures to break business requests or readiness response sanitization.
+5. **No Fabricated Zeroes:** Do not fabricate zero-valued infrastructure gauges when no successful snapshot exists.
+6. **Release Tag Immutability:** Keep the Phase 8 frozen tag `v0.8.0-phase8-freeze` (commit `da27047`) unchanged.
+7. **Provenance & Verification Trail:** Preserve a reproducible benchmark and regression-test trail anchored at the frozen G9.2.2 baseline commit (`6ad01df`).
+
+### 8.3 Implementation Sequence & Staging Plan
+
+```mermaid
+flowchart TD
+    Contract[G9.2.3 Contract Amendment] --> Stage1[Stage 1: Health Probe Subsystem]
+    Stage1 --> Stage2[Stage 2: Gauge Snapshot Cache & Telemetry Collector]
+    Stage2 --> Stage3[Stage 3: HTTP Metrics Middleware & Route Normalization]
+    Stage3 --> Stage4[Stage 4: Acceptance Tests AC-1 through AC-11]
+    Stage4 --> Regression[Full Regression: 193 + New G9.2.3 Tests]
+    Regression --> GateReview[Formal G9.2.3 Review & Sign-Off]
+```
