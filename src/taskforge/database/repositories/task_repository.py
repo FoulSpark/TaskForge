@@ -22,7 +22,9 @@ from taskforge.database.models import (
     get_utc_now,
 )
 from taskforge.monitoring.metrics import (
+    record_fencing_rejection,
     record_lease_recovery,
+    record_lease_renewal,
     record_queue_wait,
     record_task_completed,
     record_task_dead_letter,
@@ -297,10 +299,18 @@ class TaskRepository:
         if not force:
             if task.lease_token is not None:
                 if not lease_token or task.lease_token != lease_token:
+                    try:
+                        record_fencing_rejection()
+                    except Exception:
+                        pass
                     raise PermissionError(
                         "Fencing violation: supplied lease token does not match active task lease"
                     )
             elif lease_token is not None:
+                try:
+                    record_fencing_rejection()
+                except Exception:
+                    pass
                 raise PermissionError(
                     "Fencing violation: caller provided lease token, but task has no active lease"
                 )
@@ -407,14 +417,26 @@ class TaskRepository:
 
         # Strict fail-closed lease fencing: non-empty token, exact match, non-null expiry, unexpired
         if not lease_token:
+            try:
+                record_fencing_rejection()
+            except Exception:
+                pass
             raise PermissionError(
                 "Fencing violation: lease_token must be provided to record execution attempt"
             )
         if not task.lease_token or task.lease_token != lease_token:
+            try:
+                record_fencing_rejection()
+            except Exception:
+                pass
             raise PermissionError(
                 "Fencing violation: supplied lease token does not match active task lease"
             )
         if not task.lease_expires_at:
+            try:
+                record_fencing_rejection()
+            except Exception:
+                pass
             raise PermissionError(
                 "Fencing violation: active task lease has no expiration timestamp"
             )
@@ -484,10 +506,18 @@ class TaskRepository:
         # Strict fencing: if task has active lease, caller must provide matching token
         if task.lease_token is not None:
             if not lease_token or task.lease_token != lease_token:
+                try:
+                    record_fencing_rejection()
+                except Exception:
+                    pass
                 raise PermissionError(
                     "Fencing violation: supplied lease token does not match active task lease"
                 )
         elif lease_token is not None:
+            try:
+                record_fencing_rejection()
+            except Exception:
+                pass
             raise PermissionError(
                 "Fencing violation: caller provided lease token, but task has no active lease"
             )
@@ -521,6 +551,10 @@ class TaskRepository:
             raise ValueError(f"Task with id {task_id} not found")
 
         if not lease_token or task.lease_token != lease_token:
+            try:
+                record_fencing_rejection()
+            except Exception:
+                pass
             raise PermissionError(
                 "Fencing violation: supplied lease token does not match active task lease"
             )
@@ -626,6 +660,10 @@ class TaskRepository:
             raise ValueError(f"Task with id {task_id} not found")
 
         if not lease_token or task.lease_token != lease_token:
+            try:
+                record_fencing_rejection()
+            except Exception:
+                pass
             raise PermissionError(
                 "Fencing violation: supplied lease token does not match active task lease"
             )
@@ -845,11 +883,19 @@ class TaskRepository:
         )
         task = self.db.scalars(stmt).first()
         if not task:
+            try:
+                record_lease_renewal("failed")
+            except Exception:
+                pass
             return False
 
         task.lease_expires_at = expires_at
         task.updated_at = now
         self.db.commit()
+        try:
+            record_lease_renewal("success")
+        except Exception:
+            pass
         return True
 
     def release_lease(self, task_id: str, lease_token: str) -> bool:

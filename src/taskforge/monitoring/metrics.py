@@ -36,6 +36,8 @@ __all__ = [
     "DB_POOL_CHECKOUT_DURATION",
     "DB_POOL_CHECKOUT_TIMEOUTS_TOTAL",
     "TELEMETRY_SCRAPE_ERRORS_TOTAL",
+    "LEASE_RENEWALS_TOTAL",
+    "FENCING_REJECTIONS_TOTAL",
     "normalize_priority",
     "normalize_task_type",
     "normalize_status",
@@ -47,6 +49,7 @@ __all__ = [
     "normalize_status_code_class",
     "normalize_pool_state",
     "normalize_pool_name",
+    "normalize_lease_renewal_status",
     "record_task_submitted",
     "record_queue_wait",
     "record_task_execution_duration",
@@ -59,6 +62,8 @@ __all__ = [
     "record_db_pool_checkout_timeout",
     "record_db_pool_active_connections",
     "record_db_pool_overflow_connections",
+    "record_lease_renewal",
+    "record_fencing_rejection",
 ]
 
 # ---------------------------------------------------------------------------
@@ -87,12 +92,19 @@ ROUTE_WHITELIST = {
 STATUS_CODE_CLASS_WHITELIST = {"2xx", "4xx", "5xx"}
 POOL_STATE_WHITELIST = {"checked_out", "idle", "overflow"}
 POOL_NAME_WHITELIST = {"primary", "dedicated_telemetry"}
+LEASE_RENEWAL_STATUS_WHITELIST = {"success", "failed"}
 
 
 def normalize_pool_name(val: Any) -> str:
     """Normalize DB pool name to finite whitelist ('primary' or 'dedicated_telemetry')."""
     s = str(val).strip().lower() if val is not None else ""
     return s if s in POOL_NAME_WHITELIST else "primary"
+
+
+def normalize_lease_renewal_status(val: Any) -> str:
+    """Normalize lease renewal status to finite whitelist ('success' or 'failed')."""
+    s = str(val).strip().lower() if val is not None else ""
+    return s if s in LEASE_RENEWAL_STATUS_WHITELIST else "failed"
 
 
 
@@ -328,10 +340,28 @@ DB_POOL_CHECKOUT_TIMEOUTS_TOTAL = Counter(
     ["pool_name"],
 )
 
+# 21. Worker lease renewals counter (G9.4.3 - 4 runtime series including _created)
+LEASE_RENEWALS_TOTAL = Counter(
+    "taskforge_lease_renewals_total",
+    "Total worker lease extension attempts",
+    ["status"],
+)
+
+# 22. Fencing rejections counter (G9.4.3 - 2 runtime series including _created)
+FENCING_REJECTIONS_TOTAL = Counter(
+    "taskforge_fencing_rejections_total",
+    "Total stale worker commits rejected by authoritative fencing token guard",
+)
+
 # Initialize primary series for pool metrics
 DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary").set(0.0)
 DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary").set(0.0)
 DB_POOL_CHECKOUT_TIMEOUTS_TOTAL.labels(pool_name="primary")
+
+# Initialize default series for lease & fencing metrics to guarantee immediate exposition
+LEASE_RENEWALS_TOTAL.labels(status="success")
+LEASE_RENEWALS_TOTAL.labels(status="failed")
+FENCING_REJECTIONS_TOTAL.inc(0.0)
 
 
 
@@ -472,6 +502,23 @@ def record_db_pool_overflow_connections(count: int, pool_name: Any = "primary") 
         DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name=norm_name).set(max(0, int(count)))
     except Exception as exc:
         logger.debug("Telemetry isolation: failed to record db pool overflow connections: %s", exc)
+
+
+def record_lease_renewal(status: Any = "success") -> None:
+    """Record worker lease renewal attempt counter (G9.4.3)."""
+    try:
+        norm_status = normalize_lease_renewal_status(status)
+        LEASE_RENEWALS_TOTAL.labels(status=norm_status).inc()
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record lease renewal: %s", exc)
+
+
+def record_fencing_rejection() -> None:
+    """Record authoritative fencing rejection counter (G9.4.3)."""
+    try:
+        FENCING_REJECTIONS_TOTAL.inc()
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record fencing rejection: %s", exc)
 
 
 

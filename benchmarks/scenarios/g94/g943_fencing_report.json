@@ -1,0 +1,72 @@
+{
+  "milestone": "G9.4.3_lease_renewal_and_fencing_drills",
+  "timestamp_utc": "2026-11-10T21:22:38.839103+00:00",
+  "provenance": {
+    "authorized_base_commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
+    "frozen_tag": "v0.8.0-phase8-freeze (da27047f56fe2eec75acdb8502f505542cf61202)"
+  },
+  "cardinality_audit": {
+    "adopted_contract": "Option A",
+    "legacy_g92_pool_series": 3,
+    "g942_net_new_pool_series": 19,
+    "g943_lease_and_fencing_series": 6,
+    "total_g94_net_new_additions": 25,
+    "g94_additions_ceiling": 25,
+    "total_combined_exposition": 28,
+    "combined_ceiling": 28,
+    "compliant": true
+  },
+  "fencing_trials": [
+    {
+      "trial_id": "T1",
+      "num_tasks": 20,
+      "stale_renewal_attempts": 20,
+      "stale_renewal_rejections": 20,
+      "stale_commit_attempts": 20,
+      "fencing_rejections": 20,
+      "accepted_stale_commits": 0,
+      "valid_commits_accepted": 20,
+      "authoritative_verified_count": 20,
+      "invariants_met": true
+    },
+    {
+      "trial_id": "T2",
+      "num_tasks": 20,
+      "stale_renewal_attempts": 20,
+      "stale_renewal_rejections": 20,
+      "stale_commit_attempts": 20,
+      "fencing_rejections": 20,
+      "accepted_stale_commits": 0,
+      "valid_commits_accepted": 20,
+      "authoritative_verified_count": 20,
+      "invariants_met": true
+    },
+    {
+      "trial_id": "T3",
+      "num_tasks": 20,
+      "stale_renewal_attempts": 20,
+      "stale_renewal_rejections": 20,
+      "stale_commit_attempts": 20,
+      "fencing_rejections": 20,
+      "accepted_stale_commits": 0,
+      "valid_commits_accepted": 20,
+      "authoritative_verified_count": 20,
+      "invariants_met": true
+    }
+  ],
+  "duplicate_handler_accounting": {
+    "handler_invocations": 2,
+    "stale_commit_attempts": 1,
+    "accepted_stale_commits": 0,
+    "authoritative_commits": 1,
+    "duplicate_execution_decoupled_from_fencing": true
+  },
+  "aggregate_invariants": {
+    "total_stale_commit_attempts": 61,
+    "total_fencing_rejections": 61,
+    "total_accepted_stale_commits": 0,
+    "total_authoritative_valid_commits": 61,
+    "accepted_stale_commits_strictly_zero": true,
+    "fencing_rejections_equal_stale_attempts": true
+  }
+}
