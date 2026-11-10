@@ -48,14 +48,14 @@ The architecture whitepaper will accurately characterize the experimental findin
 
 ### Corrected Architectural Trade-off Statement:
 1. **Operating Envelope Sufficiency ($c \le 10$):**  
-   For the standard production operating envelope ($c=4$ to $c=10$), sequential single-item priority dequeue (`ZPOPMIN` via Lua) demonstrated minimal queue starvation ($< 6\%$) and lower tail-latency variance ($p99$ jitter) compared to batch dequeue.
+   For the standard production operating envelope ($c=4$ to $c=10$), sequential single-item priority dequeue (`ZPOPMAX` via Lua, operating on priority score `(priority * 10^12) - seq`, as implemented in `src/taskforge/queue/broker.py:55` and `broker.py:68`) demonstrated minimal queue starvation ($< 6\%$) and lower tail-latency variance ($p99$ jitter) compared to batch dequeue.
 2. **Serialization Onset ($c=20$):**  
-   Under heavy concurrency ($c=20$), lock and command serialization onset was observed on sequential dequeue, where batch dequeue began to show aggregate throughput benefits.
+   Under heavy concurrency ($c=20$), command serialization onset was observed on sequential dequeue, where batch dequeue began to show aggregate throughput benefits.
 3. **Design Choice Justification:**  
    Because TaskForge is targeted for the $c \le 10$ worker envelope, batch dequeue was **not adopted for production** because:
    - It introduced priority-inversion risk within batches.
    - It increased latency variance for high-priority tasks arriving behind a batch.
-   - Single-item dequeue met all SLA targets with lower implementation complexity.
+   - Single-item priority dequeue (`ZPOPMAX`) met all SLA targets with lower implementation complexity.
 
 ---
 
@@ -86,38 +86,72 @@ The **canonical, implemented, and accepted contract** in `src/taskforge/monitori
 ### 4.2. Master Cardinality Allocation Table
 | Sub-System | Metric Name | Metric Type | Labels | Runtime Series Count |
 | :--- | :--- | :---: | :--- | :---: |
-| **Legacy Pool (G9.2)** | `taskforge_db_pool_connections` | Gauge | `state="active\|overflow\|idle"` | **3** |
-| **G9.4.2 Pool Additions** | `taskforge_db_pool_checkout_duration_seconds` | Histogram | 11 buckets + sum + count | **13** |
-| | `taskforge_db_pool_checkout_timeouts_total` | Counter | `pool_name="primary"` (+ `_created`) | **2** |
-| | `taskforge_db_pool_active_connections` | Gauge | `pool_name="primary"` | **2** |
-| | `taskforge_db_pool_overflow_connections` | Gauge | `pool_name="primary"` | **2** |
-| **G9.4.3 Lease & Fencing** | `taskforge_lease_renewals_total` | Counter | `status="success\|failed"` (+ 2 `_created`) | **4** |
-| | `taskforge_fencing_rejections_total` | Counter | None (+ 1 `_created`) | **2** |
-| **Total Net-New G9.4** | — | — | — | **25 (Ceiling: 25)** |
-| **Total Combined Exposition** | — | — | — | **28 (Ceiling: 28)** |
+| **Pre-Existing Baseline (G9.2)** | `taskforge_db_pool_connections` | Gauge | `state="active\|overflow\|idle"` | **3** (Legacy Baseline) |
+| **G9.4.2 Pool Additions** | `taskforge_db_pool_checkout_duration_seconds` | Histogram | 11 buckets + sum + count | **13** (Net-New) |
+| | `taskforge_db_pool_checkout_timeouts_total` | Counter | `pool_name="primary"` (+ `_created`) | **2** (Net-New) |
+| | `taskforge_db_pool_active_connections` | Gauge | `pool_name="primary"` | **2** (Net-New) |
+| | `taskforge_db_pool_overflow_connections` | Gauge | `pool_name="primary"` | **2** (Net-New) |
+| **G9.4.3 Lease & Fencing** | `taskforge_lease_renewals_total` | Counter | `status="success\|failed"` (+ 2 `_created`) | **4** (Net-New) |
+| | `taskforge_fencing_rejections_total` | Counter | None (+ 1 `_created`) | **2** (Net-New) |
+| **Subtotal G9.4 Net-New Additions** | — | — | — | **25 (Ceiling: 25)** |
+| **Pre-Existing Legacy Pool Gauges** | — | — | — | **3** |
+| **Total Combined Runtime Exposition** | — | — | — | **28 (Ceiling: 28)** |
 
-The 25 net-new and 28 combined series limits are preserved and locked.
+*Important Clarification:* The 3 legacy G9.2 pool gauges are pre-existing baselines from Gate G9.2; the net-new additions in G9.4 comprise strictly the 19 G9.4.2 pool series plus the 6 G9.4.3 lease and fencing series, totaling exactly 25 net-new series ($\le 25$). Combined with the 3 legacy gauges, the total runtime exposition is exactly 28 series ($\le 28$).
 
 ---
 
 ## 5. Finding R4 — Reproducible Local Demo Contract (`scripts/demo.py`)
 
-The public demo script must run safely and deterministically without touching normal development databases or production services.
+The public demo script must run safely, concurrently, and deterministically without touching normal development databases or production services.
 
 ### 5.1. Execution Modes
 1. **Pre-flight Environment Validation:**
    ```bash
    python scripts/demo.py --check
    ```
-   Checks PostgreSQL 16 on `localhost:5432`, Redis 7 on `localhost:6379`, Python $\ge 3.12$, and required libraries. Emits clear exit codes (0 = ready, 1 = missing dependency) with remediation instructions.
+   Validates prerequisites (PostgreSQL 16 on `localhost:5432`, Redis 7 on `localhost:6379`, Python $\ge 3.12$, Docker, and required packages). Emits structured check marks and returns exit code 0 if ready, or 1 with clear remediation steps if missing.
 2. **Interactive Demonstration:**
    ```bash
    python scripts/demo.py
    ```
-   Runs pre-flight checks, provisions disposable resources, executes workloads and fault injection, and cleans up.
+   Executes pre-flight checks, provisions an isolated disposable database and Redis namespace, executes workloads and fault injection drills, and cleans up safely.
 
-### 5.2. Safety & Isolation Invariants
-- **Disposable Database:** All demo operations target `taskforge_demo` (created at start, dropped at finish). The development database `taskforge` and test databases are strictly untouched.
+### 5.2. Safety, Isolation & Concurrency Protection
+- **Unique Disposable Database Per Run:** To prevent collision between concurrent demo runs, the demo provisions a uniquely named database `taskforge_demo_<run_id>` (where `<run_id>` is an 8-character hex token), applies Alembic migrations, and drops it upon completion.
+- **Isolated Redis Namespace:** All Redis keys are strictly namespaced under `taskforge:demo:<run_id>:*`.
+- **Ownership-Checked Teardown:** Teardown strictly targets `taskforge_demo_<run_id>` and `taskforge:demo:<run_id>:*`. It will never drop or clean any resource not positively identified by its own run ID.
+
+### 5.3. Separate Stale-Worker Fencing vs. Terminal Duplicate Suppression
+The demo explicitly demonstrates both distinct guarantees:
+1. **D7: Actual Stale Lease-Token Rejection (Lease Fencing):**
+   - Worker A claims Task 1 and receives lease token A.
+   - Worker A pauses/stalls; lease expires.
+   - Worker B claims Task 1 with replacement token B.
+   - Worker A resumes and executes a real guarded PostgreSQL state update with stale token A (`WHERE lease_token = :token`).
+   - PostgreSQL rejects Worker A's stale update (0 rows affected; fencing rejection incremented).
+   - Worker B successfully completes Task 1 with token B.
+   - Database inspection verifies Worker B's result is authoritative.
+2. **D8: Terminal Duplicate Suppression (`TERMINAL_DUPLICATE`):**
+   - A duplicate message for an already completed terminal task (`SUCCESS`) is enqueued to Redis.
+   - Dispatcher dequeues the duplicate message.
+   - Worker detects task is already terminal in PostgreSQL, suppresses execution, and ACKs the broker without overwriting state.
+
+### 5.4. Stage 1 Demo Acceptance Contract (D1–D12)
+| ID | Requirement | Verification Method |
+| :--- | :--- | :--- |
+| **D1** | Environment validation & `--check` mode | `--check` flag verifies dependencies without executing demo |
+| **D2** | Isolated disposable PostgreSQL & Redis resources | `taskforge_demo_<run_id>` and `taskforge:demo:<run_id>:*` |
+| **D3** | Automatic database migrations | Alembic migration upgrade executed against disposable database |
+| **D4** | Deterministic multi-priority workload | 30 tasks seeded: 10 High, 10 Normal, 10 Low |
+| **D5** | Verified priority ordering | High processed before Normal, Normal before Low (`ZPOPMAX`) |
+| **D6** | Real broker transport interruption & recovery | 3-second TCP socket severance; publisher/dispatcher recover |
+| **D7** | Actual stale lease-token rejection | Real PostgreSQL conditional write rejection; 0 stale state accepted |
+| **D8** | Separate terminal duplicate suppression | Redelivery of terminal task suppressed as `TERMINAL_DUPLICATE` |
+| **D9** | Initial-to-final identity reconciliation | $E_{\text{initial}} = E_{\text{final}}$ and $T_{\text{initial}} = T_{\text{final}}$ |
+| **D10** | 100% terminal completion | All seeded tasks reach terminal state; failures explicitly logged |
+| **D11** | Safe, ownership-checked teardown | Drops only resources matching own `run_id` |
+| **D12** | Progress reporting & summary result | Real-time ASCII progress reporting and JSON summary output |
 - **Isolated Redis Namespace:** All broker keys use prefix `taskforge:demo:<run_id>:*` (flushed at teardown).
 - **Deterministic Workload:** Seeds 30 tasks with explicit priorities:
   - 10 High Priority
@@ -242,3 +276,4 @@ With this Stage 0 report, the protocol, measurement boundaries, and metric recon
 - **Phase 8 Tag:** `v0.8.0-phase8-freeze` (`da27047`) preserved.
 - **Telemetry Budget:** Option A strictly maintained (28 combined / 25 net-new series).
 - **Stage 1 (Demo Implementation):** Ready to proceed upon submission of this Stage 0 report.
+
