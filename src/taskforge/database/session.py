@@ -1,11 +1,19 @@
 from collections.abc import Generator
+import time
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text, exc as sa_exc
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import QueuePool
 
 from taskforge.core.config import get_settings
 from taskforge.core.logging import get_logger
+from taskforge.monitoring.metrics import (
+    record_db_pool_active_connections,
+    record_db_pool_checkout_duration,
+    record_db_pool_checkout_timeout,
+    record_db_pool_overflow_connections,
+)
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -15,7 +23,51 @@ class Base(DeclarativeBase):
     pass
 
 
-def build_engine(database_url: str | None = None):
+class InstrumentedQueuePool(QueuePool):
+    """SQLAlchemy QueuePool subclass instrumented with G9.4 connection acquisition telemetry.
+
+    Measures checkout wait latency and increments timeout counter on pool exhaustion
+    while preserving strict failure isolation and identical underlying QueuePool semantics.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self._pool_name = kwargs.pop("pool_name", "primary")
+        super().__init__(*args, **kwargs)
+
+        @event.listens_for(self, "checkin")
+        def _on_checkin(dbapi_conn, conn_record):
+            try:
+                post_checkedout = max(0, self.checkedout() - 1)
+                record_db_pool_active_connections(post_checkedout, pool_name=self._pool_name)
+                record_db_pool_overflow_connections(max(0, self.overflow()), pool_name=self._pool_name)
+            except Exception as exc:
+                logger.debug("Telemetry isolation: failed to record checkin pool telemetry: %s", exc)
+
+    def connect(self):
+        t0 = time.perf_counter()
+        try:
+            conn = super().connect()
+            duration = time.perf_counter() - t0
+            record_db_pool_checkout_duration(duration, pool_name=self._pool_name)
+            record_db_pool_active_connections(self.checkedout(), pool_name=self._pool_name)
+            record_db_pool_overflow_connections(max(0, self.overflow()), pool_name=self._pool_name)
+            return conn
+        except sa_exc.TimeoutError:
+            duration = time.perf_counter() - t0
+            record_db_pool_checkout_timeout(pool_name=self._pool_name)
+            record_db_pool_active_connections(self.checkedout(), pool_name=self._pool_name)
+            record_db_pool_overflow_connections(max(0, self.overflow()), pool_name=self._pool_name)
+            raise
+
+
+def build_engine(
+    database_url: str | None = None,
+    pool_size: int | None = None,
+    max_overflow: int | None = None,
+    pool_timeout: int | float | None = None,
+    pool_name: str = "primary",
+    poolclass=None,
+):
     url = database_url or settings.database_url
     connect_args = {}
     if url.startswith("sqlite"):
@@ -23,14 +75,24 @@ def build_engine(database_url: str | None = None):
         return create_engine(url, connect_args=connect_args)
     else:
         connect_args["connect_timeout"] = 1
-        return create_engine(
+        effective_poolclass = poolclass or InstrumentedQueuePool
+        effective_pool_size = pool_size if pool_size is not None else getattr(settings, "db_pool_size", 10)
+        effective_max_overflow = max_overflow if max_overflow is not None else getattr(settings, "db_max_overflow", 20)
+        effective_pool_timeout = pool_timeout if pool_timeout is not None else getattr(settings, "db_pool_timeout", 30)
+
+        eng = create_engine(
             url,
             connect_args=connect_args,
+            poolclass=effective_poolclass,
             pool_pre_ping=True,
-            pool_size=getattr(settings, "db_pool_size", 10),
-            max_overflow=getattr(settings, "db_max_overflow", 20),
-            pool_timeout=getattr(settings, "db_pool_timeout", 30),
+            pool_size=effective_pool_size,
+            max_overflow=effective_max_overflow,
+            pool_timeout=effective_pool_timeout,
         )
+        if hasattr(eng.pool, "_pool_name"):
+            eng.pool._pool_name = pool_name
+        return eng
+
 
 
 def init_db(engine_override=None) -> None:

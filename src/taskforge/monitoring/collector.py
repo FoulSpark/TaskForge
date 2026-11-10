@@ -16,6 +16,8 @@ from taskforge.monitoring.metrics import (
     OUTBOX_PENDING_EVENTS,
     QUEUE_DEPTH,
     TELEMETRY_SCRAPE_ERRORS_TOTAL,
+    record_db_pool_active_connections,
+    record_db_pool_overflow_connections,
 )
 
 logger = get_logger(__name__)
@@ -86,6 +88,9 @@ class GaugeSnapshotCache:
             DB_POOL_CONNECTIONS.labels(pool_state="checked_out").set(checked_out)
             DB_POOL_CONNECTIONS.labels(pool_state="idle").set(idle)
             DB_POOL_CONNECTIONS.labels(pool_state="overflow").set(overflow)
+
+            record_db_pool_active_connections(checked_out, pool_name="primary")
+            record_db_pool_overflow_connections(max(0, overflow), pool_name="primary")
         except Exception as exc:
             logger.debug("Failed to read application DB pool stats: %s", exc)
 

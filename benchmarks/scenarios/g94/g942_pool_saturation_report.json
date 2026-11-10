@@ -1,0 +1,546 @@
+{
+  "milestone": "G9.4.2_database_connection_pool_saturation",
+  "timestamp_utc": "2026-11-10T20:14:43.907709+00:00",
+  "production_baseline": {
+    "commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_timeout_seconds": 30,
+    "pool_pre_ping": true,
+    "total_production_capacity": 30,
+    "status": "IMMUTABLE_PRESERVED"
+  },
+  "experimental_saturation_fixture": {
+    "pool_size": 5,
+    "max_overflow": 10,
+    "pool_timeout_seconds": 5.0,
+    "total_capacity": 15,
+    "concurrent_callers": 30,
+    "contention_ratio": "2x"
+  },
+  "metric_cardinality": {
+    "base_series": 17,
+    "runtime_series_with_created": 22,
+    "series_ceiling": 25,
+    "compliant": true
+  },
+  "saturation_recovery_trials": [
+    {
+      "trial_id": "T1",
+      "capacity": 15,
+      "num_callers": 30,
+      "peak_checked_out": 15,
+      "peak_overflow": 10,
+      "recovery_duration_s": 0.034,
+      "final_checked_out": 0,
+      "final_overflow": 0,
+      "error_count": 0,
+      "checkout_distributions": {
+        "all_callers": {
+          "p50_ms": 524.143,
+          "p95_ms": 1020.741,
+          "p99_ms": 1021.17,
+          "max_ms": 1021.262,
+          "min_ms": 17.86,
+          "mean_ms": 522.588,
+          "stddev_ms": 502.836,
+          "count": 30
+        },
+        "holding_callers": {
+          "p50_ms": 27.584,
+          "p95_ms": 35.744,
+          "p99_ms": 36.231,
+          "max_ms": 36.353,
+          "min_ms": 17.86,
+          "mean_ms": 28.224,
+          "stddev_ms": 5.772,
+          "count": 15
+        },
+        "queued_callers": {
+          "p50_ms": 1017.113,
+          "p95_ms": 1021.039,
+          "p99_ms": 1021.217,
+          "max_ms": 1021.262,
+          "min_ms": 1011.934,
+          "mean_ms": 1016.952,
+          "stddev_ms": 3.034,
+          "count": 15
+        }
+      },
+      "occupancy_timeline_sample_count": 116,
+      "occupancy_timeline": [
+        {
+          "t_elapsed_s": 0.0004,
+          "checked_out": 0,
+          "overflow": 0
+        },
+        {
+          "t_elapsed_s": 0.0552,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.1076,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.16,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.212,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.2636,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.3148,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.3669,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.419,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.4712,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.5236,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.5759,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.6277,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.6801,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.7322,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.7842,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.8364,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.888,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.9401,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.9919,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.0438,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.0962,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.1484,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.2044,
+          "checked_out": 2,
+          "overflow": 2
+        }
+      ]
+    },
+    {
+      "trial_id": "T2",
+      "capacity": 15,
+      "num_callers": 30,
+      "peak_checked_out": 15,
+      "peak_overflow": 10,
+      "recovery_duration_s": 0.032,
+      "final_checked_out": 0,
+      "final_overflow": 0,
+      "error_count": 0,
+      "checkout_distributions": {
+        "all_callers": {
+          "p50_ms": 526.931,
+          "p95_ms": 1018.985,
+          "p99_ms": 1020.046,
+          "max_ms": 1020.463,
+          "min_ms": 16.51,
+          "mean_ms": 523.574,
+          "stddev_ms": 501.829,
+          "count": 30
+        },
+        "holding_callers": {
+          "p50_ms": 29.388,
+          "p95_ms": 40.146,
+          "p99_ms": 40.552,
+          "max_ms": 40.654,
+          "min_ms": 16.51,
+          "mean_ms": 30.209,
+          "stddev_ms": 7.627,
+          "count": 15
+        },
+        "queued_callers": {
+          "p50_ms": 1017.049,
+          "p95_ms": 1019.457,
+          "p99_ms": 1020.262,
+          "max_ms": 1020.463,
+          "min_ms": 1013.208,
+          "mean_ms": 1016.939,
+          "stddev_ms": 1.94,
+          "count": 15
+        }
+      },
+      "occupancy_timeline_sample_count": 117,
+      "occupancy_timeline": [
+        {
+          "t_elapsed_s": 0.0005,
+          "checked_out": 0,
+          "overflow": 0
+        },
+        {
+          "t_elapsed_s": 0.0548,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.1068,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.1589,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.2104,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.2628,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.3152,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.3672,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.4191,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.4709,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.5228,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.5746,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.6265,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.6791,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.7318,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.7839,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.8356,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.8879,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.9399,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.9913,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.0439,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.0961,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.1482,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.2044,
+          "checked_out": 15,
+          "overflow": 10
+        }
+      ]
+    },
+    {
+      "trial_id": "T3",
+      "capacity": 15,
+      "num_callers": 30,
+      "peak_checked_out": 15,
+      "peak_overflow": 10,
+      "recovery_duration_s": 0.029,
+      "final_checked_out": 0,
+      "final_overflow": 0,
+      "error_count": 0,
+      "checkout_distributions": {
+        "all_callers": {
+          "p50_ms": 526.553,
+          "p95_ms": 1018.873,
+          "p99_ms": 1019.523,
+          "max_ms": 1019.763,
+          "min_ms": 16.091,
+          "mean_ms": 522.956,
+          "stddev_ms": 502.214,
+          "count": 30
+        },
+        "holding_callers": {
+          "p50_ms": 29.676,
+          "p95_ms": 39.909,
+          "p99_ms": 40.286,
+          "max_ms": 40.38,
+          "min_ms": 16.091,
+          "mean_ms": 29.217,
+          "stddev_ms": 8.3,
+          "count": 15
+        },
+        "queued_callers": {
+          "p50_ms": 1016.682,
+          "p95_ms": 1019.184,
+          "p99_ms": 1019.647,
+          "max_ms": 1019.763,
+          "min_ms": 1012.725,
+          "mean_ms": 1016.695,
+          "stddev_ms": 1.873,
+          "count": 15
+        }
+      },
+      "occupancy_timeline_sample_count": 117,
+      "occupancy_timeline": [
+        {
+          "t_elapsed_s": 0.0005,
+          "checked_out": 0,
+          "overflow": 0
+        },
+        {
+          "t_elapsed_s": 0.0573,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.1096,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.1619,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.214,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.2663,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.3188,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.3717,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.4237,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.4753,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.5271,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.5792,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.6306,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.6824,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.7343,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.7863,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.8382,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.8904,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.9428,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 0.9956,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.0479,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.1001,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.1521,
+          "checked_out": 15,
+          "overflow": 10
+        },
+        {
+          "t_elapsed_s": 1.2055,
+          "checked_out": 15,
+          "overflow": 10
+        }
+      ]
+    }
+  ],
+  "timeout_rejection_drill": {
+    "callers_attempted": 15,
+    "timeouts_recorded": 15,
+    "mean_timeout_duration_s": 5.015,
+    "min_timeout_duration_s": 5.013,
+    "max_timeout_duration_s": 5.016,
+    "bounded_target_s": 5.0,
+    "final_checked_out": 0
+  },
+  "telemetry_engine_isolation": {
+    "telemetry_query_duration_ms": 27.127,
+    "business_pool_occupancy_during_scrape": 0.0,
+    "isolation_verified": true
+  },
+  "invariants": {
+    "zero_connection_leaks": true,
+    "zero_hung_threads": true,
+    "recovery_under_5s": true
+  }
+}

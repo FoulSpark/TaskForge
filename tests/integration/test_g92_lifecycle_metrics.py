@@ -523,10 +523,29 @@ def test_cardinality_ceiling_exhaustive_runtime_exposition():
     # 16. TELEMETRY_SCRAPE_ERRORS_TOTAL = 1
     TELEMETRY_SCRAPE_ERRORS_TOTAL.inc(0)
 
-    # Collect actual exported samples from Prometheus client registry
+    G92_METRIC_NAMES = {
+        "taskforge_tasks_submitted",
+        "taskforge_task_queue_wait_seconds",
+        "taskforge_task_execution_duration_seconds",
+        "taskforge_tasks_completed",
+        "taskforge_retries",
+        "taskforge_dead_letter",
+        "taskforge_queue_depth",
+        "taskforge_outbox_pending_events",
+        "taskforge_outbox_lag_seconds",
+        "taskforge_lease_recoveries",
+        "taskforge_api_request_duration_seconds",
+        "taskforge_api_requests",
+        "taskforge_rate_limit_exceeded",
+        "taskforge_active_workers",
+        "taskforge_db_pool_connections",
+        "taskforge_telemetry_scrape_errors",
+    }
+
+    # Collect actual exported samples from Prometheus client registry for G9.2 metric families
     all_taskforge_samples = []
     for metric in REGISTRY.collect():
-        if metric.name.startswith("taskforge_"):
+        if metric.name in G92_METRIC_NAMES:
             for s in metric.samples:
                 all_taskforge_samples.append(s)
 

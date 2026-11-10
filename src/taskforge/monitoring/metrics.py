@@ -31,6 +31,10 @@ __all__ = [
     "RATE_LIMIT_EXCEEDED_TOTAL",
     "ACTIVE_WORKERS",
     "DB_POOL_CONNECTIONS",
+    "DB_POOL_ACTIVE_CONNECTIONS",
+    "DB_POOL_OVERFLOW_CONNECTIONS",
+    "DB_POOL_CHECKOUT_DURATION",
+    "DB_POOL_CHECKOUT_TIMEOUTS_TOTAL",
     "TELEMETRY_SCRAPE_ERRORS_TOTAL",
     "normalize_priority",
     "normalize_task_type",
@@ -42,6 +46,7 @@ __all__ = [
     "normalize_route",
     "normalize_status_code_class",
     "normalize_pool_state",
+    "normalize_pool_name",
     "record_task_submitted",
     "record_queue_wait",
     "record_task_execution_duration",
@@ -50,6 +55,10 @@ __all__ = [
     "record_task_dead_letter",
     "record_lease_recovery",
     "record_api_request",
+    "record_db_pool_checkout_duration",
+    "record_db_pool_checkout_timeout",
+    "record_db_pool_active_connections",
+    "record_db_pool_overflow_connections",
 ]
 
 # ---------------------------------------------------------------------------
@@ -77,6 +86,14 @@ ROUTE_WHITELIST = {
 }
 STATUS_CODE_CLASS_WHITELIST = {"2xx", "4xx", "5xx"}
 POOL_STATE_WHITELIST = {"checked_out", "idle", "overflow"}
+POOL_NAME_WHITELIST = {"primary", "dedicated_telemetry"}
+
+
+def normalize_pool_name(val: Any) -> str:
+    """Normalize DB pool name to finite whitelist ('primary' or 'dedicated_telemetry')."""
+    s = str(val).strip().lower() if val is not None else ""
+    return s if s in POOL_NAME_WHITELIST else "primary"
+
 
 
 def normalize_priority(val: Any) -> str:
@@ -282,6 +299,42 @@ TELEMETRY_SCRAPE_ERRORS_TOTAL = Counter(
     "Total number of telemetry collection failures during scrape",
 )
 
+# 17. DB pool active connections gauge (G9.4 - 1 series)
+DB_POOL_ACTIVE_CONNECTIONS = Gauge(
+    "taskforge_db_pool_active_connections",
+    "Currently checked-out database connections actively in use by a session/transaction",
+    ["pool_name"],
+)
+
+# 18. DB pool overflow connections gauge (G9.4 - 1 series)
+DB_POOL_OVERFLOW_CONNECTIONS = Gauge(
+    "taskforge_db_pool_overflow_connections",
+    "Currently allocated overflow database connections beyond base pool size",
+    ["pool_name"],
+)
+
+# 19. DB pool checkout duration histogram (G9.4 - 14 base series)
+DB_POOL_CHECKOUT_DURATION = Histogram(
+    "taskforge_db_pool_checkout_duration_seconds",
+    "Latency waiting to acquire a database connection from the pool in seconds",
+    ["pool_name"],
+    buckets=[0.001, 0.005, 0.010, 0.025, 0.050, 0.100, 0.250, 0.500, 1.0, 2.5, 5.0],
+)
+
+# 20. DB pool checkout timeouts counter (G9.4 - 1 series)
+DB_POOL_CHECKOUT_TIMEOUTS_TOTAL = Counter(
+    "taskforge_db_pool_checkout_timeouts_total",
+    "Total count of database connection pool checkout timeout exceptions",
+    ["pool_name"],
+)
+
+# Initialize primary series for pool metrics
+DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary").set(0.0)
+DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary").set(0.0)
+DB_POOL_CHECKOUT_TIMEOUTS_TOTAL.labels(pool_name="primary")
+
+
+
 
 # ---------------------------------------------------------------------------
 # Telemetry Failure Isolation Helper Functions
@@ -382,6 +435,44 @@ def record_api_request(
             RATE_LIMIT_EXCEEDED_TOTAL.labels(route=norm_route).inc()
     except Exception as exc:
         logger.debug("Telemetry isolation: failed to record API request metrics: %s", exc)
+
+
+def record_db_pool_checkout_duration(duration_seconds: float, pool_name: Any = "primary") -> None:
+    """Record connection checkout wait duration histogram (G9.4)."""
+    try:
+        norm_name = normalize_pool_name(pool_name)
+        val = max(0.0, float(duration_seconds))
+        DB_POOL_CHECKOUT_DURATION.labels(pool_name=norm_name).observe(val)
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record db pool checkout duration: %s", exc)
+
+
+def record_db_pool_checkout_timeout(pool_name: Any = "primary") -> None:
+    """Record connection pool checkout timeout counter (G9.4)."""
+    try:
+        norm_name = normalize_pool_name(pool_name)
+        DB_POOL_CHECKOUT_TIMEOUTS_TOTAL.labels(pool_name=norm_name).inc()
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record db pool checkout timeout: %s", exc)
+
+
+def record_db_pool_active_connections(count: int, pool_name: Any = "primary") -> None:
+    """Record currently checked-out active connections gauge (G9.4)."""
+    try:
+        norm_name = normalize_pool_name(pool_name)
+        DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name=norm_name).set(max(0, int(count)))
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record db pool active connections: %s", exc)
+
+
+def record_db_pool_overflow_connections(count: int, pool_name: Any = "primary") -> None:
+    """Record currently allocated overflow connections gauge (G9.4)."""
+    try:
+        norm_name = normalize_pool_name(pool_name)
+        DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name=norm_name).set(max(0, int(count)))
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record db pool overflow connections: %s", exc)
+
 
 
 def get_metrics_content() -> bytes:
