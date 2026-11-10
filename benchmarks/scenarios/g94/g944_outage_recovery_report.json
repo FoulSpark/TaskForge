@@ -1,6 +1,6 @@
 {
   "milestone": "G9.4.4_broker_reconnection_and_outage_recovery",
-  "timestamp_utc": "2026-11-10T22:00:03.702229+00:00",
+  "timestamp_utc": "2026-11-10T22:20:26.558424+00:00",
   "provenance": {
     "authorized_base_commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
     "frozen_tag": "v0.8.0-phase8-freeze (da27047f56fe2eec75acdb8502f505542cf61202)",
@@ -17,29 +17,245 @@
     "combined_ceiling": 28,
     "compliant": true
   },
-  "outage_recovery_drill": {
+  "outage_recovery_drill_50_tasks": {
     "num_tasks": 50,
-    "outage_duration_seconds": 5.71,
-    "initial_outbox_events_count": 50,
-    "events_pending_during_outage": 50,
-    "failed_publish_attempts": 5,
-    "failed_dequeue_attempts": 5,
-    "final_published_outbox_events": 50,
-    "final_pending_outbox_events": 0,
+    "outage_duration_seconds": 5.713,
+    "execution_topology": {
+      "model": "In-process multithreaded daemon workers",
+      "parent_process_id": 11428,
+      "publisher_thread_id": 21032,
+      "dispatcher_thread_id": 8444,
+      "api_process_active": false,
+      "process_survived_without_restart": true,
+      "formal_statement": "Publisher and dispatcher worker threads remained alive during the Redis outage and recovered without application-process restart."
+    },
+    "identity_reconciliation": {
+      "initial_task_ids": [
+        "g944-bench-task-00-e4bf13",
+        "g944-bench-task-01-e65496",
+        "g944-bench-task-02-757982",
+        "g944-bench-task-03-594c7a",
+        "g944-bench-task-04-0e9db0",
+        "g944-bench-task-05-82e897",
+        "g944-bench-task-06-c77b89",
+        "g944-bench-task-07-b88858",
+        "g944-bench-task-08-e604bb",
+        "g944-bench-task-09-10b1e2",
+        "g944-bench-task-10-34896a",
+        "g944-bench-task-11-82455d",
+        "g944-bench-task-12-a3963d",
+        "g944-bench-task-13-581782",
+        "g944-bench-task-14-a325e4",
+        "g944-bench-task-15-459650",
+        "g944-bench-task-16-5a41fe",
+        "g944-bench-task-17-720e89",
+        "g944-bench-task-18-af8956",
+        "g944-bench-task-19-d8163d",
+        "g944-bench-task-20-80ee43",
+        "g944-bench-task-21-608ac5",
+        "g944-bench-task-22-9a7df4",
+        "g944-bench-task-23-02952d",
+        "g944-bench-task-24-3d40e6",
+        "g944-bench-task-25-934840",
+        "g944-bench-task-26-f6c5b1",
+        "g944-bench-task-27-b885b0",
+        "g944-bench-task-28-0bbbcb",
+        "g944-bench-task-29-881ada",
+        "g944-bench-task-30-1e4312",
+        "g944-bench-task-31-065e14",
+        "g944-bench-task-32-0930e0",
+        "g944-bench-task-33-3d13f0",
+        "g944-bench-task-34-8e11bd",
+        "g944-bench-task-35-d0afda",
+        "g944-bench-task-36-f92fab",
+        "g944-bench-task-37-07f923",
+        "g944-bench-task-38-58d328",
+        "g944-bench-task-39-75693a",
+        "g944-bench-task-40-5d6c1c",
+        "g944-bench-task-41-98e679",
+        "g944-bench-task-42-d25046",
+        "g944-bench-task-43-e5d25a",
+        "g944-bench-task-44-3820e0",
+        "g944-bench-task-45-62b0a6",
+        "g944-bench-task-46-ad7bcd",
+        "g944-bench-task-47-0ada54",
+        "g944-bench-task-48-4e0163",
+        "g944-bench-task-49-a15741"
+      ],
+      "initial_outbox_event_ids": [
+        "bde9a69a-be58-46e4-9105-3e1cfe855684",
+        "56f3c45e-60fe-4c84-a300-bd56592fefe6",
+        "21b52899-1838-4a0a-b9e0-b6c09984b3bb",
+        "468c1d77-4184-4851-8149-5e607a0fadca",
+        "268748a9-2d8e-464d-a651-6a5b29fa47d3",
+        "315f1330-bff8-49b0-b4b7-7fe4b23f299e",
+        "8ebeb0ef-ae08-4d07-a7d9-f02ff974a418",
+        "456fc379-e01b-4516-baba-8a8b0747b564",
+        "165464ef-78a2-416d-a033-ff83f72c8831",
+        "22be2e79-a78a-4b22-a042-975d102f4a3f",
+        "d01eafdf-24ae-48d4-af68-894281f1c119",
+        "711def95-7df3-4482-aba0-01ebacb72472",
+        "cc111570-d2eb-41c5-b581-d8ae0998bc69",
+        "451ac238-ed42-4606-affe-dcac2fc142a9",
+        "a0a96b2b-c973-44f4-b00c-02bd1175be49",
+        "713e0be5-8126-4762-8764-73f7adab962c",
+        "c352fb19-d600-4ffc-b28c-33ac3ddf4cd5",
+        "3d4bc5a9-fc62-47b6-9cdd-c8d84e7ae5ba",
+        "f4d040f0-1959-47b6-a858-ce7e2f6f3662",
+        "a26615cf-5a31-4eec-b252-dc5239c53205",
+        "be6c3333-74c3-4e05-87ec-7591d9122ba9",
+        "86244271-f5bc-4e0d-ac04-7e06dfecde86",
+        "bc2c6646-044e-48b9-a789-e21777ec093a",
+        "7ab96b1b-c660-4b3c-9500-5eb750a65c45",
+        "cc936b67-eea5-41cd-95e3-d2460a0fcacb",
+        "14db1ede-23b4-4727-8591-3458aa1040ac",
+        "183a9d2f-c902-4985-acda-56cbbbe3a09c",
+        "de5953f9-20fd-4b08-a2bf-d004306b0faa",
+        "aa465de1-c231-442f-acbb-98a092473daa",
+        "635a4dc2-2c76-4dea-9dfa-7d03dd40e157",
+        "12648329-0491-46c3-a09a-edb4a1540701",
+        "30ac4965-896d-4261-a0da-47cbafc8cc45",
+        "440df425-25d2-490b-8036-3a9343307c73",
+        "9a482ef4-b5f5-4fed-a44a-849f250f7c30",
+        "dcba8ddf-8543-4e81-8058-06bf70eb1ec8",
+        "fd0ce74a-28d0-4790-ace6-5e8562fa1066",
+        "909e1380-45ed-4d7d-be3c-c441d72f1354",
+        "d6058d8d-5381-415a-bcfc-6914a9cd1101",
+        "f0f4d0cf-78ae-4cf3-9f2e-b1ff70246a74",
+        "0bb097d3-d83a-4ab8-b872-965d66ce14a1",
+        "cdf41e15-38d8-440f-a30f-e3bf06442f06",
+        "c9cebb43-ed87-43c2-a746-70ca3f189156",
+        "56d50419-3f86-4d0d-9917-d2a199274c60",
+        "c2cbc84b-b467-41b5-b466-351a500392b8",
+        "88dcedaa-a095-4aaf-be5e-b3b6439be258",
+        "f04abfa9-d58d-4bcb-94ac-14735df56d25",
+        "162c145e-9a25-49f1-820b-a31106976fa0",
+        "eb6483c3-ed43-41ad-bc47-fc0e01c91050",
+        "c186eb94-5924-4c02-9a2f-6fc688899319",
+        "82d450d4-a332-4e11-8d8c-b9fe9709dd55"
+      ],
+      "set_equality_events": true,
+      "set_equality_tasks": true,
+      "set_equality_results": true,
+      "associations_valid": true,
+      "durable_outbox_event_loss": 0,
+      "unaccounted_tasks": 0,
+      "unexpected_results": 0
+    },
+    "outage_accounting": {
+      "events_pending_during_outage": 50,
+      "failed_publish_attempts": 5,
+      "failed_dequeue_attempts": 5,
+      "final_published_outbox_events": 50,
+      "final_pending_outbox_events": 0,
+      "final_tasks_completed_success": 50,
+      "final_task_results_persisted": 50,
+      "final_redis_queue_depth": 0,
+      "final_redis_in_flight_depth": 0,
+      "drain_duration_seconds": 2.094
+    },
+    "retry_timelines": {
+      "publisher": [
+        {
+          "attempt_index": 1,
+          "timestamp_utc": "2026-11-10T22:20:09.855592+00:00",
+          "configured_backoff_seconds": 0.0,
+          "observed_interval_seconds": 0.0,
+          "deviation_seconds": 0.0
+        },
+        {
+          "attempt_index": 2,
+          "timestamp_utc": "2026-11-10T22:20:10.077059+00:00",
+          "configured_backoff_seconds": 0.2,
+          "observed_interval_seconds": 0.2215,
+          "deviation_seconds": 0.0215
+        },
+        {
+          "attempt_index": 3,
+          "timestamp_utc": "2026-11-10T22:20:10.490613+00:00",
+          "configured_backoff_seconds": 0.4,
+          "observed_interval_seconds": 0.4136,
+          "deviation_seconds": 0.0136
+        },
+        {
+          "attempt_index": 4,
+          "timestamp_utc": "2026-11-10T22:20:11.315485+00:00",
+          "configured_backoff_seconds": 0.8,
+          "observed_interval_seconds": 0.8249,
+          "deviation_seconds": 0.0249
+        },
+        {
+          "attempt_index": 5,
+          "timestamp_utc": "2026-11-10T22:20:12.934767+00:00",
+          "configured_backoff_seconds": 1.6,
+          "observed_interval_seconds": 1.6193,
+          "deviation_seconds": 0.0193
+        }
+      ],
+      "dispatcher": [
+        {
+          "attempt_index": 1,
+          "timestamp_utc": "2026-11-10T22:20:09.846769+00:00",
+          "configured_backoff_seconds": 0.0,
+          "observed_interval_seconds": 0.0,
+          "deviation_seconds": 0.0
+        },
+        {
+          "attempt_index": 2,
+          "timestamp_utc": "2026-11-10T22:20:10.058133+00:00",
+          "configured_backoff_seconds": 0.2,
+          "observed_interval_seconds": 0.2114,
+          "deviation_seconds": 0.0114
+        },
+        {
+          "attempt_index": 3,
+          "timestamp_utc": "2026-11-10T22:20:10.471527+00:00",
+          "configured_backoff_seconds": 0.4,
+          "observed_interval_seconds": 0.4134,
+          "deviation_seconds": 0.0134
+        },
+        {
+          "attempt_index": 4,
+          "timestamp_utc": "2026-11-10T22:20:11.282777+00:00",
+          "configured_backoff_seconds": 0.8,
+          "observed_interval_seconds": 0.8113,
+          "deviation_seconds": 0.0113
+        },
+        {
+          "attempt_index": 5,
+          "timestamp_utc": "2026-11-10T22:20:12.885593+00:00",
+          "configured_backoff_seconds": 1.6,
+          "observed_interval_seconds": 1.6028,
+          "deviation_seconds": 0.0028
+        }
+      ]
+    }
+  },
+  "transport_level_socket_drill": {
+    "injection_mechanism": "Real OS-level TCP socket severance via RealSocketTCPProxy",
+    "transport_error_types": [
+      "ConnectionResetError (WinError 10054)",
+      "ConnectionRefusedError (WinError 10061)",
+      "TimeoutError"
+    ],
+    "num_tasks": 20,
+    "outage_duration_seconds": 5.103,
+    "tasks_completed_success": 20,
+    "outbox_events_published": 20,
+    "task_results_persisted": 20,
     "durable_outbox_event_loss": 0,
-    "final_tasks_completed_success": 50,
-    "final_task_results_persisted": 50,
-    "final_redis_queue_depth": 0,
-    "final_redis_in_flight_depth": 0,
-    "drain_duration_seconds": 2.3,
-    "process_survived_without_restart": true,
-    "invariants_met": true
+    "tcp_reconnection_successful": true
   },
   "duplicate_delivery_drill": {
-    "task_id": "6f7f8562-88cb-4828-90d6-5cfc93e54b04",
+    "task_id": "e0d3b25a-4f48-46a4-bd89-b3ae0df6a0df",
+    "duplicate_deliveries_attempted": 1,
     "duplicate_delivery_handled_as": "TERMINAL_DUPLICATE",
+    "duplicate_deliveries_suppressed": 1,
     "authoritative_state_corrupted": false,
     "final_status": "SUCCESS",
+    "final_return_value": {
+      "initial_worker": "worker-initial"
+    },
     "redis_cleared": true
   },
   "acceptance_criteria_verification": {
@@ -50,6 +266,7 @@
     "publisher_recovered": true,
     "retry_exponential_backoff": true,
     "no_process_restart_required": true,
-    "postgresql_authoritative": true
+    "postgresql_authoritative": true,
+    "real_transport_socket_resilience": true
   }
 }

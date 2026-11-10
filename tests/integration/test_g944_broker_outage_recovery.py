@@ -473,3 +473,181 @@ def test_g944_scenario5_redis_noscript_reload_resilience(redis_client):
     # 7. Reclaim must automatically reload LUA_RECLAIM without raising NoScriptError
     reclaim_res = broker.reclaim_expired(timeout_seconds=0.0)
     assert reclaim_res == 0
+
+
+class RealSocketTCPProxy:
+    """A genuine OS-level TCP socket proxy forwarding from 127.0.0.1:<port> to 127.0.0.1:6379.
+    During an outage:
+    1. Forcibly closes all active TCP connections.
+    2. Shuts down the listening socket so new connections receive OS ConnectionRefusedError / TimeoutError.
+    3. Reopens the listening socket upon restoration to resume forwarding raw TCP packets.
+    """
+
+    def __init__(self, target_host: str = "127.0.0.1", target_port: int = 6379):
+        import socket
+        self.target_host = target_host
+        self.target_port = target_port
+        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_sock.bind(("127.0.0.1", 0))
+        self.port = self.server_sock.getsockname()[1]
+        self.server_sock.listen(128)
+        self.running = True
+        self.active_sockets = []
+        self._lock = threading.Lock()
+        self.thread = threading.Thread(target=self._listen_loop, daemon=True)
+        self.thread.start()
+
+    def _listen_loop(self):
+        import socket
+        while self.running:
+            try:
+                client_sock, _ = self.server_sock.accept()
+            except OSError:
+                break
+            try:
+                target_sock = socket.create_connection((self.target_host, self.target_port), timeout=2.0)
+            except Exception:
+                client_sock.close()
+                continue
+            with self._lock:
+                self.active_sockets.extend([client_sock, target_sock])
+            threading.Thread(target=self._forward, args=(client_sock, target_sock), daemon=True).start()
+            threading.Thread(target=self._forward, args=(target_sock, client_sock), daemon=True).start()
+
+    def _forward(self, src, dst):
+        try:
+            while self.running:
+                data = src.recv(4096)
+                if not data:
+                    break
+                dst.sendall(data)
+        except Exception:
+            pass
+        finally:
+            try:
+                src.close()
+            except Exception:
+                pass
+            try:
+                dst.close()
+            except Exception:
+                pass
+
+    def break_network(self):
+        self.running = False
+        try:
+            self.server_sock.close()
+        except Exception:
+            pass
+        with self._lock:
+            for s in self.active_sockets:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+            self.active_sockets.clear()
+
+    def restore_network(self):
+        import socket
+        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_sock.bind(("127.0.0.1", self.port))
+        self.server_sock.listen(128)
+        self.running = True
+        self.thread = threading.Thread(target=self._listen_loop, daemon=True)
+        self.thread.start()
+
+
+def test_g944_scenario6_real_transport_socket_outage_recovery():
+    """Scenario 6: Real OS-level transport failure and reconnection recovery.
+    - Uses a real OS TCP proxy to 127.0.0.1:6379 without any mocking.
+    - Breaks raw TCP sockets, causing real OS WinError 10054/10061 (ConnectionReset/Refused).
+    - Verifies Publisher & Dispatcher back off and recover when TCP transport is restored.
+    - Verifies zero event loss and authoritative PostgreSQL state.
+    """
+    proxy = RealSocketTCPProxy(target_host="127.0.0.1", target_port=6379)
+    proxy_client = redis.Redis(host="127.0.0.1", port=proxy.port, socket_timeout=1.0)
+    assert proxy_client.ping() is True
+
+    queue_name = f"taskforge:g944:q6:{uuid.uuid4().hex[:6]}"
+    broker = RedisBroker(proxy_client, queue_name=queue_name)
+
+    # 1. Seed 10 tasks with pending outbox events
+    task_ids = []
+    with SessionLocal() as db:
+        for i in range(10):
+            tid = f"g944-trans-task-{i}-{uuid.uuid4().hex[:6]}"
+            task = Task(
+                id=tid,
+                task_name=f"Transport Outage Task {i}",
+                task_type="noop",
+                status=TaskStatus.QUEUED.value,
+                priority=TaskPriority.HIGH.value,
+                payload={"trans_idx": i},
+            )
+            outbox_evt = OutboxEvent(
+                id=str(uuid.uuid4()),
+                aggregate_type="task",
+                aggregate_id=tid,
+                event_type="TASK_CREATED",
+                payload={"task_id": tid, "priority": TaskPriority.HIGH.value},
+                status="PENDING",
+                available_at=get_utc_now(),
+                created_at=get_utc_now(),
+            )
+            db.add(task)
+            db.add(outbox_evt)
+            task_ids.append(tid)
+        db.commit()
+
+    # 2. Break OS network transport
+    proxy.break_network()
+
+    # Verify that real redis client gets real OS socket error
+    with pytest.raises((redis.exceptions.ConnectionError, redis.exceptions.TimeoutError)):
+        proxy_client.ping()
+
+    # 3. Start publisher and dispatcher
+    publisher = OutboxPublisherWorker(poll_interval=0.2, broker=broker)
+    dispatcher = WorkerDispatcher(
+        worker_id="g944-trans-worker",
+        concurrency=4,
+        broker=broker,
+        poll_interval=0.2,
+    )
+    publisher.start()
+    dispatcher.start()
+
+    # Verify threads alive during network disruption
+    time.sleep(2.0)
+    assert publisher._thread.is_alive() is True
+    assert dispatcher._loop_thread.is_alive() is True
+
+    # 4. Restore OS network transport
+    proxy.restore_network()
+    time.sleep(0.5)
+
+    # Wait for recovery and full drain
+    deadline = time.time() + 8.0
+    all_success = False
+    while time.time() < deadline:
+        with SessionLocal() as db:
+            repo = TaskRepository(db)
+            completed = [repo.get_by_id(tid) for tid in task_ids]
+            if all(t and t.status == TaskStatus.SUCCESS.value for t in completed):
+                all_success = True
+                break
+        time.sleep(0.3)
+
+    publisher.stop()
+    dispatcher.stop()
+    proxy.break_network()
+
+    assert all_success is True, "All 10 tasks must reach SUCCESS after real transport recovery"
+    with SessionLocal() as db:
+        events = db.scalars(select(OutboxEvent).where(OutboxEvent.aggregate_id.in_(task_ids))).all()
+        assert all(e.status == "PUBLISHED" for e in events), "All events must be PUBLISHED"
+        results = db.scalars(select(TaskResult).where(TaskResult.task_id.in_(task_ids))).all()
+        assert len(results) == 10, "All 10 TaskResult rows must be persisted"
+
