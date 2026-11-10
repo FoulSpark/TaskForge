@@ -140,8 +140,14 @@ def normalize_http_method(val: Any) -> str:
 def normalize_route(val: Any) -> str:
     """Normalize route template to whitelist or 'other'."""
     s = str(val).strip() if val is not None else ""
-    if s in ("/api/v1/tasks/{task_id}", "/api/v1/tasks/{id}"):
+    if s in ("/api/v1/tasks/{task_id}", "/api/v1/tasks/{id}", "/tasks/{task_id}", "/tasks/{id}"):
         return "/api/v1/tasks/{id}"
+    if s in ("/api/v1/tasks", "/tasks"):
+        return "/api/v1/tasks"
+    if s in ("/api/v1/operator/recover", "/operator/recover"):
+        return "/api/v1/operator/recover"
+    if s in ("/api/v1/operator/outbox-sweep", "/operator/outbox-sweep"):
+        return "/api/v1/operator/outbox-sweep"
     return s if s in ROUTE_WHITELIST else "other"
 
 

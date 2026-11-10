@@ -41,22 +41,20 @@ def _find_route_path(routes, raw_path: str) -> str | None:
 
 
 def resolve_request_route_template(request: Request) -> str:
-    """Resolve Starlette route template, falling back to route hierarchy search on early rejection."""
+    """Resolve Starlette route template, matching against app route hierarchy with scope fallback."""
     try:
-        # 1. Direct route object in scope (populated by Starlette router on successful dispatch)
-        route_obj = request.scope.get("route")
-        if route_obj is not None:
-            template = getattr(route_obj, "path_format", None) or getattr(route_obj, "path", None)
-            if template:
-                return normalize_route(template)
-
-        # 2. Fallback to router hierarchy inspection (e.g. RateLimitMiddleware early 429 rejection or 404)
         app = getattr(request, "app", None)
         if app is not None and hasattr(app, "routes"):
             raw_path = request.url.path
             matched_template = _find_route_path(app.routes, raw_path)
             if matched_template:
                 return normalize_route(matched_template)
+
+        route_obj = request.scope.get("route")
+        if route_obj is not None:
+            template = getattr(route_obj, "path_format", None) or getattr(route_obj, "path", None)
+            if template:
+                return normalize_route(template)
     except Exception:
         pass
 
