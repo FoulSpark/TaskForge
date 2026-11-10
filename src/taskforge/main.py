@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from taskforge.api.errors import register_error_handlers
-from taskforge.api.middleware import CorrelationIdMiddleware
+from taskforge.api.middleware import CorrelationIdMiddleware, PrometheusHttpMiddleware
 from taskforge.api.routes import api_v1_router
 from taskforge.api.routes.metrics import router as metrics_router
 from taskforge.core.config import get_settings
@@ -118,6 +118,7 @@ app = FastAPI(
 # Middleware
 app.add_middleware(CorrelationIdMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=settings.rate_limit_per_minute)
+app.add_middleware(PrometheusHttpMiddleware)
 
 # Standardized Error Handlers
 register_error_handlers(app)

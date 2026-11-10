@@ -49,6 +49,7 @@ __all__ = [
     "record_task_retry",
     "record_task_dead_letter",
     "record_lease_recovery",
+    "record_api_request",
 ]
 
 # ---------------------------------------------------------------------------
@@ -139,6 +140,8 @@ def normalize_http_method(val: Any) -> str:
 def normalize_route(val: Any) -> str:
     """Normalize route template to whitelist or 'other'."""
     s = str(val).strip() if val is not None else ""
+    if s in ("/api/v1/tasks/{task_id}", "/api/v1/tasks/{id}"):
+        return "/api/v1/tasks/{id}"
     return s if s in ROUTE_WHITELIST else "other"
 
 
@@ -347,6 +350,32 @@ def record_lease_recovery(initiator: Any, recovery_result: Any) -> None:
         LEASE_RECOVERIES_TOTAL.labels(initiator=norm_init, recovery_result=norm_res).inc()
     except Exception as exc:
         logger.debug("Telemetry isolation: failed to record lease recovery: %s", exc)
+
+
+def record_api_request(
+    http_method: Any,
+    route: Any,
+    status_code: Any,
+    duration_seconds: float,
+) -> None:
+    """Record HTTP request lifecycle metrics strictly isolated from request failure."""
+    try:
+        norm_method = normalize_http_method(http_method)
+        norm_route = normalize_route(route)
+        norm_status_class = normalize_status_code_class(status_code)
+        val = max(0.0, float(duration_seconds))
+
+        API_REQUEST_DURATION.labels(http_method=norm_method, route=norm_route).observe(val)
+        API_REQUESTS_TOTAL.labels(
+            http_method=norm_method,
+            route=norm_route,
+            status_code_class=norm_status_class,
+        ).inc()
+
+        if status_code == 429:
+            RATE_LIMIT_EXCEEDED_TOTAL.labels(route=norm_route).inc()
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record API request metrics: %s", exc)
 
 
 def get_metrics_content() -> bytes:
