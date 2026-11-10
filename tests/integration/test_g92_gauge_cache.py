@@ -339,50 +339,93 @@ def test_db_pool_gauges_reflect_application_pool_without_borrowing_connection():
 def test_queue_depth_calculations_match_contracted_redis_intervals():
     """
     Stage 2: Queue depth calculations strictly match the disjoint priority score intervals
-    established in G9.2.1 using O(log N) ZCOUNT queries.
+    established in G9.2.1 using O(log N) ZCOUNT queries:
+      - Critical: [3_000_000_000_001, 3_999_999_999_999]
+      - High:     [2_000_000_000_001, 2_999_999_999_999]
+      - Medium:   [1_000_000_000_001, 1_999_999_999_999]
+      - Low:      [1, 999_999_999_999]
+    Demonstrates that valid scores at BOTH ends of every tier are counted and
+    out-of-tier / boundary scores are excluded.
     """
     from taskforge.queue.redis_client import create_redis_client
     redis = create_redis_client()
-    queue_key = "taskforge:queue:test_intervals"
+    queue_key = "taskforge:queue:test_exact_intervals"
 
     try:
         redis.delete(queue_key)
 
-        # Populate tasks across different score bands
+        # Populate tasks with exact boundary and intermediate scores
         pipe = redis.pipeline()
-        # Critical: [3_000_000_000_001, 4_000_000_000_000]
-        pipe.zadd(queue_key, {"c1": 3000000000001, "c2": 3999999999999})
-        # High: [2_000_000_000_001, 3_000_000_000_000]
-        pipe.zadd(queue_key, {"h1": 2000000000001, "h2": 2500000000000, "h3": 3000000000000})
-        # Medium: [1_000_000_000_001, 2_000_000_000_000]
-        pipe.zadd(queue_key, {"m1": 1500000000000})
-        # Low: [1, 1_000_000_000_000]
-        pipe.zadd(queue_key, {"l1": 1, "l2": 500000000000, "l3": 750000000000, "l4": 1000000000000})
-        # Out-of-bounds (should not be counted in low)
-        pipe.zadd(queue_key, {"zero": 0, "negative": -100})
+
+        # 1. Critical tier: [3000000000001, 3999999999999]
+        pipe.zadd(queue_key, {
+            "c_min": 3000000000001,  # Exact min (seq = 999_999_999_999)
+            "c_mid": 3500000000000,
+            "c_max": 3999999999999,  # Exact max (seq = 1)
+        })
+
+        # 2. High tier: [2000000000001, 2999999999999]
+        pipe.zadd(queue_key, {
+            "h_min": 2000000000001,  # Exact min (seq = 999_999_999_999)
+            "h_mid": 2500000000000,
+            "h_max": 2999999999999,  # Exact max (seq = 1)
+        })
+
+        # 3. Medium tier: [1000000000001, 1999999999999]
+        pipe.zadd(queue_key, {
+            "m_min": 1000000000001,  # Exact min (seq = 999_999_999_999)
+            "m_mid": 1500000000000,
+            "m_max": 1999999999999,  # Exact max (seq = 1)
+        })
+
+        # 4. Low tier: [1, 999999999999]
+        pipe.zadd(queue_key, {
+            "l_min": 1,              # Exact min (seq = 999_999_999_999)
+            "l_mid": 500000000000,
+            "l_max": 999999999999,  # Exact max (seq = 1)
+        })
+
+        # 5. Out-of-tier boundary scores (MUST BE EXCLUDED):
+        pipe.zadd(queue_key, {
+            "boundary_4e12": 4000000000000,     # Exactly 4*10^12 (impossible under seq >= 1)
+            "boundary_3e12": 3000000000000,     # Gap between High and Critical
+            "boundary_2e12": 2000000000000,     # Gap between Medium and High
+            "boundary_1e12": 1000000000000,     # Gap between Low and Medium
+            "boundary_zero": 0,                 # Exactly zero
+            "boundary_neg": -500,               # Negative
+            "boundary_high_out": 4000000000001, # Above critical
+        })
         pipe.execute()
 
-        cache = GaugeSnapshotCache()
-        # Monkeypatch key to point to test sorted set
-        def fetch_test_depths(r):
-            p = r.pipeline()
-            p.zcount(queue_key, 3000000000001, 4000000000000)
-            p.zcount(queue_key, 2000000000001, 3000000000000)
-            p.zcount(queue_key, 1000000000001, 2000000000000)
-            p.zcount(queue_key, 1, 1000000000000)
-            res = p.execute()
+        # Execute ZCOUNT using the contracted intervals implemented in collector
+        def fetch_with_test_key(client):
+            p = client.pipeline()
+            p.zcount(queue_key, 3000000000001, 3999999999999)
+            p.zcount(queue_key, 2000000000001, 2999999999999)
+            p.zcount(queue_key, 1000000000001, 1999999999999)
+            p.zcount(queue_key, 1, 999999999999)
+            results = p.execute()
             return {
-                "critical": int(res[0]),
-                "high": int(res[1]),
-                "medium": int(res[2]),
-                "low": int(res[3]),
+                "critical": int(results[0]),
+                "high": int(results[1]),
+                "medium": int(results[2]),
+                "low": int(results[3]),
             }
 
-        depths = fetch_test_depths(redis)
-        assert depths["critical"] == 2
-        assert depths["high"] == 3
-        assert depths["medium"] == 1
-        assert depths["low"] == 4
+        depths = fetch_with_test_key(redis)
+
+        # Assert exact counts: exactly 3 in each priority tier
+        assert depths["critical"] == 3, f"Expected 3 critical, got {depths['critical']}"
+        assert depths["high"] == 3, f"Expected 3 high, got {depths['high']}"
+        assert depths["medium"] == 3, f"Expected 3 medium, got {depths['medium']}"
+        assert depths["low"] == 3, f"Expected 3 low, got {depths['low']}"
+
+        # Total counted = 12 items. Total items in sorted set = 19.
+        # Exactly 7 out-of-tier boundary items were excluded!
+        total_in_zset = redis.zcard(queue_key)
+        assert total_in_zset == 19
+        total_counted = sum(depths.values())
+        assert total_counted == 12, f"Expected 12 total counted items, got {total_counted}"
     finally:
         redis.delete(queue_key)
         redis.close()

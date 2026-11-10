@@ -146,10 +146,10 @@ class GaugeSnapshotCache:
             raise RuntimeError("Redis client is not available")
         queue_key = "taskforge:queue:tasks"
         pipe = redis_client.pipeline()
-        pipe.zcount(queue_key, 3000000000001, 4000000000000)  # critical
-        pipe.zcount(queue_key, 2000000000001, 3000000000000)  # high
-        pipe.zcount(queue_key, 1000000000001, 2000000000000)  # medium
-        pipe.zcount(queue_key, 1, 1000000000000)              # low
+        pipe.zcount(queue_key, 3000000000001, 3999999999999)  # critical: [3*10^12 + 1, 4*10^12 - 1]
+        pipe.zcount(queue_key, 2000000000001, 2999999999999)  # high:     [2*10^12 + 1, 3*10^12 - 1]
+        pipe.zcount(queue_key, 1000000000001, 1999999999999)  # medium:   [10^12 + 1, 2*10^12 - 1]
+        pipe.zcount(queue_key, 1, 999999999999)              # low:      [1, 10^12 - 1]
         results = pipe.execute()
         return {
             "critical": int(results[0]),

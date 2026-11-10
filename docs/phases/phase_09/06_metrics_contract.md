@@ -214,10 +214,10 @@ sequenceDiagram
      * Within any tier, a smaller `seq` yields a higher score, popping earlier tasks first.
      * **FIFO Clarification:** In TaskForge, FIFO ordering within a tier strictly reflects **enqueue order** into the ready queue, not original task creation order. Tasks that are retried or re-enqueued receive a new monotonic sequence number at the time of re-enqueue.
    - **Collection Method:** Each priority tier depth is collected using $O(\log N)$ `ZCOUNT queue min_score max_score`:
-     * `critical`: `ZCOUNT queue 3000000000001 4000000000000`
-     * `high`: `ZCOUNT queue 2000000000001 3000000000000`
-     * `medium`: `ZCOUNT queue 1000000000001 2000000000000`
-     * `low`: `ZCOUNT queue 1 1000000000000`
+     * `critical`: `ZCOUNT queue 3000000000001 3999999999999`
+     * `high`: `ZCOUNT queue 2000000000001 2999999999999`
+     * `medium`: `ZCOUNT queue 1000000000001 1999999999999`
+     * `low`: `ZCOUNT queue 1 999999999999`
    - **Scope Restriction:** Does NOT count in-flight leased items in `taskforge:in_flight` or pending outbox rows in PostgreSQL.
 8. **`taskforge_outbox_pending_events`:**
    - **Definition:** Instantaneous count of rows in PostgreSQL `outbox_events` with `status = 'PENDING'`.
@@ -301,11 +301,11 @@ To prevent database pool starvation and Redis connection exhaustion from aggress
      | `ZCARD` | $O(1)$ | Active worker set cardinality count |
      | `ZREMRANGEBYSCORE` | $O(\log N + M)$ | Pruning expired worker heartbeats ($M = \text{removed members}$) |
    - **Queue Depth Score Intervals:** Queue-depth queries execute `ZCOUNT` using the exact disjoint score intervals established in G9.2.1:
-     * **Critical:** $3 \times 10^{12}+1$ through $4 \times 10^{12}-1$ (`[3000000000001, 4000000000000]`)
-     * **High:** $2 \times 10^{12}+1$ through $3 \times 10^{12}-1$ (`[2000000000001, 3000000000000]`)
-     * **Medium:** $10^{12}+1$ through $2 \times 10^{12}-1$ (`[1000000000001, 2000000000000]`)
-     * **Low:** $1$ through $10^{12}-1$ (`[1, 1000000000000]`)
-   - **Worker Expiry Threshold:** `ZREMRANGEBYSCORE taskforge:workers:active -inf (now - 15.0)` uses an authoritative 15-second cutoff ($\text{now} - 15.0$). Workers emit heartbeats every 5.0 seconds; this cutoff prevents active workers from being removed.
+     * **Critical:** $3 \times 10^{12}+1$ through $4 \times 10^{12}-1$ (`[3000000000001, 3999999999999]`)
+     * **High:** $2 \times 10^{12}+1$ through $3 \times 10^{12}-1$ (`[2000000000001, 2999999999999]`)
+     * **Medium:** $10^{12}+1$ through $2 \times 10^{12}-1$ (`[1000000000001, 1999999999999]`)
+     * **Low:** $1$ through $10^{12}-1$ (`[1, 999999999999]`)
+   - **Worker Expiry Threshold:** `ZREMRANGEBYSCORE taskforge:workers:active -inf (now - 15.0)` uses an authoritative 15-second cutoff ($\text{now} - 15.0$). Workers emit heartbeats every 5.0 seconds; this 15-second cutoff reflects the platform stale-worker expiration policy under normal operating conditions.
 
 ### 5.2 Metric Ownership & Aggregation Rules
 
