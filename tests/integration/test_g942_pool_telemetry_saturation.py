@@ -292,30 +292,54 @@ def test_g942_dedicated_telemetry_engine_isolation_during_pool_saturation(experi
         assert eng.pool.checkedout() == total_capacity, "Application pool must be 100% occupied"
 
         # While application pool is 100% full, test telemetry engine and complete scrape latency (R5)
-        # 1. Database query execution duration on dedicated telemetry engine
-        t0_query = time.perf_counter()
-        telemetry_eng = get_dedicated_telemetry_engine()
-        with telemetry_eng.connect() as tconn:
-            res = tconn.execute(text("SELECT 42")).scalar()
-            assert res == 42
-        query_dur_ms = (time.perf_counter() - t0_query) * 1000.0
+        # Instrument single cold-start scrape request to prove strict mathematical nesting:
+        # T_complete_scrape >= T_metrics_collection >= T_dedicated_db_query
+        from taskforge.monitoring import collector
+        from taskforge.monitoring.collector import reset_gauge_snapshot_cache
+        reset_gauge_snapshot_cache()
 
-        # 2. Metrics collection duration across PostgreSQL & Redis
-        cache = GaugeSnapshotCache(telemetry_engine=telemetry_eng)
-        t0_collect = time.perf_counter()
-        collect_ok = cache.collect_and_update()
-        assert collect_ok is True
-        collect_dur_ms = (time.perf_counter() - t0_collect) * 1000.0
+        nested_timings: dict[str, float] = {}
+        orig_fetch = collector.GaugeSnapshotCache._fetch_outbox_telemetry
+        orig_collect = collector.GaugeSnapshotCache.collect_and_update
 
-        # 3. Complete Prometheus scrape response duration
+        def _timed_fetch(self_cache):
+            t_start = time.perf_counter()
+            res = orig_fetch(self_cache)
+            t_end = time.perf_counter()
+            nested_timings["db_query_duration_ms"] = (t_end - t_start) * 1000.0
+            return res
+
+        def _timed_collect(self_cache):
+            t_start = time.perf_counter()
+            res = orig_collect(self_cache)
+            t_end = time.perf_counter()
+            nested_timings["collection_duration_ms"] = (t_end - t_start) * 1000.0
+            return res
+
+        collector.GaugeSnapshotCache._fetch_outbox_telemetry = _timed_fetch
+        collector.GaugeSnapshotCache.collect_and_update = _timed_collect
+
         t0_scrape = time.perf_counter()
         scrape_bytes = get_metrics_content()
-        scrape_dur_ms = (time.perf_counter() - t0_scrape) * 1000.0
+        t1_scrape = time.perf_counter()
+        scrape_dur_ms = (t1_scrape - t0_scrape) * 1000.0
 
-        # Invariants: All durations must be strictly bounded (< 1.0s / 1000ms)
-        assert query_dur_ms < 1000.0, f"Dedicated DB query took {query_dur_ms:.2f}ms (target < 1000ms)"
+        collector.GaugeSnapshotCache._fetch_outbox_telemetry = orig_fetch
+        collector.GaugeSnapshotCache.collect_and_update = orig_collect
+
+        db_query_dur_ms = nested_timings["db_query_duration_ms"]
+        collect_dur_ms = nested_timings["collection_duration_ms"]
+
+        # Invariant 1: All durations must be strictly bounded (< 1.0s / 1000ms)
+        assert db_query_dur_ms < 1000.0, f"Dedicated DB query took {db_query_dur_ms:.2f}ms (target < 1000ms)"
         assert collect_dur_ms < 1000.0, f"Metrics collection took {collect_dur_ms:.2f}ms (target < 1000ms)"
         assert scrape_dur_ms < 1000.0, f"Complete scrape response took {scrape_dur_ms:.2f}ms (target < 1000ms)"
+
+        # Invariant 2: Mathematical nesting hierarchy of single scrape request
+        assert scrape_dur_ms >= collect_dur_ms >= db_query_dur_ms, (
+            f"Mathematical nesting violated: scrape({scrape_dur_ms:.2f}ms) >= "
+            f"collect({collect_dur_ms:.2f}ms) >= db_query({db_query_dur_ms:.2f}ms)"
+        )
 
         # Freshness verification: Live scrape reflects 15/15 occupancy and 10 overflow
         scrape_text = scrape_bytes.decode("utf-8")

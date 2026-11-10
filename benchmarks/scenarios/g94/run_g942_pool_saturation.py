@@ -364,26 +364,59 @@ def verify_telemetry_engine_isolation() -> dict[str, Any]:
         time.sleep(0.15)
         assert eng.pool.checkedout() == capacity, "Application pool must be 100% occupied"
 
-        # While business pool is saturated, test dedicated telemetry engine across 3 distinct dimensions (R5)
-        # 1. Database query duration on dedicated engine
-        telemetry_eng = get_dedicated_telemetry_engine()
-        t0 = time.perf_counter()
-        with telemetry_eng.connect() as tconn:
-            val = tconn.execute(text("SELECT 99")).scalar()
-            assert val == 99
-        query_dur_ms = round((time.perf_counter() - t0) * 1000.0, 3)
+        # While business pool is saturated, test dedicated telemetry engine across two clear request scenarios (R5):
+        # Scenario A: True nested single scrape request (cold cache, synchronous backend queries)
+        from taskforge.monitoring import collector
+        from taskforge.monitoring.collector import reset_gauge_snapshot_cache
+        reset_gauge_snapshot_cache()
 
-        # 2. Metrics collection duration (PostgreSQL outbox + Redis queue queries)
-        cache = GaugeSnapshotCache(telemetry_engine=telemetry_eng)
-        t0_collect = time.perf_counter()
-        collect_ok = cache.collect_and_update()
-        assert collect_ok is True
-        collection_dur_ms = round((time.perf_counter() - t0_collect) * 1000.0, 3)
+        req_id_nested = f"scrape-sat-nested-{time.time_ns()}"
+        nested_timings: dict[str, float] = {}
+        orig_fetch = collector.GaugeSnapshotCache._fetch_outbox_telemetry
+        orig_collect = collector.GaugeSnapshotCache.collect_and_update
 
-        # 3. Complete Prometheus scrape response duration
-        t0_scrape = time.perf_counter()
+        def _timed_fetch(self_cache):
+            t_start = time.perf_counter()
+            res = orig_fetch(self_cache)
+            t_end = time.perf_counter()
+            nested_timings["db_query_start"] = t_start
+            nested_timings["db_query_end"] = t_end
+            nested_timings["db_query_duration_ms"] = round((t_end - t_start) * 1000.0, 3)
+            return res
+
+        def _timed_collect(self_cache):
+            t_start = time.perf_counter()
+            res = orig_collect(self_cache)
+            t_end = time.perf_counter()
+            nested_timings["collection_start"] = t_start
+            nested_timings["collection_end"] = t_end
+            nested_timings["collection_duration_ms"] = round((t_end - t_start) * 1000.0, 3)
+            return res
+
+        collector.GaugeSnapshotCache._fetch_outbox_telemetry = _timed_fetch
+        collector.GaugeSnapshotCache.collect_and_update = _timed_collect
+
+        t_scrape_start = time.perf_counter()
         scrape_bytes = get_metrics_content()
-        scrape_dur_ms = round((time.perf_counter() - t0_scrape) * 1000.0, 3)
+        t_scrape_end = time.perf_counter()
+        scrape_total_ms = round((t_scrape_end - t_scrape_start) * 1000.0, 3)
+
+        collector.GaugeSnapshotCache._fetch_outbox_telemetry = orig_fetch
+        collector.GaugeSnapshotCache.collect_and_update = orig_collect
+
+        # Invariant check: True nested hierarchy
+        db_query_ms = nested_timings["db_query_duration_ms"]
+        collection_ms = nested_timings["collection_duration_ms"]
+        assert scrape_total_ms >= collection_ms >= db_query_ms, (
+            f"Expected nested hierarchy: {scrape_total_ms} >= {collection_ms} >= {db_query_ms}"
+        )
+
+        # Scenario B: Subsequent warm cache scrape request (within 5.0s TTL)
+        req_id_warm = f"scrape-sat-warm-{time.time_ns()}"
+        t_warm_start = time.perf_counter()
+        warm_bytes = get_metrics_content()
+        t_warm_end = time.perf_counter()
+        warm_total_ms = round((t_warm_end - t_warm_start) * 1000.0, 3)
 
         active_val = DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get()
         overflow_val = DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get()
@@ -394,17 +427,29 @@ def verify_telemetry_engine_isolation() -> dict[str, Any]:
 
     set_engine(orig_engine)
     eng.dispose()
-    print(f"  -> Dedicated DB Query Duration: {query_dur_ms} ms (Target < 1000 ms)")
-    print(f"  -> Metrics Collection Duration: {collection_dur_ms} ms (Target < 1000 ms)")
-    print(f"  -> Complete Scrape Response Duration: {scrape_dur_ms} ms (Target < 1000 ms)")
+    print(f"  -> Nested Scrape [{req_id_nested}]:")
+    print(f"     1. Dedicated DB Query Duration: {db_query_ms} ms (Target < 1000 ms)")
+    print(f"     2. Synchronous Metrics Collection: {collection_ms} ms (Target < 1000 ms)")
+    print(f"     3. Complete Scrape Response: {scrape_total_ms} ms (Target < 1000 ms)")
+    print(f"     Strict Nesting: {scrape_total_ms} ms >= {collection_ms} ms >= {db_query_ms} ms [VERIFIED]")
+    print(f"  -> Warm Scrape [{req_id_warm}]: {warm_total_ms} ms (Within 5.0s TTL cache)")
     print(f"  -> Live Saturated Scrape Occupancy: Active={active_val}, Overflow={overflow_val}")
     return {
-        "telemetry_db_query_duration_ms": query_dur_ms,
-        "metrics_collection_duration_ms": collection_dur_ms,
-        "complete_scrape_response_duration_ms": scrape_dur_ms,
+        "isolation_verified": True,
+        "nested_cold_scrape": {
+            "request_id": req_id_nested,
+            "dedicated_db_query_duration_ms": db_query_ms,
+            "metrics_collection_duration_ms": collection_ms,
+            "complete_scrape_response_duration_ms": scrape_total_ms,
+            "mathematically_nested": True,
+        },
+        "warm_cache_scrape": {
+            "request_id": req_id_warm,
+            "complete_scrape_response_duration_ms": warm_total_ms,
+            "explanation": "Hits in-memory snapshot within 5.0s TTL, bypassing redundant DB and Redis queries",
+        },
         "business_pool_active_during_scrape": active_val,
         "business_pool_overflow_during_scrape": overflow_val,
-        "isolation_verified": True,
     }
 
 
