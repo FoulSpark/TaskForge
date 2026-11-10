@@ -1,0 +1,55 @@
+{
+  "milestone": "G9.4.4_broker_reconnection_and_outage_recovery",
+  "timestamp_utc": "2026-11-10T22:00:03.702229+00:00",
+  "provenance": {
+    "authorized_base_commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
+    "frozen_tag": "v0.8.0-phase8-freeze (da27047f56fe2eec75acdb8502f505542cf61202)",
+    "g943_closure_commit": "2aaf5c8"
+  },
+  "cardinality_audit": {
+    "adopted_contract": "Option A",
+    "legacy_g92_pool_series": 3,
+    "g942_net_new_pool_series": 19,
+    "g943_lease_and_fencing_series": 6,
+    "total_g94_net_new_additions": 25,
+    "g94_additions_ceiling": 25,
+    "total_combined_exposition": 28,
+    "combined_ceiling": 28,
+    "compliant": true
+  },
+  "outage_recovery_drill": {
+    "num_tasks": 50,
+    "outage_duration_seconds": 5.71,
+    "initial_outbox_events_count": 50,
+    "events_pending_during_outage": 50,
+    "failed_publish_attempts": 5,
+    "failed_dequeue_attempts": 5,
+    "final_published_outbox_events": 50,
+    "final_pending_outbox_events": 0,
+    "durable_outbox_event_loss": 0,
+    "final_tasks_completed_success": 50,
+    "final_task_results_persisted": 50,
+    "final_redis_queue_depth": 0,
+    "final_redis_in_flight_depth": 0,
+    "drain_duration_seconds": 2.3,
+    "process_survived_without_restart": true,
+    "invariants_met": true
+  },
+  "duplicate_delivery_drill": {
+    "task_id": "6f7f8562-88cb-4828-90d6-5cfc93e54b04",
+    "duplicate_delivery_handled_as": "TERMINAL_DUPLICATE",
+    "authoritative_state_corrupted": false,
+    "final_status": "SUCCESS",
+    "redis_cleared": true
+  },
+  "acceptance_criteria_verification": {
+    "durable_outbox_event_loss": 0,
+    "unpublished_events_recoverable": true,
+    "duplicate_delivery_safe": true,
+    "dispatcher_recovered": true,
+    "publisher_recovered": true,
+    "retry_exponential_backoff": true,
+    "no_process_restart_required": true,
+    "postgresql_authoritative": true
+  }
+}

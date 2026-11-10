@@ -135,6 +135,7 @@ class WorkerDispatcher:
     def _dispatch_loop(self) -> None:
         loop_iter = 0
         sleep_counter = 0
+        consecutive_broker_errors = 0
         while not self._stop_event.is_set():
             loop_iter += 1
             iter_id = f"iter-{loop_iter}"
@@ -193,7 +194,23 @@ class WorkerDispatcher:
                 },
             )
 
-            task_msg = self.broker.dequeue(timeout_seconds=self.poll_interval)
+            try:
+                task_msg = self.broker.dequeue(timeout_seconds=self.poll_interval)
+                consecutive_broker_errors = 0
+            except Exception as exc:
+                consecutive_broker_errors += 1
+                # Bounded exponential backoff: base poll_interval, doubling up to 5.0s max
+                backoff = min(5.0, self.poll_interval * (2 ** (consecutive_broker_errors - 1)))
+                logger.warning(
+                    "dispatcher_broker_dequeue_failed",
+                    error=str(exc),
+                    consecutive_errors=consecutive_broker_errors,
+                    backoff_seconds=backoff,
+                    worker_id=self.worker_id,
+                )
+                self._stop_event.wait(backoff)
+                continue
+
             if not task_msg:
                 continue
 

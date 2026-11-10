@@ -283,6 +283,19 @@ class RedisBroker(MessageBroker):
         self._sha_ack = self.client.script_load(LUA_ACK)
         self._sha_reclaim = self.client.script_load(LUA_RECLAIM)
 
+    def _evalsha_with_reload(
+        self, sha_attr_name: str, script_code: str, numkeys: int, *keys_and_args: Any
+    ) -> Any:
+        """Execute evalsha with automatic script cache reloading if Redis restarted/flushed."""
+        try:
+            sha = getattr(self, sha_attr_name)
+            return self.client.evalsha(sha, numkeys, *keys_and_args)
+        except redis.exceptions.NoScriptError:
+            logger.warning("redis_script_cache_missing_reloading", script_attr=sha_attr_name)
+            new_sha = self.client.script_load(script_code)
+            setattr(self, sha_attr_name, new_sha)
+            return self.client.evalsha(new_sha, numkeys, *keys_and_args)
+
     def enqueue(self, task_id: str, priority: int, payload: dict[str, Any]) -> None:
         message = json.dumps(
             {
@@ -291,8 +304,9 @@ class RedisBroker(MessageBroker):
                 "payload": payload,
             }
         )
-        self.client.evalsha(
-            self._sha_enqueue,
+        self._evalsha_with_reload(
+            "_sha_enqueue",
+            LUA_ENQUEUE,
             2,
             self.queue_name,
             self.seq_key,
@@ -305,8 +319,9 @@ class RedisBroker(MessageBroker):
     def dequeue(self, timeout_seconds: float = 1.0) -> dict[str, Any] | None:
         now = time.time()
         delivery_token = f"del-{uuid.uuid4().hex}"
-        res = self.client.evalsha(
-            self._sha_dequeue,
+        res = self._evalsha_with_reload(
+            "_sha_dequeue",
+            LUA_DEQUEUE,
             2,
             self.queue_name,
             self.in_flight_name,
@@ -334,8 +349,9 @@ class RedisBroker(MessageBroker):
         if not token:
             logger.warning("ack_rejected_missing_delivery_token", task_id=task_id)
             return False
-        removed = self.client.evalsha(
-            self._sha_ack,
+        removed = self._evalsha_with_reload(
+            "_sha_ack",
+            LUA_ACK,
             1,
             self.in_flight_name,
             task_id,
@@ -345,8 +361,9 @@ class RedisBroker(MessageBroker):
 
     def reclaim_expired(self, timeout_seconds: float = 30.0) -> int:
         now = time.time()
-        reclaimed = self.client.evalsha(
-            self._sha_reclaim,
+        reclaimed = self._evalsha_with_reload(
+            "_sha_reclaim",
+            LUA_RECLAIM,
             3,
             self.in_flight_name,
             self.queue_name,

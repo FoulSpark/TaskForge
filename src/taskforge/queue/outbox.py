@@ -15,7 +15,11 @@ logger = get_logger(__name__)
 
 
 def publish_pending_outbox_events(
-    db: Session, broker: MessageBroker, limit: int = 50, event_id: str | None = None
+    db: Session,
+    broker: MessageBroker,
+    limit: int = 50,
+    event_id: str | None = None,
+    raise_on_connection_error: bool = False,
 ) -> int:
     """
     Fetch pending outbox events and publish them to the message broker.
@@ -109,6 +113,12 @@ def publish_pending_outbox_events(
                 error=str(exc),
                 retry_count=event.retry_count,
             )
+            is_conn_err = "Connection" in type(exc).__name__ or "Timeout" in type(exc).__name__
+            if is_conn_err:
+                db.commit()
+                if raise_on_connection_error:
+                    raise
+                break
 
     db.commit()
     for tid in published_task_ids:
@@ -140,10 +150,23 @@ class OutboxPublisherWorker:
             logger.info("outbox_publisher_stopped")
 
     def _run(self) -> None:
+        consecutive_errors = 0
         while not self._stop_event.is_set():
             try:
                 with SessionLocal() as db:
-                    publish_pending_outbox_events(db, self.broker)
+                    publish_pending_outbox_events(
+                        db, self.broker, raise_on_connection_error=True
+                    )
+                consecutive_errors = 0
+                self._stop_event.wait(self.poll_interval)
             except Exception as exc:
-                logger.error("outbox_publisher_cycle_error", error=str(exc))
-            self._stop_event.wait(self.poll_interval)
+                consecutive_errors += 1
+                # Bounded exponential backoff: base poll_interval, doubling up to 5.0s max (no tight spin)
+                backoff = min(5.0, self.poll_interval * (2 ** (consecutive_errors - 1)))
+                logger.warning(
+                    "outbox_publisher_cycle_failed",
+                    error=str(exc),
+                    consecutive_errors=consecutive_errors,
+                    backoff_seconds=backoff,
+                )
+                self._stop_event.wait(backoff)
