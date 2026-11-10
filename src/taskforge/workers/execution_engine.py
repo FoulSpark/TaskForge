@@ -13,6 +13,7 @@ from taskforge.core.state_machine import TaskStatus, is_terminal_state
 from taskforge.database.models import TaskAttempt, get_utc_now
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
+from taskforge.monitoring.metrics import record_task_execution_duration
 from taskforge.tasks.registry import get_handler
 from taskforge.workers.lease_manager import LeaseManager
 
@@ -169,14 +170,23 @@ def execute_task(
         # Execute handler with timeout enforcement without blocking on executor __exit__
         handler = get_handler(task_type)
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        t_handler_start = time.perf_counter()
         try:
             future = executor.submit(handler, payload)
             result_data = future.result(timeout=timeout_seconds)
+            t_handler_duration = time.perf_counter() - t_handler_start
+            record_task_execution_duration(task_type, t_handler_duration)
         except concurrent.futures.TimeoutError:
+            t_handler_duration = time.perf_counter() - t_handler_start
+            record_task_execution_duration(task_type, t_handler_duration)
             try:
                 executor.shutdown(wait=False, cancel_futures=True)
             except TypeError:
                 executor.shutdown(wait=False)
+            raise
+        except Exception:
+            t_handler_duration = time.perf_counter() - t_handler_start
+            record_task_execution_duration(task_type, t_handler_duration)
             raise
         finally:
             try:

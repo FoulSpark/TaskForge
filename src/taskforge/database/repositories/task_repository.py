@@ -21,6 +21,14 @@ from taskforge.database.models import (
     TaskResult,
     get_utc_now,
 )
+from taskforge.monitoring.metrics import (
+    record_lease_recovery,
+    record_queue_wait,
+    record_task_completed,
+    record_task_dead_letter,
+    record_task_retry,
+    record_task_submitted,
+)
 
 
 @dataclass(frozen=True)
@@ -30,6 +38,9 @@ class RecoveredTaskInfo:
     task_id: str
     status: str
     lease_token: str | None = None
+    task_type: str = "other"
+    priority: int = 1
+    payload: Any = None
 
     @property
     def id(self) -> str:
@@ -210,6 +221,10 @@ class TaskRepository:
 
             self.db.commit()
             created_task = self.get_by_id(task.id)
+            if created_task:
+                record_task_submitted(created_task.task_type, created_task.priority)
+            else:
+                record_task_submitted(task.task_type, task.priority)
             return CreateTaskResult(created_task, True)  # type: ignore
         except IntegrityError as exc:
             self.db.rollback()
@@ -325,6 +340,16 @@ class TaskRepository:
         self.db.commit()
         self.db.refresh(task)
 
+        if nxt_status == TaskStatus.CANCELLED:
+            record_task_completed(task.task_type, "CANCELLED")
+        elif nxt_status == TaskStatus.FAILED:
+            record_task_completed(task.task_type, "FAILED")
+        elif nxt_status == TaskStatus.DEAD_LETTER:
+            record_task_dead_letter(task.task_type)
+            record_task_completed(task.task_type, "DEAD_LETTER")
+        elif nxt_status == TaskStatus.SUCCESS:
+            record_task_completed(task.task_type, "SUCCESS")
+
         # Invalidate read cache
         try:
             from taskforge.core.cache import get_cache
@@ -419,6 +444,17 @@ class TaskRepository:
         self.db.add(attempt)
         self.db.commit()
         self.db.refresh(attempt)
+
+        t_created = task.created_at
+        t_started = attempt.started_at
+        if t_created and t_started:
+            if t_created.tzinfo is None:
+                t_created = t_created.replace(tzinfo=UTC)
+            if t_started.tzinfo is None:
+                t_started = t_started.replace(tzinfo=UTC)
+            wait_s = max(0.0, (t_started - t_created).total_seconds())
+            record_queue_wait(task.task_type, task.priority, wait_s)
+
         return attempt
 
     def record_result(
@@ -533,6 +569,7 @@ class TaskRepository:
 
             self.db.commit()
             self.db.refresh(task)
+            record_task_completed(task.task_type, "SUCCESS")
         except Exception:
             self.db.rollback()
             raise
@@ -688,6 +725,13 @@ class TaskRepository:
 
             self.db.commit()
             self.db.refresh(task)
+
+            if task.status == TaskStatus.RETRY_WAIT.value:
+                failure_reason = "timeout" if is_timeout else "exception"
+                record_task_retry(task.task_type, failure_reason)
+            elif task.status == TaskStatus.DEAD_LETTER.value:
+                record_task_dead_letter(task.task_type)
+                record_task_completed(task.task_type, "DEAD_LETTER")
         except Exception:
             self.db.rollback()
             raise
@@ -795,7 +839,7 @@ class TaskRepository:
         self.db.commit()
         return True
 
-    def recover_expired_leases(self) -> list[RecoveredTaskInfo]:
+    def recover_expired_leases(self, initiator: str = "supervisor") -> list[RecoveredTaskInfo]:
         """Find RUNNING tasks whose lease has expired and transition them to RETRY_WAIT or DEAD_LETTER.
         Commits the transaction explicitly on success, or rolls back on exception before re-raising.
         Returns a list of immutable RecoveredTaskInfo objects.
@@ -810,6 +854,7 @@ class TaskRepository:
             )
             expired_tasks = list(self.db.scalars(stmt).all())
             recovered: list[RecoveredTaskInfo] = []
+            recovery_records: list[tuple[str, str, str]] = []
             for task in expired_tasks:
                 # Re-check under row lock
                 if task.lease_expires_at is not None:
@@ -823,9 +868,11 @@ class TaskRepository:
                 if task.retry_count <= task.max_retries:
                     task.status = TaskStatus.RETRY_WAIT.value
                     event_reason = f"lease_expired_recovered_for_retry_{task.retry_count}"
+                    recovery_res = "requeued"
                 else:
                     task.status = TaskStatus.DEAD_LETTER.value
                     event_reason = "lease_expired_retries_exhausted_sent_to_dlq"
+                    recovery_res = "abandoned"
 
                 task.lease_token = None
                 task.lease_expires_at = None
@@ -840,9 +887,27 @@ class TaskRepository:
                     created_at=now,
                 )
                 self.db.add(event)
-                recovered.append(RecoveredTaskInfo(task_id=task.id, status=task.status))
+                recovered.append(
+                    RecoveredTaskInfo(
+                        task_id=task.id,
+                        status=task.status,
+                        task_type=task.task_type,
+                        priority=task.priority,
+                        payload=task.payload,
+                    )
+                )
+                recovery_records.append((task.task_type, task.status, recovery_res))
 
             self.db.commit()
+
+            for t_type, t_status, r_res in recovery_records:
+                record_lease_recovery(initiator, r_res)
+                if t_status == TaskStatus.RETRY_WAIT.value:
+                    record_task_retry(t_type, failure_reason="timeout")
+                elif t_status == TaskStatus.DEAD_LETTER.value:
+                    record_task_dead_letter(t_type)
+                    record_task_completed(t_type, "DEAD_LETTER")
+
             return recovered
         except Exception:
             self.db.rollback()

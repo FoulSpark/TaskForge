@@ -189,3 +189,39 @@ def handle_sleep(payload: dict[str, Any]) -> dict[str, Any]:
     duration = float(payload.get("duration", 1.0))
     time.sleep(duration)
     return {"slept_seconds": duration, "status": "sleep_complete"}
+
+
+@register_handler("image_resize")
+def handle_image_resize(payload: dict[str, Any]) -> dict[str, Any]:
+    """Simulated image resizing task."""
+    width = payload.get("width", 800)
+    height = payload.get("height", 600)
+    return {"resized": True, "dimensions": f"{width}x{height}", "status": "processed"}
+
+
+@register_handler("payment_reconcile")
+def handle_payment_reconcile(payload: dict[str, Any]) -> dict[str, Any]:
+    """Simulated payment reconciliation task."""
+    tx_count = payload.get("tx_count", 1)
+    return {"reconciled": True, "tx_count": tx_count, "status": "reconciled"}
+
+
+@register_handler("report_generate")
+def handle_report_generate(payload: dict[str, Any]) -> dict[str, Any]:
+    """Simulated report generation task."""
+    report_type = payload.get("report_type", "summary")
+    return {"report_type": report_type, "generated": True, "status": "complete"}
+
+
+@register_handler("webhook_send")
+def handle_webhook_send(payload: dict[str, Any]) -> dict[str, Any]:
+    """Simulated webhook transmission task."""
+    url = payload.get("url", "https://example.com/webhook")
+    return {"delivered": True, "destination": url, "status": "sent"}
+
+
+@register_handler("csv_export")
+def handle_csv_export(payload: dict[str, Any]) -> dict[str, Any]:
+    """Simulated CSV export task."""
+    rows = payload.get("rows", 100)
+    return {"exported": True, "row_count": rows, "status": "exported"}

@@ -53,7 +53,7 @@ def trigger_recovery(
     principal: AuthenticatedPrincipal = Depends(require_scope("admin:operator")),
 ):
     repo = TaskRepository(db)
-    recovered = repo.recover_expired_leases()
+    recovered = repo.recover_expired_leases(initiator="operator")
     broker = get_broker()
     reclaimed = broker.reclaim_expired() if broker else 0
 

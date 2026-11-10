@@ -153,7 +153,7 @@ def idempotency_storm(
 @router.post("/recover-stale", summary="Trigger stale lease recovery sweep")
 def recover_stale_leases(db: Session = Depends(get_db)):
     repo = TaskRepository(db)
-    recovered = repo.recover_expired_leases()
+    recovered = repo.recover_expired_leases(initiator="operator")
     broker = get_broker()
     for t in recovered:
         if t.status == "RETRY_WAIT":
