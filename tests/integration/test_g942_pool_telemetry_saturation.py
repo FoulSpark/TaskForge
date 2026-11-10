@@ -291,21 +291,38 @@ def test_g942_dedicated_telemetry_engine_isolation_during_pool_saturation(experi
         time.sleep(0.15)
         assert eng.pool.checkedout() == total_capacity, "Application pool must be 100% occupied"
 
-        # While application pool is 100% full, test telemetry engine
-        t0 = time.perf_counter()
+        # While application pool is 100% full, test telemetry engine and complete scrape latency (R5)
+        # 1. Database query execution duration on dedicated telemetry engine
+        t0_query = time.perf_counter()
         telemetry_eng = get_dedicated_telemetry_engine()
         with telemetry_eng.connect() as tconn:
             res = tconn.execute(text("SELECT 42")).scalar()
             assert res == 42
-        telemetry_dur = time.perf_counter() - t0
+        query_dur_ms = (time.perf_counter() - t0_query) * 1000.0
 
-        # Dedicated telemetry query must succeed rapidly without waiting on the saturated business pool
-        assert telemetry_dur < 1.0, f"Telemetry query took {telemetry_dur:.3f}s (should be < 1.0s)"
-
-        # Scrape metrics content
+        # 2. Metrics collection duration across PostgreSQL & Redis
         cache = GaugeSnapshotCache(telemetry_engine=telemetry_eng)
-        cache.update_db_pool_connections()
-        assert DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get() == 15
+        t0_collect = time.perf_counter()
+        collect_ok = cache.collect_and_update()
+        assert collect_ok is True
+        collect_dur_ms = (time.perf_counter() - t0_collect) * 1000.0
+
+        # 3. Complete Prometheus scrape response duration
+        t0_scrape = time.perf_counter()
+        scrape_bytes = get_metrics_content()
+        scrape_dur_ms = (time.perf_counter() - t0_scrape) * 1000.0
+
+        # Invariants: All durations must be strictly bounded (< 1.0s / 1000ms)
+        assert query_dur_ms < 1000.0, f"Dedicated DB query took {query_dur_ms:.2f}ms (target < 1000ms)"
+        assert collect_dur_ms < 1000.0, f"Metrics collection took {collect_dur_ms:.2f}ms (target < 1000ms)"
+        assert scrape_dur_ms < 1000.0, f"Complete scrape response took {scrape_dur_ms:.2f}ms (target < 1000ms)"
+
+        # Freshness verification: Live scrape reflects 15/15 occupancy and 10 overflow
+        scrape_text = scrape_bytes.decode("utf-8")
+        assert 'taskforge_db_pool_active_connections{pool_name="primary"} 15.0' in scrape_text
+        assert 'taskforge_db_pool_overflow_connections{pool_name="primary"} 10.0' in scrape_text
+        assert 'taskforge_db_pool_connections{pool_state="checked_out"} 15.0' in scrape_text
+        assert 'taskforge_db_pool_connections{pool_state="overflow"} 10.0' in scrape_text
 
         hold_release.set()
         for f in futures:
@@ -313,6 +330,110 @@ def test_g942_dedicated_telemetry_engine_isolation_during_pool_saturation(experi
 
     time.sleep(0.1)
     assert eng.pool.checkedout() == 0
+
+
+def test_g942_pool_occupancy_transitions_and_nonnegative_overflow(experimental_saturation_engine):
+    """R1, R2, R3: Verifies active and overflow gauge transitions across:
+    - State 0: Empty pool (0 / 5)
+    - State 1: Partially initialized pool (2 / 5)
+    - State 2: Fully occupied base pool (5 / 5)
+    - State 3: Actual overflow usage (8 / 15: 5 base + 3 overflow)
+    - State 4: Maximum saturation (15 / 15: 5 base + 10 overflow)
+    - State 5: Release back to empty (0 / 5)
+
+    Invariants:
+    1. Checkout increases checked-out count immediately.
+    2. Checkin decreases checked-out count immediately.
+    3. Overflow is strictly non-negative (>= 0) in all states.
+    4. Prometheus text exposition confirms nonnegative values.
+    """
+    from taskforge.monitoring.metrics import DB_POOL_CONNECTIONS
+
+    eng = experimental_saturation_engine
+
+    # --- State 0: Empty Pool ---
+    content_0 = get_metrics_content().decode("utf-8")
+    assert DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get() == 0.0
+    assert DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get() == 0.0
+    assert DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get() >= 0.0
+    assert 'taskforge_db_pool_connections{pool_state="overflow"} 0.0' in content_0
+    assert 'taskforge_db_pool_overflow_connections{pool_name="primary"} 0.0' in content_0
+
+    # --- State 1: Partial Occupancy (2 connections checked out) ---
+    c1 = eng.connect()
+    c2 = eng.connect()
+    try:
+        assert DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get() == 2.0
+        assert DB_POOL_CONNECTIONS.labels(pool_state="checked_out")._value.get() == 2.0
+        assert DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get() == 0.0
+        assert DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get() == 0.0
+        content_1 = get_metrics_content().decode("utf-8")
+        assert 'taskforge_db_pool_connections{pool_state="checked_out"} 2.0' in content_1
+        assert 'taskforge_db_pool_connections{pool_state="overflow"} 0.0' in content_1
+        assert 'taskforge_db_pool_overflow_connections{pool_name="primary"} 0.0' in content_1
+
+        # --- State 2: Fully Occupied Base Pool (5 connections checked out) ---
+        c3 = eng.connect()
+        c4 = eng.connect()
+        c5 = eng.connect()
+        try:
+            assert DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get() == 5.0
+            assert DB_POOL_CONNECTIONS.labels(pool_state="checked_out")._value.get() == 5.0
+            assert DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get() == 0.0
+            assert DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get() == 0.0
+            content_2 = get_metrics_content().decode("utf-8")
+            assert 'taskforge_db_pool_connections{pool_state="checked_out"} 5.0' in content_2
+            assert 'taskforge_db_pool_connections{pool_state="overflow"} 0.0' in content_2
+
+            # --- State 3: Actual Overflow Usage (8 connections checked out: 5 base + 3 overflow) ---
+            c6 = eng.connect()
+            c7 = eng.connect()
+            c8 = eng.connect()
+            try:
+                assert DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get() == 8.0
+                assert DB_POOL_CONNECTIONS.labels(pool_state="checked_out")._value.get() == 8.0
+                assert DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get() == 3.0
+                assert DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get() == 3.0
+                content_3 = get_metrics_content().decode("utf-8")
+                assert 'taskforge_db_pool_connections{pool_state="checked_out"} 8.0' in content_3
+                assert 'taskforge_db_pool_connections{pool_state="overflow"} 3.0' in content_3
+                assert 'taskforge_db_pool_overflow_connections{pool_name="primary"} 3.0' in content_3
+
+                # --- State 4: Maximum Saturation (15 connections checked out: 5 base + 10 overflow) ---
+                overflow_conns = [eng.connect() for _ in range(7)]
+                try:
+                    assert DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get() == 15.0
+                    assert DB_POOL_CONNECTIONS.labels(pool_state="checked_out")._value.get() == 15.0
+                    assert DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get() == 10.0
+                    assert DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get() == 10.0
+                    content_4 = get_metrics_content().decode("utf-8")
+                    assert 'taskforge_db_pool_connections{pool_state="checked_out"} 15.0' in content_4
+                    assert 'taskforge_db_pool_connections{pool_state="overflow"} 10.0' in content_4
+                    assert 'taskforge_db_pool_overflow_connections{pool_name="primary"} 10.0' in content_4
+                finally:
+                    for conn in overflow_conns:
+                        conn.close()
+            finally:
+                c6.close()
+                c7.close()
+                c8.close()
+        finally:
+            c3.close()
+            c4.close()
+            c5.close()
+    finally:
+        c1.close()
+        c2.close()
+
+    # --- State 5: All Released Back to Empty ---
+    # Trigger scrape cache update
+    content_final = get_metrics_content().decode("utf-8")
+    assert DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get() == 0.0
+    assert DB_POOL_CONNECTIONS.labels(pool_state="checked_out")._value.get() == 0.0
+    assert DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get() == 0.0
+    assert DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get() == 0.0
+    assert 'taskforge_db_pool_connections{pool_state="overflow"} 0.0' in content_final
+    assert 'taskforge_db_pool_overflow_connections{pool_name="primary"} 0.0' in content_final
 
 
 def test_g942_mixed_task_submission_and_lease_workload_under_contention(experimental_saturation_engine):

@@ -340,6 +340,7 @@ def run_timeout_rejection_drill() -> dict[str, Any]:
 
 def verify_telemetry_engine_isolation() -> dict[str, Any]:
     print("\n[G9.4.2] Verifying Dedicated Telemetry Engine Isolation during 100% Saturation...")
+    from taskforge.database.session import set_engine, engine as orig_engine
     eng = build_engine(
         database_url=BENCHMARK_DB_URL,
         pool_size=5,
@@ -348,6 +349,7 @@ def verify_telemetry_engine_isolation() -> dict[str, Any]:
         pool_name="primary",
         poolclass=InstrumentedQueuePool,
     )
+    set_engine(eng)
     capacity = 15
     hold_barrier = threading.Barrier(capacity)
     hold_release = threading.Event()
@@ -362,27 +364,46 @@ def verify_telemetry_engine_isolation() -> dict[str, Any]:
         time.sleep(0.15)
         assert eng.pool.checkedout() == capacity, "Application pool must be 100% occupied"
 
-        # While business pool is saturated, test dedicated telemetry engine
+        # While business pool is saturated, test dedicated telemetry engine across 3 distinct dimensions (R5)
+        # 1. Database query duration on dedicated engine
         telemetry_eng = get_dedicated_telemetry_engine()
         t0 = time.perf_counter()
         with telemetry_eng.connect() as tconn:
             val = tconn.execute(text("SELECT 99")).scalar()
             assert val == 99
-        telemetry_dur_ms = round((time.perf_counter() - t0) * 1000.0, 3)
+        query_dur_ms = round((time.perf_counter() - t0) * 1000.0, 3)
 
+        # 2. Metrics collection duration (PostgreSQL outbox + Redis queue queries)
         cache = GaugeSnapshotCache(telemetry_engine=telemetry_eng)
-        cache.update_db_pool_connections()
+        t0_collect = time.perf_counter()
+        collect_ok = cache.collect_and_update()
+        assert collect_ok is True
+        collection_dur_ms = round((time.perf_counter() - t0_collect) * 1000.0, 3)
+
+        # 3. Complete Prometheus scrape response duration
+        t0_scrape = time.perf_counter()
+        scrape_bytes = get_metrics_content()
+        scrape_dur_ms = round((time.perf_counter() - t0_scrape) * 1000.0, 3)
+
         active_val = DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary")._value.get()
+        overflow_val = DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary")._value.get()
 
         hold_release.set()
         for f in futures:
             f.result()
 
+    set_engine(orig_engine)
     eng.dispose()
-    print(f"  -> Dedicated Telemetry Query Duration: {telemetry_dur_ms} ms (Isolated from saturated pool)")
+    print(f"  -> Dedicated DB Query Duration: {query_dur_ms} ms (Target < 1000 ms)")
+    print(f"  -> Metrics Collection Duration: {collection_dur_ms} ms (Target < 1000 ms)")
+    print(f"  -> Complete Scrape Response Duration: {scrape_dur_ms} ms (Target < 1000 ms)")
+    print(f"  -> Live Saturated Scrape Occupancy: Active={active_val}, Overflow={overflow_val}")
     return {
-        "telemetry_query_duration_ms": telemetry_dur_ms,
-        "business_pool_occupancy_during_scrape": active_val,
+        "telemetry_db_query_duration_ms": query_dur_ms,
+        "metrics_collection_duration_ms": collection_dur_ms,
+        "complete_scrape_response_duration_ms": scrape_dur_ms,
+        "business_pool_active_during_scrape": active_val,
+        "business_pool_overflow_during_scrape": overflow_val,
         "isolation_verified": True,
     }
 

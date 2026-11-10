@@ -9,6 +9,7 @@ from sqlalchemy.pool import QueuePool
 from taskforge.core.config import get_settings
 from taskforge.core.logging import get_logger
 from taskforge.monitoring.metrics import (
+    DB_POOL_CONNECTIONS,
     record_db_pool_active_connections,
     record_db_pool_checkout_duration,
     record_db_pool_checkout_timeout,
@@ -37,9 +38,14 @@ class InstrumentedQueuePool(QueuePool):
         @event.listens_for(self, "checkin")
         def _on_checkin(dbapi_conn, conn_record):
             try:
+                # Inside checkin event, the returning connection is still counted in checkedout()
                 post_checkedout = max(0, self.checkedout() - 1)
+                active_overflow = max(0, self.overflow())
                 record_db_pool_active_connections(post_checkedout, pool_name=self._pool_name)
-                record_db_pool_overflow_connections(max(0, self.overflow()), pool_name=self._pool_name)
+                record_db_pool_overflow_connections(active_overflow, pool_name=self._pool_name)
+                if self._pool_name == "primary":
+                    DB_POOL_CONNECTIONS.labels(pool_state="checked_out").set(post_checkedout)
+                    DB_POOL_CONNECTIONS.labels(pool_state="overflow").set(active_overflow)
             except Exception as exc:
                 logger.debug("Telemetry isolation: failed to record checkin pool telemetry: %s", exc)
 
@@ -49,14 +55,24 @@ class InstrumentedQueuePool(QueuePool):
             conn = super().connect()
             duration = time.perf_counter() - t0
             record_db_pool_checkout_duration(duration, pool_name=self._pool_name)
-            record_db_pool_active_connections(self.checkedout(), pool_name=self._pool_name)
-            record_db_pool_overflow_connections(max(0, self.overflow()), pool_name=self._pool_name)
+            checked_out = self.checkedout()
+            active_overflow = max(0, self.overflow())
+            record_db_pool_active_connections(checked_out, pool_name=self._pool_name)
+            record_db_pool_overflow_connections(active_overflow, pool_name=self._pool_name)
+            if self._pool_name == "primary":
+                DB_POOL_CONNECTIONS.labels(pool_state="checked_out").set(checked_out)
+                DB_POOL_CONNECTIONS.labels(pool_state="overflow").set(active_overflow)
             return conn
         except sa_exc.TimeoutError:
             duration = time.perf_counter() - t0
             record_db_pool_checkout_timeout(pool_name=self._pool_name)
-            record_db_pool_active_connections(self.checkedout(), pool_name=self._pool_name)
-            record_db_pool_overflow_connections(max(0, self.overflow()), pool_name=self._pool_name)
+            checked_out = self.checkedout()
+            active_overflow = max(0, self.overflow())
+            record_db_pool_active_connections(checked_out, pool_name=self._pool_name)
+            record_db_pool_overflow_connections(active_overflow, pool_name=self._pool_name)
+            if self._pool_name == "primary":
+                DB_POOL_CONNECTIONS.labels(pool_state="checked_out").set(checked_out)
+                DB_POOL_CONNECTIONS.labels(pool_state="overflow").set(active_overflow)
             raise
 
 

@@ -329,7 +329,10 @@ def test_db_pool_gauges_reflect_application_pool_without_borrowing_connection():
     # Verify Prometheus metrics match application pool
     assert DB_POOL_CONNECTIONS.labels(pool_state="checked_out")._value.get() == engine.pool.checkedout()
     assert DB_POOL_CONNECTIONS.labels(pool_state="idle")._value.get() == engine.pool.checkedin()
-    assert DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get() == engine.pool.overflow()
+    # G9.4.2 Invariant: exported overflow connection count is strictly non-negative (>= 0)
+    overflow_val = DB_POOL_CONNECTIONS.labels(pool_state="overflow")._value.get()
+    assert overflow_val == max(0, engine.pool.overflow())
+    assert overflow_val >= 0.0
 
 
 # ==============================================================================
