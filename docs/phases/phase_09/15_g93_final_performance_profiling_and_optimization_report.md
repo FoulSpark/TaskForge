@@ -87,9 +87,9 @@ Ingestion              Outbox Lag                Redis Broker Dwell Proxy       
 1. **Client-Observed Broker Dwell Proxy vs. Redis Server Sorted-Set Residence:**
    - $T_{\text{broker-dwell}}$ ($9.25 - 22.46\,\text{seconds}$) represents the client-observed interval between `redis_enqueue_complete` and `redis_dequeue_complete`. 
    - This interval serves as a client-observed proxy for queue residence, which includes Redis sorted set dwell, network transport, dispatcher loop scheduling, and client socket reception. It must not be treated as purely server-side ZSET residence.
-2. **Outbox Lag Sub-Intervals:**
-   - Eligible outbox lag ($T_{\text{outbox-lag}} = 71.78 - 145.13\,\text{ms}$) is dominated by outbox publisher polling interval alignment ($100\,\text{ms}$ fixed polling sleep) and batch claim query execution (`SELECT ... FOR UPDATE SKIP LOCKED`).
-   - The isolated Redis enqueue network round-trip ($T_{\text{redis-enq}}$) requires only $2.8 - 8.1\,\text{ms}$ ($p50$). Outbox lag is therefore driven primarily by polling sleep alignment and DB batch claim queries, not Redis write latency.
+2. **Outbox Lag Sub-Intervals & Attribution Qualification:**
+   - The measured eligible outbox lag ($T_{\text{outbox-lag}} = 71.78 - 145.13\,\text{ms}$) is consistent with a substantial contribution from the publisher's 100 ms polling cadence and batch-claim work. The available measurements do not independently isolate the contribution of each component.
+   - The isolated Redis enqueue network round-trip ($T_{\text{redis-enq}}$) requires only $2.8 - 8.1\,\text{ms}$ ($p50$), distinguishing pure Redis write network latency from broader outbox claim and polling intervals.
 3. **The Idle Worker Paradox:**
    - Continuous timeline reconstruction across 1,000 points revealed that while logical queue depth remained heavily positive ($Q(t) > 0$), active worker occupancy was zero ($W=0$) for **$58.4\% - 78.7\%$** of queue-positive time.
    - This concentrated platform optimization directly on `WorkerDispatcher`: why were available worker slots starved when tasks were resident in Redis?
@@ -191,12 +191,12 @@ All figures represent multi-trial means across 3 paired observations per conditi
 | **End-to-End Latency ($T_{\text{e2e}}$)** | W-01 (`noop`, $c=10$) | 5,718.77 ms | **5,172.12 ms** | **$-9.56\%$** | Faster task lifecycle |
 | ($p50$) | W-02 (`prime`, $c=4$) | 2,811.45 ms | **2,147.21 ms** | **$-23.63\%$** | Substantial turnaround reduction |
 | | W-03 (`io`, $c=10$) | 2,460.87 ms | **2,297.87 ms** | **$-6.62\%$** | Consistent E2E reduction |
-| **Process CPU Utilization** | All Workloads | Baseline | Adopted (`a89858b`) | **Neutral ($\pm 3\%$)** | W-01: $-3.53\%$, W-02: $+2.17\%$, W-03: $-0.33\%$ |
+| **Process CPU Utilization** | All Workloads | Baseline | Adopted (`a89858b`) | **No clear regression** | W-01: $-3.53\%$, W-02: $+2.17\%$, W-03: $-0.33\%$ |
 
 ### Methodological Qualifications:
 - **Phase 2B vs. Phase 2C Distinction:** Pre-optimization baseline and initial wake-up deltas were measured during the Phase 2B 18-trial interleaved campaign. Post-optimization production metrics reflect the independent Phase 2C 18-trial campaign conducted under the production-adopted dispatcher (`a89858b`).
 - **Saturation Metrics:** Worker saturation improvements represent relative percentage gains computed from underlying percentage-point shifts (e.g. W-01: $44.5\% \to 78.0\%$, a $+33.5$ percentage-point gain, or $+76.4\%$ relative).
-- **Process CPU Measurement:** Process CPU time was captured via standard library `time.process_time()` across multi-trial means and remained within $\pm 3\%$.
+- **Process CPU Measurement:** Observed mean process CPU-time changes ranged from −3.53% to +2.17% (measured via standard library `time.process_time()` across multi-trial means). These descriptive results show no clear CPU regression in the tested campaigns; the sample size is insufficient to establish statistical equivalence.
 - **Statistical Scope:** With three paired observations per condition, these figures are descriptive characterizations of performance in the tested environment rather than universal statistical guarantees.
 
 ---
@@ -213,7 +213,7 @@ All figures represent multi-trial means across 3 paired observations per conditi
 
 ### 6.3 What Remains a Measured Limitation:
 - **High-Concurrency Serialization ($c=20$):** At $c=20$, a single dispatcher thread serializing single-task round-trips incurs $74\%$ duty cycle and drops worker saturation to $25\%$. The exact onset threshold between $c=10$ and $c=20$ remains unmeasured.
-- **Outbox Publisher Polling Lag:** Transactional outbox polling contributes $71.78 - 145.13\,\text{ms}$ ($p50$) between PostgreSQL task commit and Redis availability, driven primarily by outbox polling sleep cycles and batch query execution.
+- **Outbox Publisher Polling Lag:** Transactional outbox polling contributes $71.78 - 145.13\,\text{ms}$ ($p50$) between PostgreSQL task commit and Redis availability. This is consistent with a substantial contribution from the publisher's 100 ms polling cadence and batch-claim work, though individual components are not independently isolated.
 
 ### 6.4 What Must Not Be Changed Without New Evidence:
 - **Authoritative PostgreSQL State:** PostgreSQL remains the single source of truth for task state and lease ownership.
