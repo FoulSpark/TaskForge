@@ -16,20 +16,21 @@
 Phase 2A executed a **3-paired interleaved diagnostic campaign** ($3 \times \text{Disabled}$, $3 \times \text{Enabled}$, 18 trials total) across workloads W-01, W-02, and W-03 to measure internal dispatcher dynamics under positive queue depth. 
 
 ### Key Empirical Findings:
-1. **Primary Cause of Replenishment Delay (H1 Confirmed):**
+1. **Cause of Replenishment Delay (H1 Partially Supported Under Original Thresholds):**
    - **$74.5\% - 89.9\%$ of all worker slot releases occur while the dispatcher thread is asleep.**
    - Wake-up delay ($T_{\text{sleep-lag}}$) averages **$22.9 - 24.0\,\text{ms}$** ($p50$) and up to **$48.6\,\text{ms}$** ($p95$).
    - Wake-up delay accounts for **$75\% - 82\%$** of the total slot replenishment lag ($T_{\text{replenish-lag}} \approx 28.6 - 32.6\,\text{ms}$).
    - Starvation ratio $R_{\text{starve}} = 22.5\% - 28.7\%$ (for over a fifth of queue-positive time, capacity is free but idle because the dispatcher is asleep).
+   - *Threshold Qualification:* The original pre-registered thresholds ($T_{\text{sleep-lag}} > 50\,\text{ms}$ and $R_{\text{starve}} > 30\%$) were not met; however, the $75\%-82\%$ dominance of sleep lag in replenishment latency and high proportion of releases during sleep justify evaluating event-driven capacity wake-up.
 2. **Sequential Dequeue Overhead (H2 Characterized):**
-   - Client-observed Redis dequeue round-trip ($T_{\text{dequeue-exec}}$) takes only **$1.47 - 4.26\,\text{ms}$** ($p50$).
+   - Client-observed Redis dequeue round-trip ($T_{\text{dequeue-exec}}$) takes only **$1.47 - 4.26\,\text{ms}$** ($p50$). This measures client-observed round-trip time (including client and transport overhead), not pure Redis Lua execution.
    - Loop overhead ($T_{\text{loop-overhead}}$) is negligible ($10 - 20\,\mu\text{s}$). Dequeue execution accounts for only $\sim 5\% - 15\%$ of total replenishment lag.
 3. **Queue / State Mismatch (H4 Ruled Out):**
    - Direct timestamp comparison between dispatcher internal `_active_tasks` and reconstructed proxy occupancy $W(t)$ demonstrated near-zero drift (mean drift: **$0.000 - 0.009$**).
-4. **Diagnostic Overhead Across 3 Interleaved Pairs:**
-   - Duration deltas across interleaved pairs were low and consistent: **$+6.91\%$** for W-01, **$+1.21\%$** for W-02, and **$+2.45\%$** for W-03 (throughput deltas: $-6.36\%$, $-1.32\%$, $-2.39\%$).
+4. **Descriptive Diagnostic Overhead Across 3 Interleaved Pairs:**
+   - Mean enabled-condition duration increased by approximately 6.91% for W-01, 1.21% for W-02, and 2.45% for W-03 (throughput deltas: $-6.36\%$, $-1.32\%$, $-2.39\%$). With only three paired observations per workload, these results are descriptive and do not establish statistical significance or a reliable instrumentation-overhead estimate.
 5. **Phase 2B Recommendation:**
-   - **Phase 2B (Event-Driven Wake-Up Notification) is decisively justified.** Testing an event-driven capacity signal (`threading.Event`) when worker slots are released will directly address the dominant $24\,\text{ms}$ ($75-82\%$) wake-up bottleneck without altering single-element dequeue or risking queue/lease contracts.
+   - **Phase 2B (Event-Driven Wake-Up Notification) is authorized for experimental evaluation.** Testing an event-driven capacity signal when worker slots are released will directly address the dominant $24\,\text{ms}$ ($75-82\%$) wake-up bottleneck without altering single-element dequeue or risking queue/lease contracts.
 
 ---
 
@@ -95,7 +96,7 @@ All percentiles were computed directly per-sample across all enabled trials:
 | :--- | :---: | :---: | :---: | :--- |
 | **Releases During Sleep (%)** | **76.36%** | **89.85%** | **74.54%** | Vast majority of completions occur while dispatcher is sleeping |
 | **Wake-up Delay ($T_{\text{sleep-lag}}$)**<br>$p50$ / $p95$ | **23.93 ms** / 48.57 ms | **23.97 ms** / 43.37 ms | **22.90 ms** / 47.58 ms | Delay until fixed sleep expires |
-| **Redis Dequeue ($T_{\text{dequeue-exec}}$)**<br>$p50$ / $p95$ | **4.26 ms** / 11.23 ms | **1.47 ms** / 3.44 ms | **3.77 ms** / 8.52 ms | Pure Redis round-trip dequeue latency |
+| **Redis Dequeue ($T_{\text{dequeue-exec}}$)**<br>$p50$ / $p95$ | **4.26 ms** / 11.23 ms | **1.47 ms** / 3.44 ms | **3.77 ms** / 8.52 ms | Client-observed Redis round-trip dequeue latency (includes transport overhead) |
 | **Loop Overhead ($T_{\text{loop-overhead}}$)**<br>$p50$ / $p95$ | **0.01 ms** / 0.03 ms | **0.02 ms** / 0.04 ms | **0.02 ms** / 0.04 ms | In-process loop scheduling |
 | **Replenishment Lag ($T_{\text{replenish-lag}}$)**<br>$p50$ / $p95$ | **32.61 ms** / 95.19 ms | **28.60 ms** / 56.00 ms | **32.09 ms** / 63.84 ms | Total lag from release to next task submitted |
 | **Queue Starvation Ratio ($R_{\text{starve}}$)** | **28.69%** | **23.31%** | **22.52%** | Fraction of queue-backed time with free capacity while asleep |
@@ -107,9 +108,9 @@ All percentiles were computed directly per-sample across all enabled trials:
 
 | Hypothesis | Pre-Registered Decision Criteria | Measured Empirical Data | Final Attribution Evaluation |
 | :--- | :--- | :--- | :--- |
-| **H1: Polling Wake-up Delay** | $T_{\text{sleep-lag}} > 50\,\text{ms}$ or accounts for dominant lag fraction, $R_{\text{starve}} > 30\%$, releases during sleep $> 40\%$ | Releases during sleep = **$74.5\% - 89.9\%$**.<br>$T_{\text{sleep-lag}} = 23-24\,\text{ms}$ ($p50$), $48\,\text{ms}$ ($p95$).<br>Accounts for **$75\% - 82\%$** of total replenishment lag.<br>$R_{\text{starve}} = 22.5\% - 28.7\%$. | **STRONGLY CONFIRMED AS DOMINANT COMPONENT.**<br>Dispatcher polling sleep is the single largest factor starving idle worker slots. |
-| **H2: Sequential Dequeue Overhead** | $T_{\text{dequeue-exec}} > 40\%$ of replenishment lag, linear scaling with $c$ | $T_{\text{dequeue-exec}} = 1.47 - 4.26\,\text{ms}$ ($p50$).<br>Accounts for only **$5\% - 15\%$** of total replenishment lag. Loop overhead is negligible ($10-20\,\mu\text{s}$). | **MINOR COMPONENT.**<br>Redis dequeue is fast and does not constitute a primary bottleneck. |
-| **H3: Service-Time Limitation** | Worker occupancy $W \ge c$ for $> 80\%$ of queue-positive time | Queue saturation ($W \ge c$) was only **$41.2\% - 48.3\%$** of queue-backed duration. | **PARTIAL COMPONENT.**<br>Service time bounds turnover when saturated, but capacity is unutilized for the remainder. |
+| **H1: Polling Wake-up Delay** | $T_{\text{sleep-lag}} > 50\,\text{ms}$, $R_{\text{starve}} > 30\%$, releases during sleep $> 40\%$ | Releases during sleep = **$74.5\% - 89.9\%$**.<br>$T_{\text{sleep-lag}} = 22.9 - 24.0\,\text{ms}$ ($p50$), $48.6\,\text{ms}$ ($p95$).<br>**$T_{\text{sleep-lag}}$ accounts for $75\% - 82\%$ of total replenishment lag.**<br>$R_{\text{starve}} = 22.5\% - 28.7\%$. | **PARTIALLY SUPPORTED UNDER ORIGINAL THRESHOLDS; JUSTIFIES EVALUATING WAKE-UP.**<br>Original pre-registered thresholds ($>50\,\text{ms}$, $>30\%$) were not met. However, the dispatcher sleep interval accounts for $75\%-82\%$ of measured replenishment latency, and $74\%-90\%$ of completions occur during sleep, establishing that evaluating event-driven capacity wake-up is technically justified. |
+| **H2: Sequential Dequeue Overhead** | $T_{\text{dequeue-exec}} > 40\%$ of replenishment lag, linear scaling with $c$ | $T_{\text{dequeue-exec}} = 1.47 - 4.26\,\text{ms}$ ($p50$).<br>Accounts for only **$5\% - 15\%$** of replenishment lag. Loop overhead is negligible ($10-20\,\mu\text{s}$). | **MINOR COMPONENT.**<br>Redis dequeue is fast and does not constitute a primary bottleneck. |
+| **H3: Service-Time Limitation** | Worker occupancy $W \ge c$ for $> 80\%$ of queue-positive time | Queue saturation ($W \ge c$) was only **$41.2\% - 48.3\%$** of queue-backed duration. | **PARTIAL COMPONENT.**<br>Service time bounds turnover when saturated, but capacity is unutilized for over half the time. |
 | **H4: State Tracking Mismatch** | Reconstructed $W(t)$ vs internal `_active_tasks` drift $> 1.0$ | Mean state drift was **$0.000 - 0.009$**. Max drift was $\le 1$ at transient boundaries. | **DECISIVELY RULED OUT.**<br>Reconstruction accurately mirrors internal dispatcher state. |
 
 ---
@@ -124,3 +125,4 @@ Based on the definitive confirmation that **H1 (Polling Wake-up Delay)** account
   - Priority ordering (ZSET scores) and lease fencing remain unchanged.
   - Outbox transaction boundaries and retry mechanics remain unchanged.
   - Test coverage will specifically verify missed notifications, shutdown handling, spurious wake-ups, and concurrent task completion.
+

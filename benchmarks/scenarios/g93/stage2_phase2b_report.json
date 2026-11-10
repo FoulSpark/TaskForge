@@ -1,0 +1,2198 @@
+{
+  "milestone": "G9.3_stage2_phase2b_capacity_wakeup_evaluation",
+  "timestamp_utc": "2026-11-10T16:35:48.431365+00:00",
+  "git_provenance": {
+    "base_authorized_sha": "a4cb3a9",
+    "frozen_baseline_tag": "v0.8.0-phase8-freeze",
+    "frozen_baseline_commit": "da27047f56fe2eec75acdb8502f505542cf61202"
+  },
+  "workload_definitions_sha256": "04f2306538868a41514c19f0958e04bf0b0586b3a83989e115231a32e50f0110",
+  "workloads": {
+    "W-01": {
+      "workload_definition": {
+        "workload_id": "W-01",
+        "name": "baseline_noop_profiling",
+        "description": "Zero-overhead deterministic handler for baseline framework latency and throughput profiling.",
+        "task_type": "noop",
+        "payload": {
+          "benchmark": "g90_noop",
+          "sample": true
+        },
+        "concurrency": 10,
+        "warmup_tasks": 50,
+        "measured_tasks": 500,
+        "priority": 2,
+        "max_retries": 3,
+        "timeout_seconds": 10
+      },
+      "trials": [
+        {
+          "trial_id": "pair_1_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 500,
+          "completed_tasks": 500,
+          "duration_seconds": 19.776,
+          "throughput_tps": 25.28,
+          "total_cpu_seconds": 24.734,
+          "flush_report": {
+            "persisted_count": 12057,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-01_pair_1_baseline_baseline_1794328548.jsonl",
+          "raw_events_sha256": "8e080bae3cfca70a6abc67d1d05d1afeeca55f280b7156944afc0110b0a26cbf",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 144,
+              "dispatcher_dequeue_start": 2353,
+              "outbox_claim_commit": 144,
+              "task_transaction_commit": 550,
+              "api_request_received": 550,
+              "api_response_sent": 550,
+              "redis_enqueue_start": 550,
+              "redis_enqueue_complete": 550,
+              "redis_dequeue_complete": 550,
+              "lease_claim_start": 550,
+              "dispatcher_task_submitted": 550,
+              "outbox_published_commit": 550,
+              "lease_commit": 550,
+              "handler_start": 550,
+              "handler_end": 550,
+              "terminal_transaction_start": 550,
+              "terminal_commit": 550,
+              "redis_ack_complete": 550,
+              "worker_slot_released": 550,
+              "dispatcher_sleep_start": 308,
+              "dispatcher_sleep_end": 308
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 550,
+              "dequeues_count": 550,
+              "acks_count": 550,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 30.71,
+              "saturation_ratio_pct": 52.74,
+              "max_queue_depth": 240,
+              "mean_queue_depth": 103.78,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.27
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 308,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 51.759,
+                "p95_ms": 55.798,
+                "p99_ms": 61.79,
+                "max_ms": 112.54,
+                "min_ms": 50.075,
+                "mean_ms": 52.448,
+                "stddev_ms": 4.092,
+                "count": 308
+              },
+              "releases_during_sleep_count": 438,
+              "releases_while_awake_count": 112,
+              "pct_releases_during_sleep": 79.64,
+              "sleep_lag_dist": {
+                "p50_ms": 24.576,
+                "p95_ms": 47.755,
+                "p99_ms": 51.532,
+                "max_ms": 112.465,
+                "min_ms": 0.078,
+                "mean_ms": 25.162,
+                "stddev_ms": 14.563,
+                "count": 438
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 34.185,
+                "p95_ms": 74.611,
+                "p99_ms": 152.005,
+                "max_ms": 349.452,
+                "min_ms": 2.021,
+                "mean_ms": 38.81,
+                "stddev_ms": 30.949,
+                "count": 540
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 5845.199,
+                "p95_ms": 7049.993,
+                "p99_ms": 7141.328,
+                "max_ms": 7222.359,
+                "min_ms": 87.388,
+                "mean_ms": 4723.664,
+                "stddev_ms": 2309.482,
+                "count": 550
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.007,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_1_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 500,
+          "completed_tasks": 500,
+          "duration_seconds": 17.899,
+          "throughput_tps": 27.93,
+          "total_cpu_seconds": 21.781,
+          "flush_report": {
+            "persisted_count": 12593,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-01_pair_1_experimental_experimental_1794328571.jsonl",
+          "raw_events_sha256": "ad37ff3cc341bfb7e75cbc2fea8fbae03e84530d84b3791e9609e69ee5e06af4",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 127,
+              "dispatcher_dequeue_start": 2591,
+              "outbox_claim_commit": 127,
+              "task_transaction_commit": 550,
+              "api_request_received": 550,
+              "api_response_sent": 550,
+              "redis_enqueue_start": 550,
+              "redis_enqueue_complete": 550,
+              "redis_dequeue_complete": 550,
+              "lease_claim_start": 550,
+              "dispatcher_task_submitted": 550,
+              "lease_commit": 550,
+              "handler_start": 550,
+              "handler_end": 550,
+              "outbox_published_commit": 550,
+              "terminal_transaction_start": 550,
+              "terminal_commit": 550,
+              "redis_ack_complete": 550,
+              "worker_slot_released": 550,
+              "dispatcher_sleep_start": 474,
+              "dispatcher_sleep_end": 474
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 550,
+              "dequeues_count": 550,
+              "acks_count": 550,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 4.02,
+              "saturation_ratio_pct": 77.36,
+              "max_queue_depth": 225,
+              "mean_queue_depth": 99.1,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.83
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 474,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 24.888,
+                "p95_ms": 63.501,
+                "p99_ms": 66.153,
+                "max_ms": 70.271,
+                "min_ms": 0.522,
+                "mean_ms": 29.812,
+                "stddev_ms": 21.105,
+                "count": 474
+              },
+              "releases_during_sleep_count": 390,
+              "releases_while_awake_count": 160,
+              "pct_releases_during_sleep": 70.91,
+              "sleep_lag_dist": {
+                "p50_ms": 1.199,
+                "p95_ms": 4.795,
+                "p99_ms": 7.395,
+                "max_ms": 10.341,
+                "min_ms": 0.069,
+                "mean_ms": 1.655,
+                "stddev_ms": 1.57,
+                "count": 390
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 8.495,
+                "p95_ms": 33.079,
+                "p99_ms": 149.071,
+                "max_ms": 235.775,
+                "min_ms": 1.097,
+                "mean_ms": 15.503,
+                "stddev_ms": 28.433,
+                "count": 540
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 5125.026,
+                "p95_ms": 6255.947,
+                "p99_ms": 6333.977,
+                "max_ms": 6354.368,
+                "min_ms": 95.873,
+                "mean_ms": 4136.533,
+                "stddev_ms": 2046.336,
+                "count": 550
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.009,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_2_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 500,
+          "completed_tasks": 500,
+          "duration_seconds": 18.53,
+          "throughput_tps": 26.98,
+          "total_cpu_seconds": 22.172,
+          "flush_report": {
+            "persisted_count": 12192,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-01_pair_2_baseline_baseline_1794328591.jsonl",
+          "raw_events_sha256": "c5915442b50f716ca9d12e00dcf202e12dbd95584f367a9689a20d1f6697f883",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 133,
+              "dispatcher_dequeue_start": 2538,
+              "outbox_claim_commit": 133,
+              "task_transaction_commit": 550,
+              "api_request_received": 550,
+              "api_response_sent": 550,
+              "redis_enqueue_start": 550,
+              "redis_enqueue_complete": 550,
+              "redis_dequeue_complete": 550,
+              "lease_claim_start": 550,
+              "dispatcher_task_submitted": 550,
+              "lease_commit": 550,
+              "outbox_published_commit": 550,
+              "handler_start": 550,
+              "handler_end": 550,
+              "terminal_transaction_start": 550,
+              "terminal_commit": 550,
+              "redis_ack_complete": 550,
+              "worker_slot_released": 550,
+              "dispatcher_sleep_start": 294,
+              "dispatcher_sleep_end": 294
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 550,
+              "dequeues_count": 550,
+              "acks_count": 550,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 28.51,
+              "saturation_ratio_pct": 54.73,
+              "max_queue_depth": 239,
+              "mean_queue_depth": 103.02,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.29
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 294,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 51.658,
+                "p95_ms": 56.389,
+                "p99_ms": 62.98,
+                "max_ms": 84.435,
+                "min_ms": 50.051,
+                "mean_ms": 52.412,
+                "stddev_ms": 3.025,
+                "count": 294
+              },
+              "releases_during_sleep_count": 443,
+              "releases_while_awake_count": 107,
+              "pct_releases_during_sleep": 80.55,
+              "sleep_lag_dist": {
+                "p50_ms": 24.146,
+                "p95_ms": 48.826,
+                "p99_ms": 53.437,
+                "max_ms": 68.975,
+                "min_ms": 0.051,
+                "mean_ms": 25.379,
+                "stddev_ms": 13.22,
+                "count": 443
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 33.611,
+                "p95_ms": 63.008,
+                "p99_ms": 136.028,
+                "max_ms": 201.291,
+                "min_ms": 1.714,
+                "mean_ms": 36.157,
+                "stddev_ms": 23.214,
+                "count": 540
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 5698.044,
+                "p95_ms": 6448.095,
+                "p99_ms": 6549.378,
+                "max_ms": 6602.253,
+                "min_ms": 94.719,
+                "mean_ms": 4384.049,
+                "stddev_ms": 2181.355,
+                "count": 550
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.005,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_2_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 500,
+          "completed_tasks": 500,
+          "duration_seconds": 18.343,
+          "throughput_tps": 27.26,
+          "total_cpu_seconds": 22.922,
+          "flush_report": {
+            "persisted_count": 12358,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-01_pair_2_experimental_experimental_1794328612.jsonl",
+          "raw_events_sha256": "506f4285e2806c1048d38a71b18f871a367cf59395514fc9f78f30cc8f9a770b",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 128,
+              "dispatcher_dequeue_start": 2354,
+              "outbox_claim_commit": 128,
+              "task_transaction_commit": 550,
+              "api_request_received": 550,
+              "api_response_sent": 550,
+              "redis_enqueue_start": 550,
+              "redis_enqueue_complete": 550,
+              "redis_dequeue_complete": 550,
+              "lease_claim_start": 550,
+              "dispatcher_task_submitted": 550,
+              "lease_commit": 550,
+              "outbox_published_commit": 550,
+              "handler_start": 550,
+              "handler_end": 550,
+              "terminal_transaction_start": 550,
+              "terminal_commit": 550,
+              "redis_ack_complete": 550,
+              "worker_slot_released": 550,
+              "dispatcher_sleep_start": 474,
+              "dispatcher_sleep_end": 474
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 550,
+              "dequeues_count": 550,
+              "acks_count": 550,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 3.89,
+              "saturation_ratio_pct": 77.26,
+              "max_queue_depth": 224,
+              "mean_queue_depth": 98.38,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.85
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 474,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 24.32,
+                "p95_ms": 63.445,
+                "p99_ms": 66.936,
+                "max_ms": 87.687,
+                "min_ms": 0.747,
+                "mean_ms": 30.545,
+                "stddev_ms": 21.572,
+                "count": 474
+              },
+              "releases_during_sleep_count": 388,
+              "releases_while_awake_count": 162,
+              "pct_releases_during_sleep": 70.55,
+              "sleep_lag_dist": {
+                "p50_ms": 1.151,
+                "p95_ms": 5.525,
+                "p99_ms": 8.944,
+                "max_ms": 27.96,
+                "min_ms": 0.041,
+                "mean_ms": 1.808,
+                "stddev_ms": 2.205,
+                "count": 388
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 8.873,
+                "p95_ms": 41.011,
+                "p99_ms": 165.073,
+                "max_ms": 305.606,
+                "min_ms": 0.946,
+                "mean_ms": 15.965,
+                "stddev_ms": 28.176,
+                "count": 540
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 5195.147,
+                "p95_ms": 6387.462,
+                "p99_ms": 6468.697,
+                "max_ms": 6500.257,
+                "min_ms": 93.273,
+                "mean_ms": 4188.233,
+                "stddev_ms": 2055.95,
+                "count": 550
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.009,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_3_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 500,
+          "completed_tasks": 500,
+          "duration_seconds": 18.668,
+          "throughput_tps": 26.78,
+          "total_cpu_seconds": 23.125,
+          "flush_report": {
+            "persisted_count": 12128,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-01_pair_3_baseline_baseline_1794328633.jsonl",
+          "raw_events_sha256": "32da87dd52c7211b644474e26fc0ea0b43ab55c2adf63d4cad541f3550b4a31f",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 135,
+              "dispatcher_dequeue_start": 2460,
+              "outbox_claim_commit": 135,
+              "task_transaction_commit": 550,
+              "api_request_received": 550,
+              "api_response_sent": 550,
+              "redis_enqueue_start": 550,
+              "redis_enqueue_complete": 550,
+              "redis_dequeue_complete": 550,
+              "lease_claim_start": 550,
+              "dispatcher_task_submitted": 550,
+              "lease_commit": 550,
+              "outbox_published_commit": 550,
+              "handler_start": 550,
+              "handler_end": 550,
+              "terminal_transaction_start": 550,
+              "terminal_commit": 550,
+              "redis_ack_complete": 550,
+              "worker_slot_released": 550,
+              "dispatcher_sleep_start": 299,
+              "dispatcher_sleep_end": 299
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 550,
+              "dequeues_count": 550,
+              "acks_count": 550,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 26.23,
+              "saturation_ratio_pct": 58.27,
+              "max_queue_depth": 234,
+              "mean_queue_depth": 100.82,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.3
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 299,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 51.565,
+                "p95_ms": 56.187,
+                "p99_ms": 61.182,
+                "max_ms": 69.42,
+                "min_ms": 50.074,
+                "mean_ms": 52.212,
+                "stddev_ms": 2.458,
+                "count": 299
+              },
+              "releases_during_sleep_count": 437,
+              "releases_while_awake_count": 113,
+              "pct_releases_during_sleep": 79.45,
+              "sleep_lag_dist": {
+                "p50_ms": 22.83,
+                "p95_ms": 47.373,
+                "p99_ms": 52.757,
+                "max_ms": 57.035,
+                "min_ms": 0.318,
+                "mean_ms": 24.501,
+                "stddev_ms": 13.157,
+                "count": 437
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 32.878,
+                "p95_ms": 64.27,
+                "p99_ms": 185.81,
+                "max_ms": 304.737,
+                "min_ms": 1.346,
+                "mean_ms": 36.962,
+                "stddev_ms": 28.007,
+                "count": 540
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 5613.07,
+                "p95_ms": 6466.043,
+                "p99_ms": 6557.445,
+                "max_ms": 6602.342,
+                "min_ms": 91.239,
+                "mean_ms": 4336.965,
+                "stddev_ms": 2186.769,
+                "count": 550
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.004,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_3_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 500,
+          "completed_tasks": 500,
+          "duration_seconds": 18.525,
+          "throughput_tps": 26.99,
+          "total_cpu_seconds": 22.859,
+          "flush_report": {
+            "persisted_count": 12399,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-01_pair_3_experimental_experimental_1794328654.jsonl",
+          "raw_events_sha256": "8ca6d9886591c613aa3746880e1d9693bd65ad8149d2bc0008edb0638e2e15fb",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 128,
+              "dispatcher_dequeue_start": 2383,
+              "outbox_claim_commit": 128,
+              "task_transaction_commit": 550,
+              "api_request_received": 550,
+              "api_response_sent": 550,
+              "redis_enqueue_start": 550,
+              "redis_enqueue_complete": 550,
+              "redis_dequeue_complete": 550,
+              "lease_claim_start": 550,
+              "dispatcher_task_submitted": 550,
+              "lease_commit": 550,
+              "outbox_published_commit": 550,
+              "handler_start": 550,
+              "handler_end": 550,
+              "terminal_transaction_start": 550,
+              "terminal_commit": 550,
+              "redis_ack_complete": 550,
+              "worker_slot_released": 550,
+              "dispatcher_sleep_start": 480,
+              "dispatcher_sleep_end": 480
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 550,
+              "dequeues_count": 550,
+              "acks_count": 550,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 2.65,
+              "saturation_ratio_pct": 80.21,
+              "max_queue_depth": 223,
+              "mean_queue_depth": 96.64,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.85
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 480,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 26.127,
+                "p95_ms": 63.764,
+                "p99_ms": 67.437,
+                "max_ms": 82.775,
+                "min_ms": 0.39,
+                "mean_ms": 30.916,
+                "stddev_ms": 21.727,
+                "count": 480
+              },
+              "releases_during_sleep_count": 383,
+              "releases_while_awake_count": 167,
+              "pct_releases_during_sleep": 69.64,
+              "sleep_lag_dist": {
+                "p50_ms": 1.27,
+                "p95_ms": 4.911,
+                "p99_ms": 8.051,
+                "max_ms": 11.859,
+                "min_ms": 0.042,
+                "mean_ms": 1.743,
+                "stddev_ms": 1.721,
+                "count": 383
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 8.355,
+                "p95_ms": 34.437,
+                "p99_ms": 147.111,
+                "max_ms": 293.748,
+                "min_ms": 1.321,
+                "mean_ms": 15.521,
+                "stddev_ms": 28.205,
+                "count": 540
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 5196.179,
+                "p95_ms": 6457.279,
+                "p99_ms": 6596.54,
+                "max_ms": 6654.334,
+                "min_ms": 95.409,
+                "mean_ms": 4190.936,
+                "stddev_ms": 2095.428,
+                "count": 550
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.007,
+              "max_state_drift": 1
+            }
+          }
+        }
+      ],
+      "comparison": {
+        "baseline_duration_mean_s": 18.991,
+        "experimental_duration_mean_s": 18.256,
+        "duration_delta_pct": -3.87,
+        "baseline_throughput_mean_tps": 26.35,
+        "experimental_throughput_mean_tps": 27.39,
+        "throughput_delta_pct": 3.97,
+        "baseline_cpu_mean_s": 23.344,
+        "experimental_cpu_mean_s": 22.521,
+        "cpu_delta_pct": -3.53,
+        "baseline_replenish_p50_ms": 33.56,
+        "experimental_replenish_p50_ms": 8.57,
+        "replenish_delta_pct": -74.45,
+        "baseline_sleep_lag_p50_ms": 23.85,
+        "experimental_sleep_lag_p50_ms": 1.21,
+        "sleep_lag_delta_pct": -94.94,
+        "baseline_starvation_ratio_pct": 28.48,
+        "experimental_starvation_ratio_pct": 3.52,
+        "starvation_ratio_delta_pct": -87.64,
+        "baseline_e2e_p50_ms": 5718.77,
+        "experimental_e2e_p50_ms": 5172.12,
+        "e2e_delta_pct": -9.56,
+        "baseline_mean_sleep_count": 300.3,
+        "experimental_mean_sleep_count": 476
+      }
+    },
+    "W-02": {
+      "workload_definition": {
+        "workload_id": "W-02",
+        "name": "cpu_bound_prime_sieve",
+        "description": "Deterministic CPU-bound prime sieve (n=1000) measuring CPU overhead and serialization under computation.",
+        "task_type": "compute_prime",
+        "payload": {
+          "n": 1000
+        },
+        "concurrency": 4,
+        "warmup_tasks": 20,
+        "measured_tasks": 200,
+        "priority": 2,
+        "max_retries": 3,
+        "timeout_seconds": 10
+      },
+      "trials": [
+        {
+          "trial_id": "pair_1_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.765,
+          "throughput_tps": 25.76,
+          "total_cpu_seconds": 8.719,
+          "flush_report": {
+            "persisted_count": 4883,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-02_pair_1_baseline_baseline_1794328676.jsonl",
+          "raw_events_sha256": "87776a70f840fa9e381793cfd7d5c897f8c6a0a6037b831b4ab2c1ef235cae99",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 86,
+              "dispatcher_dequeue_start": 901,
+              "outbox_claim_commit": 86,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 145,
+              "dispatcher_sleep_end": 145
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 25.98,
+              "saturation_ratio_pct": 69.43,
+              "max_queue_depth": 111,
+              "mean_queue_depth": 48.08,
+              "max_active_workers": 4,
+              "mean_active_workers": 3.11
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 145,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 50.587,
+                "p95_ms": 52.491,
+                "p99_ms": 54.484,
+                "max_ms": 64.602,
+                "min_ms": 50.066,
+                "mean_ms": 50.98,
+                "stddev_ms": 1.376,
+                "count": 145
+              },
+              "releases_during_sleep_count": 197,
+              "releases_while_awake_count": 23,
+              "pct_releases_during_sleep": 89.55,
+              "sleep_lag_dist": {
+                "p50_ms": 28.535,
+                "p95_ms": 44.224,
+                "p99_ms": 50.278,
+                "max_ms": 52.435,
+                "min_ms": 0.07,
+                "mean_ms": 27.452,
+                "stddev_ms": 10.612,
+                "count": 197
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 31.617,
+                "p95_ms": 55.085,
+                "p99_ms": 134.862,
+                "max_ms": 147.031,
+                "min_ms": 2.15,
+                "mean_ms": 33.537,
+                "stddev_ms": 19.989,
+                "count": 216
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2707.415,
+                "p95_ms": 3003.067,
+                "p99_ms": 3022.616,
+                "max_ms": 3044.937,
+                "min_ms": 81.261,
+                "mean_ms": 2086.715,
+                "stddev_ms": 1009.087,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0,
+              "max_state_drift": 0
+            }
+          }
+        },
+        {
+          "trial_id": "pair_1_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.462,
+          "throughput_tps": 26.8,
+          "total_cpu_seconds": 9.625,
+          "flush_report": {
+            "persisted_count": 5276,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-02_pair_1_experimental_experimental_1794328684.jsonl",
+          "raw_events_sha256": "b509400df815dfd8b86aa6110c9159d37d5abb94a30f8e0a5557edbb9499da94",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 78,
+              "dispatcher_dequeue_start": 1144,
+              "outbox_claim_commit": 78,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "outbox_published_commit": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 228,
+              "dispatcher_sleep_end": 228
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 1.75,
+              "saturation_ratio_pct": 90.33,
+              "max_queue_depth": 90,
+              "mean_queue_depth": 38.48,
+              "max_active_workers": 4,
+              "mean_active_workers": 3.66
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 228,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 25.088,
+                "p95_ms": 61.559,
+                "p99_ms": 65.067,
+                "max_ms": 66.312,
+                "min_ms": 0.455,
+                "mean_ms": 29.58,
+                "stddev_ms": 21.308,
+                "count": 228
+              },
+              "releases_during_sleep_count": 181,
+              "releases_while_awake_count": 39,
+              "pct_releases_during_sleep": 82.27,
+              "sleep_lag_dist": {
+                "p50_ms": 0.411,
+                "p95_ms": 1.908,
+                "p99_ms": 2.709,
+                "max_ms": 2.715,
+                "min_ms": 0.022,
+                "mean_ms": 0.563,
+                "stddev_ms": 0.569,
+                "count": 181
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 3.173,
+                "p95_ms": 25.876,
+                "p99_ms": 120.292,
+                "max_ms": 167.95,
+                "min_ms": 1.085,
+                "mean_ms": 7.473,
+                "stddev_ms": 19.107,
+                "count": 216
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2171.679,
+                "p95_ms": 2424.16,
+                "p99_ms": 2463.034,
+                "max_ms": 2478.719,
+                "min_ms": 97.029,
+                "mean_ms": 1690.306,
+                "stddev_ms": 829.716,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0,
+              "max_state_drift": 0
+            }
+          }
+        },
+        {
+          "trial_id": "pair_2_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 8.427,
+          "throughput_tps": 23.73,
+          "total_cpu_seconds": 9.516,
+          "flush_report": {
+            "persisted_count": 4931,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-02_pair_2_baseline_baseline_1794328693.jsonl",
+          "raw_events_sha256": "be97b712d9105c9e479c1b92e9e8242c3a525688095c5e05625e7c473060383b",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 89,
+              "dispatcher_dequeue_start": 921,
+              "outbox_claim_commit": 89,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 156,
+              "dispatcher_sleep_end": 156
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 22.97,
+              "saturation_ratio_pct": 70.3,
+              "max_queue_depth": 106,
+              "mean_queue_depth": 46.0,
+              "max_active_workers": 4,
+              "mean_active_workers": 3.24
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 156,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 50.776,
+                "p95_ms": 52.409,
+                "p99_ms": 53.225,
+                "max_ms": 53.632,
+                "min_ms": 50.052,
+                "mean_ms": 50.98,
+                "stddev_ms": 0.725,
+                "count": 156
+              },
+              "releases_during_sleep_count": 192,
+              "releases_while_awake_count": 28,
+              "pct_releases_during_sleep": 87.27,
+              "sleep_lag_dist": {
+                "p50_ms": 21.138,
+                "p95_ms": 43.637,
+                "p99_ms": 49.779,
+                "max_ms": 50.364,
+                "min_ms": 0.07,
+                "mean_ms": 22.304,
+                "stddev_ms": 10.59,
+                "count": 192
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 25.043,
+                "p95_ms": 73.031,
+                "p99_ms": 137.301,
+                "max_ms": 187.487,
+                "min_ms": 2.161,
+                "mean_ms": 31.452,
+                "stddev_ms": 27.791,
+                "count": 216
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2953.45,
+                "p95_ms": 3081.25,
+                "p99_ms": 3121.383,
+                "max_ms": 3133.418,
+                "min_ms": 93.795,
+                "mean_ms": 2197.393,
+                "stddev_ms": 1072.318,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0,
+              "max_state_drift": 0
+            }
+          }
+        },
+        {
+          "trial_id": "pair_2_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.314,
+          "throughput_tps": 27.35,
+          "total_cpu_seconds": 9.031,
+          "flush_report": {
+            "persisted_count": 5335,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-02_pair_2_experimental_experimental_1794328703.jsonl",
+          "raw_events_sha256": "d4afa7c61ad77614aa5395f7be18d8771250eb15339885585d523337a5864654",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 74,
+              "dispatcher_dequeue_start": 1211,
+              "outbox_claim_commit": 74,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 228,
+              "dispatcher_sleep_end": 228
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 1.75,
+              "saturation_ratio_pct": 91.0,
+              "max_queue_depth": 90,
+              "mean_queue_depth": 38.17,
+              "max_active_workers": 4,
+              "mean_active_workers": 3.69
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 228,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 26.003,
+                "p95_ms": 62.259,
+                "p99_ms": 65.557,
+                "max_ms": 71.135,
+                "min_ms": 0.48,
+                "mean_ms": 29.323,
+                "stddev_ms": 19.707,
+                "count": 228
+              },
+              "releases_during_sleep_count": 193,
+              "releases_while_awake_count": 27,
+              "pct_releases_during_sleep": 87.73,
+              "sleep_lag_dist": {
+                "p50_ms": 0.347,
+                "p95_ms": 1.773,
+                "p99_ms": 2.573,
+                "max_ms": 3.579,
+                "min_ms": 0.046,
+                "mean_ms": 0.553,
+                "stddev_ms": 0.598,
+                "count": 193
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 3.061,
+                "p95_ms": 25.549,
+                "p99_ms": 132.147,
+                "max_ms": 147.864,
+                "min_ms": 0.791,
+                "mean_ms": 8.027,
+                "stddev_ms": 21.218,
+                "count": 216
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2052.87,
+                "p95_ms": 2482.421,
+                "p99_ms": 2513.915,
+                "max_ms": 2523.751,
+                "min_ms": 91.703,
+                "mean_ms": 1639.482,
+                "stddev_ms": 794.002,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0,
+              "max_state_drift": 0
+            }
+          }
+        },
+        {
+          "trial_id": "pair_3_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.874,
+          "throughput_tps": 25.4,
+          "total_cpu_seconds": 9.094,
+          "flush_report": {
+            "persisted_count": 5089,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-02_pair_3_baseline_baseline_1794328711.jsonl",
+          "raw_events_sha256": "f86788db40acd4aa9df980855123c4f181b647d049f0500987da53f064555fe0",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 88,
+              "dispatcher_dequeue_start": 1103,
+              "outbox_claim_commit": 88,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 145,
+              "dispatcher_sleep_end": 145
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 31.39,
+              "saturation_ratio_pct": 62.79,
+              "max_queue_depth": 107,
+              "mean_queue_depth": 46.61,
+              "max_active_workers": 4,
+              "mean_active_workers": 3.09
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 145,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 50.753,
+                "p95_ms": 52.259,
+                "p99_ms": 55.619,
+                "max_ms": 76.951,
+                "min_ms": 50.094,
+                "mean_ms": 51.157,
+                "stddev_ms": 2.314,
+                "count": 145
+              },
+              "releases_during_sleep_count": 195,
+              "releases_while_awake_count": 25,
+              "pct_releases_during_sleep": 88.64,
+              "sleep_lag_dist": {
+                "p50_ms": 27.786,
+                "p95_ms": 44.933,
+                "p99_ms": 48.605,
+                "max_ms": 49.851,
+                "min_ms": 0.212,
+                "mean_ms": 26.988,
+                "stddev_ms": 11.639,
+                "count": 195
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 31.417,
+                "p95_ms": 50.525,
+                "p99_ms": 146.513,
+                "max_ms": 151.27,
+                "min_ms": 1.358,
+                "mean_ms": 32.325,
+                "stddev_ms": 21.062,
+                "count": 216
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2773.499,
+                "p95_ms": 2918.298,
+                "p99_ms": 2932.618,
+                "max_ms": 2954.376,
+                "min_ms": 97.534,
+                "mean_ms": 2063.976,
+                "stddev_ms": 1014.695,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.005,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_3_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.347,
+          "throughput_tps": 27.22,
+          "total_cpu_seconds": 9.266,
+          "flush_report": {
+            "persisted_count": 5377,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-02_pair_3_experimental_experimental_1794328720.jsonl",
+          "raw_events_sha256": "a338990223767d24aca817dd350f70df11680a9b48293c6c4214eed88cab33db",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 76,
+              "dispatcher_dequeue_start": 1249,
+              "outbox_claim_commit": 76,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_dequeue_complete": 220,
+              "redis_enqueue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 228,
+              "dispatcher_sleep_end": 228
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 1.72,
+              "saturation_ratio_pct": 90.71,
+              "max_queue_depth": 96,
+              "mean_queue_depth": 41.37,
+              "max_active_workers": 4,
+              "mean_active_workers": 3.65
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 228,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 24.136,
+                "p95_ms": 62.22,
+                "p99_ms": 64.686,
+                "max_ms": 65.888,
+                "min_ms": 0.492,
+                "mean_ms": 28.987,
+                "stddev_ms": 22.027,
+                "count": 228
+              },
+              "releases_during_sleep_count": 179,
+              "releases_while_awake_count": 41,
+              "pct_releases_during_sleep": 81.36,
+              "sleep_lag_dist": {
+                "p50_ms": 0.281,
+                "p95_ms": 1.355,
+                "p99_ms": 2.261,
+                "max_ms": 2.953,
+                "min_ms": 0.032,
+                "mean_ms": 0.473,
+                "stddev_ms": 0.481,
+                "count": 179
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 3.083,
+                "p95_ms": 22.395,
+                "p99_ms": 151.537,
+                "max_ms": 236.811,
+                "min_ms": 0.74,
+                "mean_ms": 8.426,
+                "stddev_ms": 25.535,
+                "count": 216
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2217.075,
+                "p95_ms": 2590.199,
+                "p99_ms": 2658.489,
+                "max_ms": 2695.684,
+                "min_ms": 98.859,
+                "mean_ms": 1763.766,
+                "stddev_ms": 843.744,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.005,
+              "max_state_drift": 1
+            }
+          }
+        }
+      ],
+      "comparison": {
+        "baseline_duration_mean_s": 8.022,
+        "experimental_duration_mean_s": 7.374,
+        "duration_delta_pct": -8.07,
+        "baseline_throughput_mean_tps": 24.96,
+        "experimental_throughput_mean_tps": 27.12,
+        "throughput_delta_pct": 8.65,
+        "baseline_cpu_mean_s": 9.11,
+        "experimental_cpu_mean_s": 9.307,
+        "cpu_delta_pct": 2.17,
+        "baseline_replenish_p50_ms": 29.36,
+        "experimental_replenish_p50_ms": 3.11,
+        "replenish_delta_pct": -89.42,
+        "baseline_sleep_lag_p50_ms": 25.82,
+        "experimental_sleep_lag_p50_ms": 0.35,
+        "sleep_lag_delta_pct": -98.66,
+        "baseline_starvation_ratio_pct": 26.78,
+        "experimental_starvation_ratio_pct": 1.74,
+        "starvation_ratio_delta_pct": -93.5,
+        "baseline_e2e_p50_ms": 2811.45,
+        "experimental_e2e_p50_ms": 2147.21,
+        "e2e_delta_pct": -23.63,
+        "baseline_mean_sleep_count": 148.7,
+        "experimental_mean_sleep_count": 228
+      }
+    },
+    "W-03": {
+      "workload_definition": {
+        "workload_id": "W-03",
+        "name": "io_simulation_delay",
+        "description": "Simulated external I/O delay (delay=5ms) measuring concurrent worker queuing and async completion.",
+        "task_type": "io_simulation",
+        "payload": {
+          "delay_seconds": 0.005,
+          "jitter": false
+        },
+        "concurrency": 10,
+        "warmup_tasks": 20,
+        "measured_tasks": 200,
+        "priority": 2,
+        "max_retries": 3,
+        "timeout_seconds": 10
+      },
+      "trials": [
+        {
+          "trial_id": "pair_1_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.706,
+          "throughput_tps": 25.95,
+          "total_cpu_seconds": 9.938,
+          "flush_report": {
+            "persisted_count": 5137,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-03_pair_1_baseline_baseline_1794328728.jsonl",
+          "raw_events_sha256": "199bd997e5a62be12a9bbcdd2dfb0a80bb1726684c7b9ee4e52379307ef0aecf",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 57,
+              "dispatcher_dequeue_start": 1273,
+              "outbox_claim_commit": 57,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 115,
+              "dispatcher_sleep_end": 115
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 29.67,
+              "saturation_ratio_pct": 54.09,
+              "max_queue_depth": 96,
+              "mean_queue_depth": 38.95,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.15
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 115,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 51.527,
+                "p95_ms": 55.917,
+                "p99_ms": 65.999,
+                "max_ms": 86.15,
+                "min_ms": 50.141,
+                "mean_ms": 52.377,
+                "stddev_ms": 3.846,
+                "count": 115
+              },
+              "releases_during_sleep_count": 167,
+              "releases_while_awake_count": 53,
+              "pct_releases_during_sleep": 75.91,
+              "sleep_lag_dist": {
+                "p50_ms": 25.875,
+                "p95_ms": 48.017,
+                "p99_ms": 52.87,
+                "max_ms": 63.362,
+                "min_ms": 0.312,
+                "mean_ms": 25.579,
+                "stddev_ms": 13.915,
+                "count": 167
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 35.004,
+                "p95_ms": 86.905,
+                "p99_ms": 268.993,
+                "max_ms": 338.641,
+                "min_ms": 3.39,
+                "mean_ms": 41.692,
+                "stddev_ms": 42.21,
+                "count": 210
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2525.241,
+                "p95_ms": 2920.748,
+                "p99_ms": 2974.61,
+                "max_ms": 2979.638,
+                "min_ms": 100.433,
+                "mean_ms": 2062.792,
+                "stddev_ms": 891.871,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0,
+              "max_state_drift": 0
+            }
+          }
+        },
+        {
+          "trial_id": "pair_1_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.738,
+          "throughput_tps": 25.85,
+          "total_cpu_seconds": 9.672,
+          "flush_report": {
+            "persisted_count": 5133,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-03_pair_1_experimental_experimental_1794328737.jsonl",
+          "raw_events_sha256": "137375d5b5773eeacefaa76cc7ab018ed275305cd0f6beeff4c377ce25fc70dc",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 55,
+              "dispatcher_dequeue_start": 1119,
+              "outbox_claim_commit": 55,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 192,
+              "dispatcher_sleep_end": 192
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 3.65,
+              "saturation_ratio_pct": 76.0,
+              "max_queue_depth": 91,
+              "mean_queue_depth": 36.96,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.69
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 192,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 28.679,
+                "p95_ms": 63.01,
+                "p99_ms": 65.364,
+                "max_ms": 77.015,
+                "min_ms": 0.911,
+                "mean_ms": 31.409,
+                "stddev_ms": 21.566,
+                "count": 192
+              },
+              "releases_during_sleep_count": 156,
+              "releases_while_awake_count": 64,
+              "pct_releases_during_sleep": 70.91,
+              "sleep_lag_dist": {
+                "p50_ms": 1.138,
+                "p95_ms": 4.75,
+                "p99_ms": 8.765,
+                "max_ms": 11.28,
+                "min_ms": 0.053,
+                "mean_ms": 1.625,
+                "stddev_ms": 1.683,
+                "count": 156
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 8.407,
+                "p95_ms": 36.381,
+                "p99_ms": 166.993,
+                "max_ms": 249.01,
+                "min_ms": 1.918,
+                "mean_ms": 15.74,
+                "stddev_ms": 31.498,
+                "count": 210
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2383.42,
+                "p95_ms": 2926.658,
+                "p99_ms": 2973.438,
+                "max_ms": 3027.122,
+                "min_ms": 100.517,
+                "mean_ms": 1998.182,
+                "stddev_ms": 862.883,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.014,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_2_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.475,
+          "throughput_tps": 26.76,
+          "total_cpu_seconds": 9.203,
+          "flush_report": {
+            "persisted_count": 4793,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-03_pair_2_baseline_baseline_1794328746.jsonl",
+          "raw_events_sha256": "3038e3344ddf5b87c4227a34e7e8215e52504bdb1bdde67402fbb7d988434958",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 55,
+              "dispatcher_dequeue_start": 935,
+              "outbox_claim_commit": 55,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 114,
+              "dispatcher_sleep_end": 114
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 26.11,
+              "saturation_ratio_pct": 54.73,
+              "max_queue_depth": 92,
+              "mean_queue_depth": 38.64,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.27
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 114,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 51.663,
+                "p95_ms": 56.466,
+                "p99_ms": 67.265,
+                "max_ms": 93.885,
+                "min_ms": 50.101,
+                "mean_ms": 52.65,
+                "stddev_ms": 4.628,
+                "count": 114
+              },
+              "releases_during_sleep_count": 158,
+              "releases_while_awake_count": 62,
+              "pct_releases_during_sleep": 71.82,
+              "sleep_lag_dist": {
+                "p50_ms": 21.701,
+                "p95_ms": 48.793,
+                "p99_ms": 52.773,
+                "max_ms": 74.833,
+                "min_ms": 0.071,
+                "mean_ms": 22.688,
+                "stddev_ms": 15.67,
+                "count": 158
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 32.356,
+                "p95_ms": 129.771,
+                "p99_ms": 212.602,
+                "max_ms": 220.755,
+                "min_ms": 2.321,
+                "mean_ms": 38.31,
+                "stddev_ms": 36.397,
+                "count": 210
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2341.477,
+                "p95_ms": 2814.019,
+                "p99_ms": 2850.34,
+                "max_ms": 2878.459,
+                "min_ms": 101.129,
+                "mean_ms": 1983.648,
+                "stddev_ms": 829.033,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0,
+              "max_state_drift": 0
+            }
+          }
+        },
+        {
+          "trial_id": "pair_2_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.348,
+          "throughput_tps": 27.22,
+          "total_cpu_seconds": 9.234,
+          "flush_report": {
+            "persisted_count": 5161,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-03_pair_2_experimental_experimental_1794328755.jsonl",
+          "raw_events_sha256": "012190428bfff5adaaeaadcbc094d7824ce23c84ed12a5358d5acc79950b9928",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 53,
+              "dispatcher_dequeue_start": 1149,
+              "outbox_claim_commit": 53,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "outbox_published_commit": 220,
+              "handler_start": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 193,
+              "dispatcher_sleep_end": 193
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 3.42,
+              "saturation_ratio_pct": 75.95,
+              "max_queue_depth": 92,
+              "mean_queue_depth": 36.88,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.62
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 193,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 22.682,
+                "p95_ms": 62.64,
+                "p99_ms": 66.081,
+                "max_ms": 70.052,
+                "min_ms": 0.889,
+                "mean_ms": 28.093,
+                "stddev_ms": 20.937,
+                "count": 193
+              },
+              "releases_during_sleep_count": 169,
+              "releases_while_awake_count": 51,
+              "pct_releases_during_sleep": 76.82,
+              "sleep_lag_dist": {
+                "p50_ms": 0.986,
+                "p95_ms": 4.272,
+                "p99_ms": 8.202,
+                "max_ms": 9.551,
+                "min_ms": 0.045,
+                "mean_ms": 1.513,
+                "stddev_ms": 1.57,
+                "count": 169
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 7.295,
+                "p95_ms": 28.81,
+                "p99_ms": 194.599,
+                "max_ms": 266.773,
+                "min_ms": 1.866,
+                "mean_ms": 15.205,
+                "stddev_ms": 32.592,
+                "count": 210
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2289.174,
+                "p95_ms": 2735.651,
+                "p99_ms": 2767.364,
+                "max_ms": 2776.675,
+                "min_ms": 97.171,
+                "mean_ms": 1921.488,
+                "stddev_ms": 806.737,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.009,
+              "max_state_drift": 1
+            }
+          }
+        },
+        {
+          "trial_id": "pair_3_baseline",
+          "capacity_wakeup_enabled": false,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.642,
+          "throughput_tps": 26.17,
+          "total_cpu_seconds": 9.516,
+          "flush_report": {
+            "persisted_count": 5184,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-03_pair_3_baseline_baseline_1794328763.jsonl",
+          "raw_events_sha256": "95bcc331898fe0da5a6519811de39e6683eafda218706d5c7908cda41e7f0059",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 59,
+              "dispatcher_dequeue_start": 1310,
+              "outbox_claim_commit": 59,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "handler_start": 220,
+              "outbox_published_commit": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 118,
+              "dispatcher_sleep_end": 118
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 19.5,
+              "saturation_ratio_pct": 65.07,
+              "max_queue_depth": 98,
+              "mean_queue_depth": 39.09,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.15
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 118,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 51.723,
+                "p95_ms": 56.28,
+                "p99_ms": 59.11,
+                "max_ms": 102.378,
+                "min_ms": 50.134,
+                "mean_ms": 52.598,
+                "stddev_ms": 4.942,
+                "count": 118
+              },
+              "releases_during_sleep_count": 164,
+              "releases_while_awake_count": 56,
+              "pct_releases_during_sleep": 74.55,
+              "sleep_lag_dist": {
+                "p50_ms": 24.855,
+                "p95_ms": 47.188,
+                "p99_ms": 50.42,
+                "max_ms": 54.002,
+                "min_ms": 0.054,
+                "mean_ms": 24.951,
+                "stddev_ms": 12.655,
+                "count": 164
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 34.611,
+                "p95_ms": 69.1,
+                "p99_ms": 254.748,
+                "max_ms": 325.938,
+                "min_ms": 3.634,
+                "mean_ms": 39.614,
+                "stddev_ms": 35.153,
+                "count": 210
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2515.898,
+                "p95_ms": 2826.59,
+                "p99_ms": 2889.773,
+                "max_ms": 2908.253,
+                "min_ms": 83.769,
+                "mean_ms": 2028.745,
+                "stddev_ms": 858.431,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0,
+              "max_state_drift": 0
+            }
+          }
+        },
+        {
+          "trial_id": "pair_3_experimental",
+          "capacity_wakeup_enabled": true,
+          "measured_tasks": 200,
+          "completed_tasks": 200,
+          "duration_seconds": 7.542,
+          "throughput_tps": 26.52,
+          "total_cpu_seconds": 9.656,
+          "flush_report": {
+            "persisted_count": 5286,
+            "total_dropped": 0,
+            "drops_by_type": {},
+            "unpersisted_count": 0,
+            "drain_timeout_exceeded": false
+          },
+          "raw_events_path": "E:\\TaskForge\\benchmarks\\raw\\g93_s2b\\events_s2b_W-03_pair_3_experimental_experimental_1794328772.jsonl",
+          "raw_events_sha256": "af056d38a44bd4d4d67cc7c914dfb1d73c4197546bb2b57e449a3545c8bb4ce6",
+          "diagnostic_analysis": {
+            "event_counts": {
+              "outbox_claim_start": 54,
+              "dispatcher_dequeue_start": 1282,
+              "outbox_claim_commit": 54,
+              "task_transaction_commit": 220,
+              "api_request_received": 220,
+              "api_response_sent": 220,
+              "redis_enqueue_start": 220,
+              "redis_enqueue_complete": 220,
+              "redis_dequeue_complete": 220,
+              "lease_claim_start": 220,
+              "dispatcher_task_submitted": 220,
+              "lease_commit": 220,
+              "handler_start": 220,
+              "outbox_published_commit": 220,
+              "handler_end": 220,
+              "terminal_transaction_start": 220,
+              "terminal_commit": 220,
+              "redis_ack_complete": 220,
+              "worker_slot_released": 220,
+              "dispatcher_sleep_start": 188,
+              "dispatcher_sleep_end": 188
+            },
+            "invariants": {
+              "min_logical_queue_depth": 0,
+              "min_worker_occupancy": 0,
+              "enqueues_count": 220,
+              "dequeues_count": 220,
+              "acks_count": 220,
+              "balance_verified": true,
+              "duplicate_submissions_count": 0
+            },
+            "starvation_analysis": {
+              "starvation_ratio_pct": 3.17,
+              "saturation_ratio_pct": 78.52,
+              "max_queue_depth": 86,
+              "mean_queue_depth": 35.77,
+              "max_active_workers": 10,
+              "mean_active_workers": 8.8
+            },
+            "sleep_analysis": {
+              "sleep_intervals_count": 188,
+              "actual_sleep_duration_dist": {
+                "p50_ms": 29.033,
+                "p95_ms": 63.86,
+                "p99_ms": 67.42,
+                "max_ms": 70.849,
+                "min_ms": 0.581,
+                "mean_ms": 31.619,
+                "stddev_ms": 20.866,
+                "count": 188
+              },
+              "releases_during_sleep_count": 157,
+              "releases_while_awake_count": 63,
+              "pct_releases_during_sleep": 71.36,
+              "sleep_lag_dist": {
+                "p50_ms": 1.032,
+                "p95_ms": 4.07,
+                "p99_ms": 6.149,
+                "max_ms": 11.152,
+                "min_ms": 0.048,
+                "mean_ms": 1.474,
+                "stddev_ms": 1.485,
+                "count": 157
+              }
+            },
+            "replenish_lag_analysis": {
+              "distribution": {
+                "p50_ms": 8.104,
+                "p95_ms": 25.045,
+                "p99_ms": 139.395,
+                "max_ms": 156.701,
+                "min_ms": 1.014,
+                "mean_ms": 12.012,
+                "stddev_ms": 18.424,
+                "count": 210
+              }
+            },
+            "e2e_latency_analysis": {
+              "distribution": {
+                "p50_ms": 2221.023,
+                "p95_ms": 2732.378,
+                "p99_ms": 2796.115,
+                "max_ms": 2811.153,
+                "min_ms": 89.763,
+                "mean_ms": 1873.723,
+                "stddev_ms": 823.203,
+                "count": 220
+              }
+            },
+            "state_comparison": {
+              "mean_state_drift": 0.009,
+              "max_state_drift": 1
+            }
+          }
+        }
+      ],
+      "comparison": {
+        "baseline_duration_mean_s": 7.608,
+        "experimental_duration_mean_s": 7.543,
+        "duration_delta_pct": -0.85,
+        "baseline_throughput_mean_tps": 26.29,
+        "experimental_throughput_mean_tps": 26.53,
+        "throughput_delta_pct": 0.9,
+        "baseline_cpu_mean_s": 9.552,
+        "experimental_cpu_mean_s": 9.521,
+        "cpu_delta_pct": -0.33,
+        "baseline_replenish_p50_ms": 33.99,
+        "experimental_replenish_p50_ms": 7.94,
+        "replenish_delta_pct": -76.65,
+        "baseline_sleep_lag_p50_ms": 24.14,
+        "experimental_sleep_lag_p50_ms": 1.05,
+        "sleep_lag_delta_pct": -95.64,
+        "baseline_starvation_ratio_pct": 25.09,
+        "experimental_starvation_ratio_pct": 3.41,
+        "starvation_ratio_delta_pct": -86.4,
+        "baseline_e2e_p50_ms": 2460.87,
+        "experimental_e2e_p50_ms": 2297.87,
+        "e2e_delta_pct": -6.62,
+        "baseline_mean_sleep_count": 115.7,
+        "experimental_mean_sleep_count": 191
+      }
+    }
+  }
+}

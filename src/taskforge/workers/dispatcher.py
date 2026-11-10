@@ -35,13 +35,16 @@ class WorkerDispatcher:
         broker: MessageBroker | None = None,
         poll_interval: float = 0.2,
         execution_mode: str = "thread",
+        enable_capacity_wakeup: bool = False,
     ):
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:6]}"
         self.concurrency = concurrency
         self.broker = broker or get_broker()
         self.poll_interval = poll_interval
         self.execution_mode = execution_mode
+        self.enable_capacity_wakeup = enable_capacity_wakeup
         self._stop_event = threading.Event()
+        self._capacity_event = threading.Event()
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=self.concurrency, thread_name_prefix=f"{self.worker_id}-thread"
         )
@@ -88,6 +91,8 @@ class WorkerDispatcher:
             grace_period=grace_period_seconds,
         )
         self._stop_event.set()
+        if self.enable_capacity_wakeup:
+            self._capacity_event.set()
         if self._loop_thread:
             self._loop_thread.join(timeout=2.0)
         if self._recovery_thread:
@@ -134,6 +139,9 @@ class WorkerDispatcher:
             loop_iter += 1
             iter_id = f"iter-{loop_iter}"
 
+            if self.enable_capacity_wakeup:
+                self._capacity_event.clear()
+
             with self._active_lock:
                 is_saturated = self._active_tasks >= self.concurrency
                 active_at_check = self._active_tasks
@@ -149,9 +157,14 @@ class WorkerDispatcher:
                         "iter_id": iter_id,
                         "active_tasks": active_at_check,
                         "concurrency": self.concurrency,
+                        "wakeup_mode": "event_driven" if self.enable_capacity_wakeup else "fixed_polling",
                     },
                 )
-                time.sleep(self.poll_interval)
+                if self.enable_capacity_wakeup:
+                    self._capacity_event.wait(timeout=self.poll_interval)
+                else:
+                    time.sleep(self.poll_interval)
+
                 with self._active_lock:
                     active_after_sleep = self._active_tasks
                 record_diagnostic_event(
@@ -162,6 +175,7 @@ class WorkerDispatcher:
                         "iter_id": iter_id,
                         "active_tasks": active_after_sleep,
                         "concurrency": self.concurrency,
+                        "wakeup_mode": "event_driven" if self.enable_capacity_wakeup else "fixed_polling",
                     },
                 )
                 continue
@@ -275,6 +289,9 @@ class WorkerDispatcher:
                 self._active_tasks = max(0, self._active_tasks - 1)
                 active_after_dec = self._active_tasks
                 self._heartbeat.set_active_tasks(self._active_tasks)
+
+            if self.enable_capacity_wakeup:
+                self._capacity_event.set()
 
             record_diagnostic_event(
                 "worker_slot_released",

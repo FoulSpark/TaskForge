@@ -15,3 +15,5 @@ build/
 *.db
 *.sqlite
 *.sqlite3
+benchmarks/raw/
+

@@ -1,0 +1,496 @@
+{
+  "milestone": "G9.3_stage1a_baseline_reproduction",
+  "timestamp_utc": "2026-11-10T14:20:27.157601+00:00",
+  "environment": {
+    "os_platform": "Windows-11-10.0.26200",
+    "cpu_architecture": "AMD64",
+    "logical_cpus": 12,
+    "total_ram_gb": 15.65,
+    "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "postgresql_version": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "redis_version": "7.4.12",
+    "git_provenance": "ada0b9b",
+    "frozen_baseline_tag": "v0.8.0-phase8-freeze",
+    "frozen_baseline_commit": "da27047f56fe2eec75acdb8502f505542cf61202"
+  },
+  "workload_definitions_sha256": "04f2306538868a41514c19f0958e04bf0b0586b3a83989e115231a32e50f0110",
+  "trials": [
+    {
+      "trial_id": "trial_1_baseline",
+      "sampling_enabled": false,
+      "workloads": {
+        "W-01": {
+          "workload_id": "W-01",
+          "trial_id": "trial_1_baseline",
+          "diagnostic_sampling_enabled": false,
+          "sample_count": 500,
+          "duration_seconds": 39.143,
+          "throughput_tps": 12.77,
+          "api_submission_latency": {
+            "p50_ms": 168.098,
+            "p95_ms": 346.216,
+            "p99_ms": 391.078,
+            "max_ms": 465.312,
+            "min_ms": 100.725,
+            "mean_ms": 198.746,
+            "stddev_ms": 71.284,
+            "variance_ms": 5081.406
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 14403.279,
+            "p95_ms": 27500.844,
+            "p99_ms": 28808.491,
+            "max_ms": 29052.898,
+            "min_ms": 70.3,
+            "mean_ms": 15198.902,
+            "stddev_ms": 7628.503,
+            "variance_ms": 58194063.712
+          },
+          "execution_overhead": {
+            "p50_ms": 127.15,
+            "p95_ms": 321.756,
+            "p99_ms": 360.605,
+            "max_ms": 397.54,
+            "min_ms": 32.4,
+            "mean_ms": 154.329,
+            "stddev_ms": 68.225,
+            "variance_ms": 4654.661
+          },
+          "end_to_end_latency": {
+            "p50_ms": 14867.656,
+            "p95_ms": 27789.624,
+            "p99_ms": 29074.558,
+            "max_ms": 29194.532,
+            "min_ms": 509.665,
+            "mean_ms": 15571.447,
+            "stddev_ms": 7566.984,
+            "variance_ms": 57259252.834
+          },
+          "raw_jsonl_filename": "raw_g93_W-01_trial_1_baseline_1794320225.jsonl",
+          "raw_jsonl_sha256": "cd9e379dccb36d14875615d0f79143a995a16dca027e18094a5d63ae10c8afe7",
+          "sampling_records_count": 0
+        },
+        "W-02": {
+          "workload_id": "W-02",
+          "trial_id": "trial_1_baseline",
+          "diagnostic_sampling_enabled": false,
+          "sample_count": 200,
+          "duration_seconds": 22.296,
+          "throughput_tps": 8.97,
+          "api_submission_latency": {
+            "p50_ms": 50.435,
+            "p95_ms": 105.397,
+            "p99_ms": 116.455,
+            "max_ms": 144.216,
+            "min_ms": 34.135,
+            "mean_ms": 57.956,
+            "stddev_ms": 19.563,
+            "variance_ms": 382.715
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 13070.442,
+            "p95_ms": 18767.015,
+            "p99_ms": 19299.232,
+            "max_ms": 19323.939,
+            "min_ms": 3.164,
+            "mean_ms": 12027.214,
+            "stddev_ms": 5381.412,
+            "variance_ms": 28959591.338
+          },
+          "execution_overhead": {
+            "p50_ms": 42.66,
+            "p95_ms": 94.91,
+            "p99_ms": 134.888,
+            "max_ms": 138.29,
+            "min_ms": 35.0,
+            "mean_ms": 48.33,
+            "stddev_ms": 18.179,
+            "variance_ms": 330.461
+          },
+          "end_to_end_latency": {
+            "p50_ms": 13171.895,
+            "p95_ms": 18872.18,
+            "p99_ms": 19385.223,
+            "max_ms": 19422.724,
+            "min_ms": 168.191,
+            "mean_ms": 12140.074,
+            "stddev_ms": 5367.953,
+            "variance_ms": 28814919.798
+          },
+          "raw_jsonl_filename": "raw_g93_W-02_trial_1_baseline_1794320249.jsonl",
+          "raw_jsonl_sha256": "38d83a57e173861ffec8a0977c31535a2175ca1bf50904ce7692ca79f6e4532f",
+          "sampling_records_count": 0
+        },
+        "W-03": {
+          "workload_id": "W-03",
+          "trial_id": "trial_1_baseline",
+          "diagnostic_sampling_enabled": false,
+          "sample_count": 200,
+          "duration_seconds": 10.645,
+          "throughput_tps": 18.79,
+          "api_submission_latency": {
+            "p50_ms": 169.07,
+            "p95_ms": 306.086,
+            "p99_ms": 353.622,
+            "max_ms": 386.155,
+            "min_ms": 100.552,
+            "mean_ms": 192.753,
+            "stddev_ms": 66.052,
+            "variance_ms": 4362.884
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 5206.027,
+            "p95_ms": 6588.948,
+            "p99_ms": 6634.09,
+            "max_ms": 6665.569,
+            "min_ms": 0.0,
+            "mean_ms": 4540.664,
+            "stddev_ms": 1983.258,
+            "variance_ms": 3933310.48
+          },
+          "execution_overhead": {
+            "p50_ms": 122.43,
+            "p95_ms": 289.741,
+            "p99_ms": 369.101,
+            "max_ms": 380.01,
+            "min_ms": 67.25,
+            "mean_ms": 149.9,
+            "stddev_ms": 66.685,
+            "variance_ms": 4446.953
+          },
+          "end_to_end_latency": {
+            "p50_ms": 5571.007,
+            "p95_ms": 6918.275,
+            "p99_ms": 7046.416,
+            "max_ms": 7121.724,
+            "min_ms": 448.681,
+            "mean_ms": 4901.237,
+            "stddev_ms": 1902.189,
+            "variance_ms": 3618324.758
+          },
+          "raw_jsonl_filename": "raw_g93_W-03_trial_1_baseline_1794320260.jsonl",
+          "raw_jsonl_sha256": "c8f05026d4e94af99c7b055ced2c556ed545e329f24f9b839124bfc310dee370",
+          "sampling_records_count": 0
+        }
+      }
+    },
+    {
+      "trial_id": "trial_2_baseline_repeat",
+      "sampling_enabled": false,
+      "workloads": {
+        "W-01": {
+          "workload_id": "W-01",
+          "trial_id": "trial_2_baseline_repeat",
+          "diagnostic_sampling_enabled": false,
+          "sample_count": 500,
+          "duration_seconds": 38.252,
+          "throughput_tps": 13.07,
+          "api_submission_latency": {
+            "p50_ms": 142.003,
+            "p95_ms": 289.38,
+            "p99_ms": 320.518,
+            "max_ms": 353.606,
+            "min_ms": 100.254,
+            "mean_ms": 165.133,
+            "stddev_ms": 53.392,
+            "variance_ms": 2850.756
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 20853.454,
+            "p95_ms": 29592.877,
+            "p99_ms": 29834.523,
+            "max_ms": 29875.236,
+            "min_ms": 38.832,
+            "mean_ms": 18577.547,
+            "stddev_ms": 8124.218,
+            "variance_ms": 66002912.259
+          },
+          "execution_overhead": {
+            "p50_ms": 116.785,
+            "p95_ms": 257.813,
+            "p99_ms": 295.067,
+            "max_ms": 317.91,
+            "min_ms": 26.98,
+            "mean_ms": 132.467,
+            "stddev_ms": 47.137,
+            "variance_ms": 2221.903
+          },
+          "end_to_end_latency": {
+            "p50_ms": 21126.869,
+            "p95_ms": 29942.331,
+            "p99_ms": 30097.286,
+            "max_ms": 30131.039,
+            "min_ms": 486.367,
+            "mean_ms": 18892.273,
+            "stddev_ms": 8095.377,
+            "variance_ms": 65535123.282
+          },
+          "raw_jsonl_filename": "raw_g93_W-01_trial_2_baseline_repeat_1794320301.jsonl",
+          "raw_jsonl_sha256": "b843155b71dcb6d32c7c76bd47f0428b0083b5bf2e3c23dc3354b011eab36171",
+          "sampling_records_count": 0
+        },
+        "W-02": {
+          "workload_id": "W-02",
+          "trial_id": "trial_2_baseline_repeat",
+          "diagnostic_sampling_enabled": false,
+          "sample_count": 200,
+          "duration_seconds": 33.118,
+          "throughput_tps": 6.04,
+          "api_submission_latency": {
+            "p50_ms": 50.818,
+            "p95_ms": 80.222,
+            "p99_ms": 99.462,
+            "max_ms": 109.679,
+            "min_ms": 37.0,
+            "mean_ms": 53.284,
+            "stddev_ms": 11.658,
+            "variance_ms": 135.913
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 14480.464,
+            "p95_ms": 29897.904,
+            "p99_ms": 30362.147,
+            "max_ms": 30396.516,
+            "min_ms": 9.194,
+            "mean_ms": 15150.639,
+            "stddev_ms": 9430.767,
+            "variance_ms": 88939370.652
+          },
+          "execution_overhead": {
+            "p50_ms": 41.88,
+            "p95_ms": 59.878,
+            "p99_ms": 94.687,
+            "max_ms": 104.21,
+            "min_ms": 35.11,
+            "mean_ms": 44.156,
+            "stddev_ms": 9.201,
+            "variance_ms": 84.651
+          },
+          "end_to_end_latency": {
+            "p50_ms": 14581.842,
+            "p95_ms": 29991.447,
+            "p99_ms": 30459.866,
+            "max_ms": 30496.339,
+            "min_ms": 167.61,
+            "mean_ms": 15254.239,
+            "stddev_ms": 9425.925,
+            "variance_ms": 88848061.217
+          },
+          "raw_jsonl_filename": "raw_g93_W-02_trial_2_baseline_repeat_1794320335.jsonl",
+          "raw_jsonl_sha256": "c7d883c597c3af19bd4f8a808c37c5ad1e45ebd4bf38e1927697b9ab4c59e13c",
+          "sampling_records_count": 0
+        },
+        "W-03": {
+          "workload_id": "W-03",
+          "trial_id": "trial_2_baseline_repeat",
+          "diagnostic_sampling_enabled": false,
+          "sample_count": 200,
+          "duration_seconds": 14.243,
+          "throughput_tps": 14.04,
+          "api_submission_latency": {
+            "p50_ms": 173.654,
+            "p95_ms": 316.358,
+            "p99_ms": 376.451,
+            "max_ms": 476.282,
+            "min_ms": 62.568,
+            "mean_ms": 196.601,
+            "stddev_ms": 68.424,
+            "variance_ms": 4681.824
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 5377.016,
+            "p95_ms": 9853.391,
+            "p99_ms": 10116.921,
+            "max_ms": 10124.205,
+            "min_ms": 3.306,
+            "mean_ms": 5776.219,
+            "stddev_ms": 3210.451,
+            "variance_ms": 10306997.177
+          },
+          "execution_overhead": {
+            "p50_ms": 128.065,
+            "p95_ms": 289.514,
+            "p99_ms": 335.034,
+            "max_ms": 392.58,
+            "min_ms": 97.35,
+            "mean_ms": 155.212,
+            "stddev_ms": 63.15,
+            "variance_ms": 3987.933
+          },
+          "end_to_end_latency": {
+            "p50_ms": 5722.314,
+            "p95_ms": 10293.45,
+            "p99_ms": 10380.475,
+            "max_ms": 10391.194,
+            "min_ms": 476.988,
+            "mean_ms": 6148.077,
+            "stddev_ms": 3147.625,
+            "variance_ms": 9907541.041
+          },
+          "raw_jsonl_filename": "raw_g93_W-03_trial_2_baseline_repeat_1794320351.jsonl",
+          "raw_jsonl_sha256": "b0e6d29abeed2dffd16cbae0cc0c51efee952ca7775add10911844c92f8c256e",
+          "sampling_records_count": 0
+        }
+      }
+    },
+    {
+      "trial_id": "trial_3_sampling_preflight",
+      "sampling_enabled": true,
+      "workloads": {
+        "W-01": {
+          "workload_id": "W-01",
+          "trial_id": "trial_3_sampling_preflight",
+          "diagnostic_sampling_enabled": true,
+          "sample_count": 500,
+          "duration_seconds": 27.563,
+          "throughput_tps": 18.14,
+          "api_submission_latency": {
+            "p50_ms": 145.942,
+            "p95_ms": 286.622,
+            "p99_ms": 334.627,
+            "max_ms": 354.775,
+            "min_ms": 57.726,
+            "mean_ms": 169.077,
+            "stddev_ms": 54.613,
+            "variance_ms": 2982.583
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 13294.524,
+            "p95_ms": 18552.267,
+            "p99_ms": 18866.819,
+            "max_ms": 18895.618,
+            "min_ms": 0.0,
+            "mean_ms": 11991.455,
+            "stddev_ms": 4748.462,
+            "variance_ms": 22547890.83
+          },
+          "execution_overhead": {
+            "p50_ms": 120.39,
+            "p95_ms": 264.111,
+            "p99_ms": 322.604,
+            "max_ms": 365.9,
+            "min_ms": 88.44,
+            "mean_ms": 137.756,
+            "stddev_ms": 48.938,
+            "variance_ms": 2394.932
+          },
+          "end_to_end_latency": {
+            "p50_ms": 13605.132,
+            "p95_ms": 18835.129,
+            "p99_ms": 19101.297,
+            "max_ms": 19167.024,
+            "min_ms": 365.669,
+            "mean_ms": 12316.15,
+            "stddev_ms": 4705.808,
+            "variance_ms": 22144630.533
+          },
+          "raw_jsonl_filename": "raw_g93_W-01_trial_3_sampling_preflight_1794320381.jsonl",
+          "raw_jsonl_sha256": "e87004674e4a8dfabe31ba981ec1c86dcdedba7e81b94e0740ed234433ae689e",
+          "sampling_records_count": 99
+        },
+        "W-02": {
+          "workload_id": "W-02",
+          "trial_id": "trial_3_sampling_preflight",
+          "diagnostic_sampling_enabled": true,
+          "sample_count": 200,
+          "duration_seconds": 32.137,
+          "throughput_tps": 6.22,
+          "api_submission_latency": {
+            "p50_ms": 53.608,
+            "p95_ms": 103.301,
+            "p99_ms": 113.216,
+            "max_ms": 115.866,
+            "min_ms": 24.148,
+            "mean_ms": 60.762,
+            "stddev_ms": 18.063,
+            "variance_ms": 326.283
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 17698.719,
+            "p95_ms": 27374.396,
+            "p99_ms": 28978.971,
+            "max_ms": 28994.867,
+            "min_ms": 1795.679,
+            "mean_ms": 16435.948,
+            "stddev_ms": 8460.857,
+            "variance_ms": 71586103.491
+          },
+          "execution_overhead": {
+            "p50_ms": 42.82,
+            "p95_ms": 90.294,
+            "p99_ms": 108.537,
+            "max_ms": 114.34,
+            "min_ms": 34.67,
+            "mean_ms": 47.281,
+            "stddev_ms": 15.232,
+            "variance_ms": 232.008
+          },
+          "end_to_end_latency": {
+            "p50_ms": 17817.473,
+            "p95_ms": 27470.012,
+            "p99_ms": 29048.881,
+            "max_ms": 29099.91,
+            "min_ms": 1950.799,
+            "mean_ms": 16550.101,
+            "stddev_ms": 8453.064,
+            "variance_ms": 71454286.476
+          },
+          "raw_jsonl_filename": "raw_g93_W-02_trial_3_sampling_preflight_1794320414.jsonl",
+          "raw_jsonl_sha256": "4f1a47604eb4652ba0debe91c870517b8bf32b1f9c7b7961fcc00b566a899368",
+          "sampling_records_count": 122
+        },
+        "W-03": {
+          "workload_id": "W-03",
+          "trial_id": "trial_3_sampling_preflight",
+          "diagnostic_sampling_enabled": true,
+          "sample_count": 200,
+          "duration_seconds": 11.962,
+          "throughput_tps": 16.72,
+          "api_submission_latency": {
+            "p50_ms": 144.918,
+            "p95_ms": 283.128,
+            "p99_ms": 376.175,
+            "max_ms": 406.135,
+            "min_ms": 83.282,
+            "mean_ms": 169.259,
+            "stddev_ms": 59.885,
+            "variance_ms": 3586.195
+          },
+          "broker_dispatch_delay": {
+            "p50_ms": 5157.766,
+            "p95_ms": 8316.334,
+            "p99_ms": 8402.197,
+            "max_ms": 8446.244,
+            "min_ms": 25.327,
+            "mean_ms": 5493.134,
+            "stddev_ms": 2159.914,
+            "variance_ms": 4665227.975
+          },
+          "execution_overhead": {
+            "p50_ms": 122.12,
+            "p95_ms": 298.782,
+            "p99_ms": 323.442,
+            "max_ms": 360.71,
+            "min_ms": 95.43,
+            "mean_ms": 139.323,
+            "stddev_ms": 52.902,
+            "variance_ms": 2798.614
+          },
+          "end_to_end_latency": {
+            "p50_ms": 5444.601,
+            "p95_ms": 8625.396,
+            "p99_ms": 8775.927,
+            "max_ms": 8809.762,
+            "min_ms": 577.021,
+            "mean_ms": 5817.833,
+            "stddev_ms": 2111.874,
+            "variance_ms": 4460013.713
+          },
+          "raw_jsonl_filename": "raw_g93_W-03_trial_3_sampling_preflight_1794320427.jsonl",
+          "raw_jsonl_sha256": "84fa23ad83df9319e28b9d6d1d503b32804ccedc5dbab6f12aaad03d7de2ecce",
+          "sampling_records_count": 43
+        }
+      }
+    }
+  ]
+}
