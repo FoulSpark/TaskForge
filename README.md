@@ -101,11 +101,11 @@ flowchart LR
 
 ### Detailed Whitepaper & Visual Diagrams (`D1`–`D4`)
 - **Full 13-Section Engineering Whitepaper:** [`docs/whitepaper/ARCHITECTURE.md`](docs/whitepaper/ARCHITECTURE.md)
-- **Inspectable Mermaid Diagram Sources:**
-  - `D1` — System Architecture: [`d1_system_architecture.mmd`](docs/whitepaper/diagrams/d1_system_architecture.mmd)
-  - `D2` — Task Submission & Execution Sequence: [`d2_task_submission_execution.mmd`](docs/whitepaper/diagrams/d2_task_submission_execution.mmd)
-  - `D3` — Lease Fencing Sequence: [`d3_lease_fencing_sequence.mmd`](docs/whitepaper/diagrams/d3_lease_fencing_sequence.mmd)
-  - `D4` — Outbox & Broker Outage Recovery: [`d4_outbox_broker_recovery.mmd`](docs/whitepaper/diagrams/d4_outbox_broker_recovery.mmd)
+- **Inspectable Mermaid Sources & Rendered Assets (`SVG` / `PNG`):**
+  - `D1` — System Architecture: [Mermaid](docs/whitepaper/diagrams/d1_system_architecture.mmd) · [SVG](docs/architecture/rendered/d1_system_architecture.svg) · [PNG](docs/architecture/rendered/d1_system_architecture.png)
+  - `D2` — Task Submission & Execution Sequence: [Mermaid](docs/whitepaper/diagrams/d2_task_submission_execution.mmd) · [SVG](docs/architecture/rendered/d2_task_submission_execution.svg) · [PNG](docs/architecture/rendered/d2_task_submission_execution.png)
+  - `D3` — Lease Fencing Sequence: [Mermaid](docs/whitepaper/diagrams/d3_lease_fencing_sequence.mmd) · [SVG](docs/architecture/rendered/d3_lease_fencing_sequence.svg) · [PNG](docs/architecture/rendered/d3_lease_fencing_sequence.png)
+  - `D4` — Outbox & Broker Outage Recovery: [Mermaid](docs/whitepaper/diagrams/d4_outbox_broker_recovery.mmd) · [SVG](docs/architecture/rendered/d4_outbox_broker_recovery.svg) · [PNG](docs/architecture/rendered/d4_outbox_broker_recovery.png)
 
 ---
 
@@ -116,7 +116,7 @@ flowchart LR
 2. **Deterministic Priority + Intra-Tier FIFO Broker (`ZPOPMAX`):**
    Redis Sorted Set scores use disjoint priority bands `score = (priority * 10^12) - seq` (`LOW=1`..`CRITICAL=4`), giving strict tier preemption and FIFO ordering within each tier via atomic `LUA_ENQUEUE` / `LUA_DEQUEUE` (`ZPOPMAX`) / `LUA_ACK` (`delivery_token` match) / `LUA_RECLAIM`.
 3. **Event-Driven Capacity Wake-up Dispatch:**
-   `WorkerDispatcher` pairs single-element `ZPOPMAX` dequeuing with a lost-wakeup-proof `threading.Event` slot-release signal (adopted in `a89858b`), cutting slot replenishment latency by `74.5%–89.4%` (`29–34 ms -> 3.1–8.6 ms`) and raising worker utilization to `91.3%` at `c=4` while avoiding unnecessary batch-dequeue complexity (`c <= 10`).
+   `WorkerDispatcher` pairs single-element `ZPOPMAX` dequeuing with a lost-wakeup-proof `threading.Event` slot-release signal (adopted in `a89858b`), cutting per-slot replenishment lag by `79.2%–91.0%` (`29.36–33.99 ms -> 2.64–7.14 ms`) and raising worker utilization to `91.3%` at `c=4` while avoiding unnecessary batch-dequeue complexity (`c <= 10`).
 4. **Lease Ownership & Authoritative Stale Fencing:**
    Workers acquire time-bounded leases (`30s` TTL, auto-renewed every `lease_duration / 2`), while a two-stage background Reaper recovers expired PostgreSQL leases first and reclaims Redis `in_flight` items second. All 5 state-mutating repository operations enforce `SELECT ... FOR UPDATE` token matching (`5/5` stale writes rejected, `0` corruptions in G9.4.3 drills).
 5. **Security, Multi-Tenancy & Fail-Closed Rate Limiting:**
