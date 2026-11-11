@@ -1,13 +1,13 @@
 {
   "schema_version": "1.0.0",
-  "timestamp_utc": "2026-11-11T09:36:20.844962+00:00",
+  "timestamp_utc": "2026-11-11T11:29:47.807606+00:00",
   "provenance": {
-    "git_commit": "f740e13661a758a04245f405c7ee9d027e99cd4f",
-    "git_dirty": true,
+    "git_commit": "1d4a76cd047a61548e92e57cfb1f032ba7914068",
+    "git_dirty": false,
     "production_baseline_sha": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
-    "harness_sha": "9043e48ca73e7f3e168f7850be25e29bdbd34434b95510c8657df78f1c50803e",
+    "harness_sha": "6576de5ba663a77a07256b20ae0700adababb1d7b906343a66dce68ef853efc0",
     "harness_path": "benchmarks/public/run_public_benchmarks.py",
-    "run_id": "a64ca3bd"
+    "run_id": "fc557f14"
   },
   "environment": {
     "os": "Windows 11 (AMD64)",
@@ -21,132 +21,168 @@
   "workload_results": {
     "W-01": {
       "task_count": 300,
-      "elapsed_seconds": 8.2893,
-      "throughput_tasks_per_sec": 37.88,
+      "elapsed_seconds": 6.9469,
+      "throughput_tasks_per_sec": 44.78,
       "warmup_tasks_excluded": 30,
       "measured_tasks_count": 270,
       "measurement_window": {
-        "t_start_utc": "2026-11-11T09:36:03.580385+00:00",
-        "t_end_utc": "2026-11-11T09:36:10.708102+00:00",
-        "window_seconds": 7.1277
+        "t_start_utc": "2026-11-11T11:29:32.410662+00:00",
+        "t_end_utc": "2026-11-11T11:29:38.440062+00:00",
+        "window_seconds": 6.0294
       },
       "task_outcomes": {
-        "success_count": 270,
+        "seeded_count": 300,
+        "warmup_count": 30,
+        "measured_count": 270,
+        "success_count": 300,
         "failed_count": 0,
-        "retried_count": 0
+        "retried_count": 0,
+        "measured_success_count": 270,
+        "measured_failed_count": 0
       },
       "latencies_ms": {
-        "p50": 4740.15,
-        "p95": 7768.596,
-        "p99": 8111.362,
-        "min": 1142.166,
-        "max": 8195.806,
-        "mean": 4691.781,
+        "p50": 4063.885,
+        "p95": 6756.751,
+        "p99": 7003.234,
+        "min": 1088.086,
+        "max": 7050.557,
+        "mean": 4092.136,
         "outbox_dwell_ms": {
-          "p50": 1132.948,
-          "p95": 1648.135,
-          "p99": 1648.135,
-          "mean": 1048.434
+          "p50": 1011.774,
+          "p95": 1506.949,
+          "p99": 1506.949,
+          "mean": 955.318
         },
         "queue_dwell_ms": {
-          "p50": 3709.018,
-          "p95": 6203.424,
-          "p99": 6549.154,
-          "mean": 3731.331
+          "p50": 2997.493,
+          "p95": 5198.47,
+          "p99": 5440.301,
+          "mean": 3084.507
         },
         "handler_execution_ms": {
-          "p50": 53.42,
-          "p95": 71.727,
-          "p99": 77.241,
-          "mean": 54.937
+          "p50": 51.874,
+          "p95": 61.466,
+          "p99": 78.723,
+          "mean": 52.31
+        },
+        "reconciliation": {
+          "sum_of_component_means_ms": 4092.135,
+          "reported_e2e_mean_ms": 4092.136,
+          "mean_discrepancy_ms": 0.001,
+          "max_per_task_discrepancy_ms": 0.0,
+          "reconciled": true
         }
       },
       "raw_observations_count": 270
     },
     "W-02": {
       "task_count": 200,
-      "elapsed_seconds": 5.4215,
-      "throughput_tasks_per_sec": 38.86,
+      "elapsed_seconds": 4.7573,
+      "throughput_tasks_per_sec": 44.59,
       "warmup_tasks_excluded": 20,
       "measured_tasks_count": 180,
       "measurement_window": {
-        "t_start_utc": "2026-11-11T09:36:11.965383+00:00",
-        "t_end_utc": "2026-11-11T09:36:16.597774+00:00",
-        "window_seconds": 4.6324
+        "t_start_utc": "2026-11-11T11:29:39.515866+00:00",
+        "t_end_utc": "2026-11-11T11:29:43.552867+00:00",
+        "window_seconds": 4.037
       },
       "task_outcomes": {
-        "success_count": 180,
+        "seeded_count": 200,
+        "warmup_count": 20,
+        "measured_count": 180,
+        "success_count": 200,
         "failed_count": 0,
-        "retried_count": 0
+        "retried_count": 0,
+        "measured_success_count": 180,
+        "measured_failed_count": 0
       },
       "latencies_ms": {
-        "p50": 3122.411,
-        "p95": 5182.96,
-        "p99": 5377.444,
-        "min": 858.337,
-        "max": 5399.632,
-        "mean": 3101.53,
+        "p50": 2842.905,
+        "p95": 4607.834,
+        "p99": 4743.055,
+        "min": 827.938,
+        "max": 4783.265,
+        "mean": 2827.287,
         "outbox_dwell_ms": {
-          "p50": 755.743,
-          "p95": 1047.38,
-          "p99": 1047.38,
-          "mean": 660.627
+          "p50": 672.316,
+          "p95": 965.244,
+          "p99": 965.244,
+          "mean": 599.911
         },
         "queue_dwell_ms": {
-          "p50": 2413.155,
-          "p95": 4177.357,
-          "p99": 4389.973,
-          "mean": 2486.487
+          "p50": 2128.693,
+          "p95": 3585.579,
+          "p99": 3726.525,
+          "mean": 2173.85
         },
         "handler_execution_ms": {
-          "p50": 51.885,
-          "p95": 71.97,
-          "p99": 80.4,
-          "mean": 53.539
+          "p50": 52.898,
+          "p95": 67.527,
+          "p99": 82.474,
+          "mean": 53.526
+        },
+        "reconciliation": {
+          "sum_of_component_means_ms": 2827.287,
+          "reported_e2e_mean_ms": 2827.287,
+          "mean_discrepancy_ms": 0.0,
+          "max_per_task_discrepancy_ms": 0.0,
+          "reconciled": true
         }
       },
       "raw_observations_count": 180
     },
     "W-03": {
       "task_count": 100,
-      "elapsed_seconds": 3.6372,
-      "throughput_tasks_per_sec": 28.13,
+      "elapsed_seconds": 3.5209,
+      "throughput_tasks_per_sec": 28.82,
       "warmup_tasks_excluded": 10,
       "measured_tasks_count": 90,
       "measurement_window": {
-        "t_start_utc": "2026-11-11T09:36:17.477174+00:00",
-        "t_end_utc": "2026-11-11T09:36:20.677079+00:00",
-        "window_seconds": 3.1999
+        "t_start_utc": "2026-11-11T11:29:44.455569+00:00",
+        "t_end_utc": "2026-11-11T11:29:47.578324+00:00",
+        "window_seconds": 3.1228
       },
       "task_outcomes": {
-        "success_count": 90,
+        "seeded_count": 100,
+        "warmup_count": 10,
+        "measured_count": 90,
+        "success_count": 100,
         "failed_count": 0,
-        "retried_count": 0
+        "retried_count": 0,
+        "measured_success_count": 90,
+        "measured_failed_count": 0
       },
       "latencies_ms": {
-        "p50": 2090.03,
-        "p95": 3539.217,
-        "p99": 3662.109,
-        "min": 577.18,
-        "max": 3665.503,
-        "mean": 2138.331,
+        "p50": 2309.314,
+        "p95": 3555.8,
+        "p99": 3675.466,
+        "min": 650.982,
+        "max": 3679.035,
+        "mean": 2296.029,
         "outbox_dwell_ms": {
-          "p50": 469.333,
-          "p95": 469.333,
-          "p99": 469.333,
-          "mean": 357.183
+          "p50": 430.803,
+          "p95": 430.803,
+          "p99": 430.803,
+          "mean": 316.172
         },
         "queue_dwell_ms": {
-          "p50": 1690.854,
-          "p95": 3110.243,
-          "p99": 3232.996,
-          "mean": 1808.68
+          "p50": 1900.923,
+          "p95": 3029.696,
+          "p99": 3153.367,
+          "mean": 1876.566
         },
         "handler_execution_ms": {
-          "p50": 96.83,
-          "p95": 113.583,
-          "p99": 116.219,
-          "mean": 97.348
+          "p50": 98.768,
+          "p95": 132.649,
+          "p99": 136.189,
+          "mean": 103.291
+        },
+        "reconciliation": {
+          "sum_of_component_means_ms": 2296.029,
+          "reported_e2e_mean_ms": 2296.029,
+          "mean_discrepancy_ms": 0.0,
+          "max_per_task_discrepancy_ms": 0.0,
+          "reconciled": true
         }
       },
       "raw_observations_count": 90
