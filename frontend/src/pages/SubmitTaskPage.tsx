@@ -33,6 +33,8 @@ export function SubmitTaskPage() {
   const [timeoutSeconds, setTimeoutSeconds] = useState(60);
   const [maxRetries, setMaxRetries] = useState(3);
   const [idempotencyKey, setIdempotencyKey] = useState("");
+  const [scheduleMode, setScheduleMode] = useState<"immediate" | "scheduled">("immediate");
+  const [scheduledLocal, setScheduledLocal] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -101,9 +103,23 @@ export function SubmitTaskPage() {
       return;
     }
 
+    let scheduledIso: string | undefined;
+    if (scheduleMode === "scheduled") {
+      if (!scheduledLocal) {
+        setSubmitError("Select a future date and time for scheduled execution.");
+        return;
+      }
+      const parsedDate = new Date(scheduledLocal);
+      if (Number.isNaN(parsedDate.getTime()) || parsedDate.getTime() <= Date.now()) {
+        setSubmitError("Scheduled execution timestamp must be in the future.");
+        return;
+      }
+      scheduledIso = parsedDate.toISOString();
+    }
+
     setSubmitting(true);
     try {
-      const created = await client.createTask({
+      const outcome = await client.createTask({
         task_name: taskName.trim(),
         task_type: taskType,
         payload: parsedPayload as Record<string, unknown>,
@@ -111,11 +127,25 @@ export function SubmitTaskPage() {
         timeout_seconds: timeoutSeconds,
         max_retries: maxRetries,
         ...(idempotencyKey.trim() ? { idempotency_key: idempotencyKey.trim() } : {}),
+        ...(scheduledIso ? { scheduled_at: scheduledIso } : {}),
       });
-      navigate(`/tasks/${created.id}`);
+      const submissionNotice = outcome.isReplay
+        ? "idempotent_replay"
+        : scheduledIso
+          ? "scheduled"
+          : "created";
+      navigate(`/tasks/${outcome.task.id}`, {
+        state: { submissionNotice },
+      });
     } catch (err) {
       if (err instanceof ApiError) {
-        setSubmitError(`${err.code}: ${err.message}`);
+        if (err.status === 409) {
+          setSubmitError(
+            `Idempotency conflict (409): ${err.message}. Reuse an idempotency key only with identical task parameters and payload, or enter a new key.`,
+          );
+        } else {
+          setSubmitError(`${err.code}: ${err.message}`);
+        }
       } else {
         setSubmitError("Failed to submit task.");
       }
@@ -142,6 +172,16 @@ export function SubmitTaskPage() {
           Submitting will return HTTP 403 while keeping your session signed in.
         </div>
       ) : null}
+
+      <div className="banner banner-info" role="note">
+        <span>
+          <strong>At-least-once delivery:</strong> TaskForge durably commits tasks to
+          PostgreSQL and dispatches via Redis outbox. Providing an{" "}
+          <span className="mono">Idempotency Key</span> deduplicates repeated API
+          submissions with identical inputs, but workers may execute an attempt more
+          than once on crash/lease expiry.
+        </span>
+      </div>
 
       {catalogError ? (
         <div className="banner banner-error" role="alert">
@@ -256,6 +296,44 @@ export function SubmitTaskPage() {
                   onChange={(e) => setIdempotencyKey(e.target.value)}
                   placeholder="req-20261112-001"
                 />
+                <span className="field-hint">
+                  Replaying the exact same payload returns the original task (HTTP 200);
+                  reusing a key with modified payload returns HTTP 409.
+                </span>
+              </div>
+
+              <div className="field">
+                <label htmlFor="schedule-mode-select">Execution Schedule</label>
+                <select
+                  id="schedule-mode-select"
+                  className="select"
+                  value={scheduleMode}
+                  onChange={(e) =>
+                    setScheduleMode(e.target.value as "immediate" | "scheduled")
+                  }
+                >
+                  <option value="immediate">Immediate Dispatch</option>
+                  <option value="scheduled">Schedule for Future Execution</option>
+                </select>
+                {scheduleMode === "scheduled" ? (
+                  <>
+                    <label htmlFor="scheduled-at-input" style={{ marginTop: 6 }}>
+                      Scheduled Time (Local, sent as UTC)
+                    </label>
+                    <input
+                      id="scheduled-at-input"
+                      type="datetime-local"
+                      className="input tabular"
+                      value={scheduledLocal}
+                      onChange={(e) => setScheduledLocal(e.target.value)}
+                      required
+                    />
+                    <span className="field-hint">
+                      Scheduled tasks enter <span className="mono">PENDING</span> wait
+                      state until due (not active execution).
+                    </span>
+                  </>
+                ) : null}
               </div>
             </div>
 

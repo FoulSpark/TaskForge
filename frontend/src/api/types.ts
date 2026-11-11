@@ -84,6 +84,13 @@ export interface TaskCreateInput {
   timeout_seconds: number;
   max_retries: number;
   idempotency_key?: string;
+  scheduled_at?: string;
+}
+
+export interface TaskSubmissionOutcome {
+  task: TaskItem;
+  status: number;
+  isReplay: boolean;
 }
 
 export interface TaskTypeCatalogItem {

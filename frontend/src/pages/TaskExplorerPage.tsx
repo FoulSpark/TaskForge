@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../api/client";
+import {
+  canCancelStatus,
+  canRetryStatus,
+  isImmutableTerminalStatus,
+} from "../api/lifecycle";
 import type { TaskItem, TaskStatus } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
@@ -17,19 +22,6 @@ const STATUS_OPTIONS: TaskStatus[] = [
   "DEAD_LETTER",
   "CANCELLED",
 ];
-
-const CANCELLABLE_STATES: ReadonlySet<TaskStatus> = new Set([
-  "PENDING",
-  "QUEUED",
-  "RUNNING",
-  "RETRY_WAIT",
-]);
-
-const RETRYABLE_STATES: ReadonlySet<TaskStatus> = new Set([
-  "FAILED",
-  "DEAD_LETTER",
-  "CANCELLED",
-]);
 
 export function TaskExplorerPage() {
   const { client, isAuthenticated, sessionEpoch, hasScope } = useAuth();
@@ -101,7 +93,14 @@ export function TaskExplorerPage() {
       }
       await fetchTasks();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : `Failed to ${action} task.`);
+      if (err instanceof ApiError && err.status === 409) {
+        await fetchTasks();
+        setError(
+          `State conflict (409): ${err.message}. Synchronized authoritative task list.`,
+        );
+      } else {
+        setError(err instanceof ApiError ? err.message : `Failed to ${action} task.`);
+      }
     } finally {
       setBusyTaskId(null);
     }
@@ -228,6 +227,15 @@ export function TaskExplorerPage() {
                       <td className="mono">{task.task_type}</td>
                       <td>
                         <StatusBadge status={task.status} />
+                        {task.status === "RETRY_WAIT" ? (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                            Backoff wait (inactive)
+                          </div>
+                        ) : task.status === "PENDING" && task.scheduled_at ? (
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
+                            Scheduled wait
+                          </div>
+                        ) : null}
                       </td>
                       <td>
                         <PriorityBadge priority={task.priority} />
@@ -239,11 +247,11 @@ export function TaskExplorerPage() {
                         {new Date(task.updated_at).toLocaleString()}
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <Link to={`/tasks/${task.id}`} className="btn btn-sm">
                             Inspect
                           </Link>
-                          {canWrite && CANCELLABLE_STATES.has(task.status) ? (
+                          {canWrite && canCancelStatus(task.status) ? (
                             <button
                               type="button"
                               className="btn btn-sm btn-danger"
@@ -253,7 +261,7 @@ export function TaskExplorerPage() {
                               Cancel
                             </button>
                           ) : null}
-                          {canWrite && RETRYABLE_STATES.has(task.status) ? (
+                          {canWrite && canRetryStatus(task.status) ? (
                             <button
                               type="button"
                               className="btn btn-sm btn-primary"
@@ -262,6 +270,11 @@ export function TaskExplorerPage() {
                             >
                               Retry
                             </button>
+                          ) : null}
+                          {isImmutableTerminalStatus(task.status) ? (
+                            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                              Immutable
+                            </span>
                           ) : null}
                         </div>
                       </td>

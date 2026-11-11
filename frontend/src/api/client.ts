@@ -7,6 +7,7 @@ import type {
   TaskCreateInput,
   TaskItem,
   TaskListResponse,
+  TaskSubmissionOutcome,
   TaskTypesCatalogResponse,
   TenantStatsResponse,
 } from "./types";
@@ -102,10 +103,10 @@ export class TaskForgeClient {
     this.onForbidden = handlers.onForbidden;
   }
 
-  private async request<T>(
+  private async requestWithStatus<T>(
     path: string,
     options: RequestInit & { tokenOverride?: string; skipAuthHeader?: boolean } = {},
-  ): Promise<T> {
+  ): Promise<{ data: T; status: number }> {
     const { tokenOverride, skipAuthHeader, headers: extraHeaders, ...fetchOptions } = options;
     const token = tokenOverride ?? this.getToken();
     const requestEpoch = this.getSessionEpoch?.();
@@ -193,7 +194,15 @@ export class TaskForgeClient {
     if (isStaleSession()) {
       throw new ApiError("Session cleared while request was in flight", 401, "SESSION_INVALIDATED");
     }
-    return parsed;
+    return { data: parsed, status: response.status };
+  }
+
+  private async request<T>(
+    path: string,
+    options: RequestInit & { tokenOverride?: string; skipAuthHeader?: boolean } = {},
+  ): Promise<T> {
+    const res = await this.requestWithStatus<T>(path, options);
+    return res.data;
   }
 
   getAuthMe(tokenOverride?: string): Promise<AuthPrincipal> {
@@ -244,11 +253,16 @@ export class TaskForgeClient {
     return this.request<TaskItem>(`/api/v1/tasks/${encodeURIComponent(taskId)}`);
   }
 
-  createTask(input: TaskCreateInput): Promise<TaskItem> {
-    return this.request<TaskItem>("/api/v1/tasks", {
+  async createTask(input: TaskCreateInput): Promise<TaskSubmissionOutcome> {
+    const { data, status } = await this.requestWithStatus<TaskItem>("/api/v1/tasks", {
       method: "POST",
       body: JSON.stringify(input),
     });
+    return {
+      task: data,
+      status,
+      isReplay: status === 200,
+    };
   }
 
   cancelTask(taskId: string): Promise<TaskItem> {

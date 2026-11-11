@@ -1,33 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
-import type { TaskItem, TaskStatus } from "../api/types";
+import {
+  canCancelStatus,
+  canRetryStatus,
+  getLifecycleStateLabel,
+  isImmutableTerminalStatus,
+  isTerminalStatus,
+} from "../api/lifecycle";
+import type { TaskItem } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
 import { useVisibilityPolling } from "../hooks/useVisibilityPolling";
 
-const TERMINAL_STATES: ReadonlySet<TaskStatus> = new Set([
-  "SUCCESS",
-  "FAILED",
-  "DEAD_LETTER",
-  "CANCELLED",
-]);
-
-const CANCELLABLE_STATES: ReadonlySet<TaskStatus> = new Set([
-  "PENDING",
-  "QUEUED",
-  "RUNNING",
-  "RETRY_WAIT",
-]);
-
-const RETRYABLE_STATES: ReadonlySet<TaskStatus> = new Set([
-  "FAILED",
-  "DEAD_LETTER",
-  "CANCELLED",
-]);
-
 export function TaskDetailPage() {
   const { taskId = "" } = useParams();
+  const location = useLocation();
+  const submissionNotice = (
+    location.state as { submissionNotice?: string } | null
+  )?.submissionNotice;
   const { client, isAuthenticated, sessionEpoch, hasScope } = useAuth();
   const canWrite = hasScope("tasks:write");
 
@@ -58,7 +49,7 @@ export function TaskDetailPage() {
     }
   }, [client, taskId]);
 
-  const isTerminal = task ? TERMINAL_STATES.has(task.status) : false;
+  const isTerminal = task ? isTerminalStatus(task.status) : false;
 
   const { backoffSeconds } = useVisibilityPolling({
     enabled: isAuthenticated && Boolean(taskId) && !isTerminal,
@@ -78,7 +69,14 @@ export function TaskDetailPage() {
           : await client.retryTask(task.id);
       setTask(updated);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : `Failed to ${action} task.`);
+      if (err instanceof ApiError && err.status === 409) {
+        await fetchTask();
+        setError(
+          `State conflict (409): ${err.message}. Refreshed authoritative server state.`,
+        );
+      } else {
+        setError(err instanceof ApiError ? err.message : `Failed to ${action} task.`);
+      }
     } finally {
       setActionBusy(false);
     }
@@ -103,8 +101,8 @@ export function TaskDetailPage() {
         </div>
 
         {task && canWrite ? (
-          <div style={{ display: "flex", gap: 8 }}>
-            {CANCELLABLE_STATES.has(task.status) ? (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {canCancelStatus(task.status) ? (
               <button
                 type="button"
                 className="btn btn-danger"
@@ -114,19 +112,33 @@ export function TaskDetailPage() {
                 Cancel Task
               </button>
             ) : null}
-            {RETRYABLE_STATES.has(task.status) ? (
+            {canRetryStatus(task.status) ? (
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={actionBusy}
                 onClick={() => void handleAction("retry")}
               >
-                Retry Task
+                Manual Retry (Re-queue)
               </button>
+            ) : null}
+            {isImmutableTerminalStatus(task.status) ? (
+              <span className="pill pill-neutral">Immutable (Terminal)</span>
             ) : null}
           </div>
         ) : null}
       </div>
+
+      {submissionNotice === "idempotent_replay" ? (
+        <div className="banner banner-info" role="status">
+          Idempotent replay (HTTP 200): Matched existing task for this idempotency key —
+          no duplicate task was created.
+        </div>
+      ) : submissionNotice === "scheduled" ? (
+        <div className="banner banner-info" role="status">
+          Task persisted and scheduled for future execution (waiting in PENDING until due).
+        </div>
+      ) : null}
 
       {backoffSeconds ? (
         <div className="banner banner-warn" role="status">
@@ -155,6 +167,9 @@ export function TaskDetailPage() {
               <StatusBadge status={task.status} />
               <PriorityBadge priority={task.priority} />
               <span className="pill pill-neutral mono">{task.task_type}</span>
+              {!isImmutableTerminalStatus(task.status) && getLifecycleStateLabel(task) ? (
+                <span className="pill pill-neutral">{getLifecycleStateLabel(task)}</span>
+              ) : null}
               {!isTerminal ? (
                 <span className="pill pill-neutral">Auto-refreshing</span>
               ) : null}
