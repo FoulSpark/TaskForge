@@ -33,6 +33,7 @@ This directory contains the milestone specifications, threat model, trust bounda
 25. [24_g95_stage0_reconciliation_addendum.md](24_g95_stage0_reconciliation_addendum.md): Gate G9.5 Stage 0 reconciliation addendum (R2 dequeue direction, R3 cardinality, R4 demo contract).
 26. [25_g95_stage1_demo_report.md](25_g95_stage1_demo_report.md): Gate G9.5 Stage 1 demonstration harness verification report (D1–D12 compliance).
 27. [26_g95_stage1_reconciliation_addendum.md](26_g95_stage1_reconciliation_addendum.md): Gate G9.5 Stage 1 reconciliation addendum (R1 ownership manifest, R2 fencing rowcount/telemetry, R3 identity/priority reconciliation).
+28. [27_g95_stage2_public_benchmarks_report.md](27_g95_stage2_public_benchmarks_report.md): Gate G9.5 Stage 2 public benchmark suite verification report (W-01, W-02, W-03 canonical results).
 
 
 

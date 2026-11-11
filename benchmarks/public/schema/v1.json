@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TaskForgePublicBenchmarkV1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "timestamp_utc",
+    "provenance",
+    "environment",
+    "workload_results"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "timestamp_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["git_commit", "git_dirty", "production_baseline_sha"],
+      "properties": {
+        "git_commit": { "type": "string" },
+        "git_dirty": { "type": "boolean" },
+        "production_baseline_sha": { "type": "string" },
+        "harness_sha": { "type": "string" },
+        "harness_path": { "type": "string" },
+        "run_id": { "type": "string" }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "os",
+        "cpu_model",
+        "cpu_logical_cores",
+        "ram_gb",
+        "python_version",
+        "postgres_version",
+        "redis_version"
+      ],
+      "properties": {
+        "os": { "type": "string" },
+        "cpu_model": { "type": "string" },
+        "cpu_logical_cores": { "type": "integer" },
+        "ram_gb": { "type": "number" },
+        "python_version": { "type": "string" },
+        "postgres_version": { "type": "string" },
+        "redis_version": { "type": "string" }
+      }
+    },
+    "workload_results": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "task_count",
+          "elapsed_seconds",
+          "throughput_tasks_per_sec",
+          "latencies_ms",
+          "raw_observations_count"
+        ],
+        "properties": {
+          "task_count": { "type": "integer" },
+          "elapsed_seconds": { "type": "number" },
+          "throughput_tasks_per_sec": { "type": "number" },
+          "warmup_tasks_excluded": { "type": "integer" },
+          "measured_tasks_count": { "type": "integer" },
+          "measurement_window": {
+            "type": "object",
+            "properties": {
+              "t_start_utc": { "type": "string" },
+              "t_end_utc": { "type": "string" },
+              "window_seconds": { "type": "number" }
+            }
+          },
+          "task_outcomes": {
+            "type": "object",
+            "properties": {
+              "success_count": { "type": "integer" },
+              "failed_count": { "type": "integer" },
+              "retried_count": { "type": "integer" }
+            }
+          },
+          "latencies_ms": {
+            "type": "object",
+            "required": ["p50", "p95", "p99", "min", "max", "mean"],
+            "properties": {
+              "p50": { "type": "number" },
+              "p95": { "type": "number" },
+              "p99": { "type": "number" },
+              "min": { "type": "number" },
+              "max": { "type": "number" },
+              "mean": { "type": "number" },
+              "outbox_dwell_ms": {
+                "type": "object",
+                "properties": {
+                  "p50": { "type": "number" },
+                  "p95": { "type": "number" },
+                  "p99": { "type": "number" },
+                  "mean": { "type": "number" }
+                }
+              },
+              "queue_dwell_ms": {
+                "type": "object",
+                "properties": {
+                  "p50": { "type": "number" },
+                  "p95": { "type": "number" },
+                  "p99": { "type": "number" },
+                  "mean": { "type": "number" }
+                }
+              },
+              "handler_execution_ms": {
+                "type": "object",
+                "properties": {
+                  "p50": { "type": "number" },
+                  "p95": { "type": "number" },
+                  "p99": { "type": "number" },
+                  "mean": { "type": "number" }
+                }
+              }
+            }
+          },
+          "raw_observations_count": { "type": "integer" }
+        }
+      }
+    }
+  }
+}
+
