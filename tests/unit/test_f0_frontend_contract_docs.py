@@ -62,6 +62,28 @@ def test_f0_resolves_all_five_contract_gaps():
     assert "F0" in spec and "F8" in spec
 
 
+def test_f0_monitoring_contract_prevents_lifecycle_interval_conflation():
+    """Ensure FRONTEND_API_CONTRACT.md separates outbox_dwell, queue_dwell, and submission_to_start."""
+    contract = (PHASE10_DIR / "FRONTEND_API_CONTRACT.md").read_text(encoding="utf-8")
+    for field_name in (
+        "outbox_dwell:",
+        "queue_dwell:",
+        "submission_to_start:",
+        "handler_duration:",
+        "worker_lease_tenure:",
+        "end_to_end:",
+    ):
+        assert field_name in contract, f"Missing lifecycle metric field '{field_name}' in API contract"
+
+    assert "queue_wait:" not in contract, (
+        "Conflated 'queue_wait:' field must not appear in MonitoringSummaryResponse.latencies_ms"
+    )
+    assert "outbox.published_at - task.created_at" in contract
+    assert "attempt.started_at - outbox.published_at" in contract
+    assert "attempt.started_at - task.created_at" in contract
+    assert "population:" in contract
+
+
 def test_f0_diagram_matches_embedded_spec_block():
     """Verify embedded Mermaid diagram in PHASE_10_FRONTEND_SPEC.md matches f0_frontend_architecture.mmd."""
     spec = (PHASE10_DIR / "PHASE_10_FRONTEND_SPEC.md").read_text(encoding="utf-8")

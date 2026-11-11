@@ -215,13 +215,17 @@ export interface OperatorSystemStatsResponse {
 ```
 
 ### 3.3 Gap `G2` & `R1`/`R2` Resolution — Scoped JSON Monitoring Summary (`GET /api/v1/monitoring/summary`)
-- **Required Scope:** `require_scope("tasks:read")`, query param `window_minutes: int = Query(5, ge=1, le=60)` (default rolling **5-minute** window).
-- **Exact Metric Semantics (`R1`):**
+- **Required Scope:** `require_scope("tasks:read")`, query param `window_minutes: int = Query(5, ge=1, le=60)` (default rolling **5-minute** window). **Never** accept a client `tenant_id` override; tenant identity comes strictly from `principal.tenant_id`.
+- **Exact Non-Conflated Lifecycle Metric Semantics (`R1`):**
   - **Throughput:** Completed tenant tasks (`status IN ('SUCCESS', 'DEAD_LETTER', 'CANCELLED')` with `completed_at` in `[now - window, now]`) returning `observation_count`, `window_seconds`, `tasks_per_second` (`observation_count / window_seconds`), and `tasks_per_minute`.
-  - **Queue Wait (`queue_wait_ms`):** Exact SQL observations of `attempt.started_at - task.created_at` (ingestion commit to attempt start) over attempts started inside the rolling window for `principal.tenant_id` (`method: "exact_sql_observations"`). Note: encompasses both outbox dwell and Redis queue dwell.
-  - **Execution Duration (`handler_duration_ms` vs `worker_lease_tenure_ms`):** Preserves the exact Phase 9 Stage 2 R1 distinction:
-    * `handler_duration_ms`: `TaskAttempt.duration_ms` (handler execution interval captured in `execute_task()`).
-    * `worker_lease_tenure_ms`: `task.completed_at - attempt.started_at` (full worker lease tenure through durable PostgreSQL commit).
+  - **Population Isolation Rule:** Completed-task/attempt observations (`population: "completed_tasks_only"` or `"completed_attempts_only"`) **never** mix active `RUNNING` attempts into completed latency percentiles.
+  - **Strict Lifecycle Stage Definitions (matching Phase 9 Stage 2 R1):**
+    * **`outbox_dwell`:** `outbox.published_at - task.created_at` ($t_{\text{published}} - t_{\text{ingested}}$) over published `TASK_SUBMITTED` outbox events belonging to completed/published tenant tasks inside the rolling window (`population: "published_submitted_outbox_events"`).
+    * **`queue_dwell`:** `attempt.started_at - outbox.published_at` ($t_{\text{started}} - t_{\text{published}}$) over completed initial attempts joined to their published `TASK_SUBMITTED` outbox event (`population: "completed_initial_attempts_with_outbox"`). **Strictly excludes outbox publication delay.**
+    * **`submission_to_start`:** `attempt.started_at - task.created_at` ($t_{\text{started}} - t_{\text{ingested}}$) explicitly labeled as total pre-execution submission-to-start latency over completed attempts (`population: "completed_attempts_only"`). Never mislabeled as `queue_wait`.
+    * **`handler_duration`:** `TaskAttempt.duration_ms` strictly over completed attempts (`completed_at IS NOT NULL AND duration_ms IS NOT NULL`, `population: "completed_attempts_only"`).
+    * **`worker_lease_tenure`:** `task.completed_at - attempt.started_at` ($t_{\text{completed}} - t_{\text{started}}$) over completed tasks/final successful attempts (`population: "completed_tasks_with_attempt"`), including lease ownership and durable PostgreSQL persistence overhead.
+    * **`end_to_end`:** `task.completed_at - task.created_at` ($t_{\text{completed}} - t_{\text{ingested}}$) over completed tenant tasks in `[now - window, now]` (`population: "completed_tasks_only"`).
   - **Empty & Low-Sample Behavior:** When `sample_count === 0`, `p50_ms`, `p95_ms`, and `p99_ms` MUST be `null` (never fabricated `0.0`). Includes `minimum_recommended_samples: 20` and `sufficient_sample_size: sample_count >= 20` so the UI surfaces an insufficient-sample notice instead of misleading tail precision.
 - **Authorization & Data Scope (`R2`):**
   - `throughput` and `latencies_ms`: strictly filtered by `principal.tenant_id`.
@@ -235,6 +239,7 @@ export interface LatencyPercentileSummary {
   sufficient_sample_size: boolean;
   minimum_recommended_samples: number;
   method: "exact_sql_observations";
+  population: string;
   p50_ms: number | null;
   p95_ms: number | null;
   p99_ms: number | null;
@@ -256,9 +261,12 @@ export interface MonitoringSummaryResponse {
     tasks_per_minute: number;
   };
   latencies_ms: {
-    queue_wait: LatencyPercentileSummary;
+    outbox_dwell: LatencyPercentileSummary;
+    queue_dwell: LatencyPercentileSummary;
+    submission_to_start: LatencyPercentileSummary;
     handler_duration: LatencyPercentileSummary;
     worker_lease_tenure: LatencyPercentileSummary;
+    end_to_end: LatencyPercentileSummary;
   };
   cluster: null | {
     queue_depth_by_priority: Record<"critical" | "high" | "medium" | "low", number>;
