@@ -16,7 +16,7 @@
 | `F2-C` | Schema-aligned Task Detail, sorted attempts/events, separated timing & diagnostics | `a8e5031` | Closed |
 | `F2-B` | Task Explorer server-side filtering, URL sync, pagination, stale-row guard & `429`/`503` | `5b21a9d` | Closed |
 | `F2-D` | Operational Monitoring UX, sample sufficiency (`N=20`), `null` quantiles & operator boundary | `a05a5e6` | Closed |
-| `F2-E` | Real browser E2E (Edge + compiled SPA + PG/Redis), responsive, accessibility & regression closure | `261da08` | Verified on `261da08` |
+| `F2-E` | Real browser E2E (Edge + compiled SPA + PG/Redis), responsive, accessibility & regression closure | `261da08` | Closed |
 
 ---
 
@@ -52,3 +52,14 @@
 3. **Server-Side Explorer, Pagination, Deep-Link Reload & Cross-Tenant Isolation:** Multi-page pagination (`limit=10`, `offset=10`), `FAILED` filter resetting `offset=0`, browser reload restoring URL params across re-authentication, zero visibility of `tenant-b` rows, and `404` rejection on cross-tenant task detail deep link.
 4. **Monitoring Boundaries, `403`, Concurrent Live DB `401` Revocation & `429`/`503` Backpressure:** Standard vs `admin:operator` cluster telemetry gate; read-only key `403` preserves session; real Postgres key revocation (`revoke-key`) aborts concurrent `/api/v1/tasks` request cleanly, clears session to Sign-In Gate with zero stale row rendering and zero follow-up `/api/v1/` polling calls over 3s; `429` & `503` `Retry-After: 4` show backoff notices preserving valid table rows.
 5. **Desktop (`1280x800`) & Mobile (`390x844`) Layout + Keyboard Accessibility:** Verified zero horizontal document overflow (`scrollWidth <= innerWidth`) across `/`, `/submit`, `/tasks`, `/monitoring` at both viewports and working keyboard `Tab` focus traversal.
+
+---
+
+## 4. Phase 10 Closure Qualifications
+
+1. **Accessibility Scope:** Keyboard traversal, focus visibility (`:focus-visible`), accessible role/label queries, and responsive overflow checks establish basic keyboard and viewport usability across tested views, **not** full WCAG 2.2 AA conformance (no screen-reader, formal color-contrast, or automated accessibility audit claimed).
+2. **Browser Coverage Scope:** The five headless Microsoft Edge E2E scenarios verify the core critical workflows against live infrastructure, not every possible browser matrix combination or edge failure permutation.
+3. **Security Scope:** Browser storage/DOM/URL key-leakage and lease-token redaction checks are supplementary to server-side authorization, tenant isolation, and response minimization — not a substitute for an external penetration/security audit.
+4. **Performance & Delivery Guarantee:** Browser E2E checks establish functional correctness under single-operator load rather than multi-user frontend capacity. TaskForge delivery remains durable **at-least-once** via PostgreSQL transactional outbox + Redis broker protected by leases and fencing tokens (never presented as universal exactly-once external side-effect execution).
+
+
