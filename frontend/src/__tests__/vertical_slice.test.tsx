@@ -244,7 +244,7 @@ describe("TaskForge Vertical Slice UI Workflow & Monitoring", () => {
     // Navigate to Monitoring -> verify low-sample confidence + no observations indicators
     await user.click(screen.getByRole("link", { name: /Monitoring/i }));
     await waitFor(() => {
-      expect(screen.getByText(/Outbox Dwell/i)).toBeInTheDocument();
+      expect(screen.getByText("Outbox Dwell")).toBeInTheDocument();
     });
     expect(screen.getAllByText(/Low N \(<20\)/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/No observations/i)).toBeInTheDocument();
