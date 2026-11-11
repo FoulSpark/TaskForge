@@ -157,15 +157,16 @@ export interface AuthPrincipalResponse {
 ### 3.2 Gap `G3` Resolution — Tenant-Scoped `/api/v1/stats` & Operator `/api/v1/operator/system-stats`
 - **Hardened `GET /api/v1/stats` (`require_scope("tasks:read")`):**
   - Enforces `WHERE tenant_id = :principal_tenant_id` on `tasks` and `task_attempts` queries.
-  - Returns **only** the authenticated tenant's status counts (`total`, `pending`, `queued`, `running`, `succeeded`, `failed`, `retry_wait`, `dead_letter`, `cancelled`) and tenant average execution duration.
-  - Does **not** expose global cross-tenant counts, global Redis queue depth, or internal worker hostnames to ordinary tenant tokens.
+  - Returns **only** the authenticated tenant's status counts (`total`, `pending`, `queued`, `running`, `succeeded`, `failed`, `retry_wait`, `dead_letter`, `cancelled`) and tenant average execution duration (`performance.avg_execution_ms`).
+  - Does **not** expose global cross-tenant counts, global Redis queue depth, or internal worker hostnames to ordinary tenant tokens (`workers` and `queue_depth` are populated **only** when `"admin:operator" in principal.scopes`, preserving backward compatibility for legacy operator-scoped test runners without leaking global data to tenant keys).
 - **Explicit System-Wide Operator Endpoint (`GET /api/v1/operator/system-stats`, `require_scope("admin:operator")`):**
-  - Retains global task counts, Redis queue depth by priority tier (`critical`, `high`, `medium`, `low`), and active worker list (`get_active_workers()`) exclusively for authorized `admin:operator` principals. (Note: `GET /api/v1/workers` must likewise be guarded by `require_scope("admin:operator")` in Phase 10 so worker infrastructure hostnames are not exposed unauthenticated.)
+  - Exposes cluster-wide task counts across all tenants, Redis queue depth by priority tier (`critical`, `high`, `medium`, `low`), and active worker list (`get_active_workers()`) exclusively for authorized `admin:operator` principals. (`GET /api/v1/workers` is likewise guarded by `require_scope("admin:operator")` in Phase 10 so worker hostnames/heartbeats are never exposed to unauthenticated or ordinary tenant callers.)
 
 ```typescript
 export interface TenantStatsResponse {
   timestamp: number;
   tenant_id: string;
+  scope: "tenant";
   tasks: {
     total: number;
     pending: number;
@@ -179,6 +180,11 @@ export interface TenantStatsResponse {
   };
   performance: {
     avg_execution_ms: number;
+    queue_depth?: number | null; // null/omitted for non-operator tenants
+  };
+  workers?: null | {
+    active_count: number;
+    list: WorkerHeartbeatInfo[];
   };
 }
 
@@ -192,11 +198,14 @@ export interface WorkerHeartbeatInfo {
   status: string;
 }
 
-export interface OperatorSystemStatsResponse extends TenantStatsResponse {
+export interface OperatorSystemStatsResponse {
+  timestamp: number;
   scope: "system";
+  tasks: TenantStatsResponse["tasks"];
   performance: {
     avg_execution_ms: number;
-    queue_depth: number | Record<string, number>;
+    queue_depth: number;
+    queue_depth_by_priority: Record<"critical" | "high" | "medium" | "low", number>;
   };
   workers: {
     active_count: number;
@@ -205,13 +214,27 @@ export interface OperatorSystemStatsResponse extends TenantStatsResponse {
 }
 ```
 
-### 3.3 Gap `G2` Resolution — Scoped JSON Monitoring Summary (`GET /api/v1/monitoring/summary`)
-- **Required Scope:** `require_scope("tasks:read")` (with `cluster` infrastructure block populated **only** when `"admin:operator" in principal.scopes`, else `null`).
-- **Implementation Constraint:** Computes `p50`/`p95`/`p99` queue wait & worker execution percentiles and recent completion throughput from PostgreSQL (`tasks` / `task_attempts` over a configurable rolling window such as `window_minutes=15`, scoped by `tenant_id` for non-operators) and reads `GaugeSnapshotCache` + `engine.pool` stats for operators. Adds **`0` new Prometheus metric series**.
+### 3.3 Gap `G2` & `R1`/`R2` Resolution — Scoped JSON Monitoring Summary (`GET /api/v1/monitoring/summary`)
+- **Required Scope:** `require_scope("tasks:read")`, query param `window_minutes: int = Query(5, ge=1, le=60)` (default rolling **5-minute** window).
+- **Exact Metric Semantics (`R1`):**
+  - **Throughput:** Completed tenant tasks (`status IN ('SUCCESS', 'DEAD_LETTER', 'CANCELLED')` with `completed_at` in `[now - window, now]`) returning `observation_count`, `window_seconds`, `tasks_per_second` (`observation_count / window_seconds`), and `tasks_per_minute`.
+  - **Queue Wait (`queue_wait_ms`):** Exact SQL observations of `attempt.started_at - task.created_at` (ingestion commit to attempt start) over attempts started inside the rolling window for `principal.tenant_id` (`method: "exact_sql_observations"`). Note: encompasses both outbox dwell and Redis queue dwell.
+  - **Execution Duration (`handler_duration_ms` vs `worker_lease_tenure_ms`):** Preserves the exact Phase 9 Stage 2 R1 distinction:
+    * `handler_duration_ms`: `TaskAttempt.duration_ms` (handler execution interval captured in `execute_task()`).
+    * `worker_lease_tenure_ms`: `task.completed_at - attempt.started_at` (full worker lease tenure through durable PostgreSQL commit).
+  - **Empty & Low-Sample Behavior:** When `sample_count === 0`, `p50_ms`, `p95_ms`, and `p99_ms` MUST be `null` (never fabricated `0.0`). Includes `minimum_recommended_samples: 20` and `sufficient_sample_size: sample_count >= 20` so the UI surfaces an insufficient-sample notice instead of misleading tail precision.
+- **Authorization & Data Scope (`R2`):**
+  - `throughput` and `latencies_ms`: strictly filtered by `principal.tenant_id`.
+  - `health`: ordinary tenants see only coarse service availability `{ overall: "healthy" | "degraded", database: "healthy" | "unavailable", redis: "healthy" | "unavailable" }` with zero hostnames, URLs, ports, DSNs, or pool internals.
+  - `cluster`: populated **only** when `"admin:operator" in principal.scopes`, else **`null`** (`queue_depth_by_priority`, `outbox_pending_events`, `outbox_lag_seconds`, `workers`, `db_pool`). Zero credentials or connection strings ever included.
+  - **Zero Cardinality Impact:** Adds **`0` new Prometheus metric series**.
 
 ```typescript
-export interface LatencyPercentiles {
+export interface LatencyPercentileSummary {
   sample_count: number;
+  sufficient_sample_size: boolean;
+  minimum_recommended_samples: number;
+  method: "exact_sql_observations";
   p50_ms: number | null;
   p95_ms: number | null;
   p99_ms: number | null;
@@ -220,18 +243,22 @@ export interface LatencyPercentiles {
 export interface MonitoringSummaryResponse {
   timestamp_utc: string;
   window_minutes: number;
+  window_seconds: number;
   tenant_id: string;
   health: {
+    overall: "healthy" | "degraded";
     database: "healthy" | "unavailable";
     redis: "healthy" | "unavailable";
   };
   throughput: {
-    completed_in_window: number;
+    observation_count: number;
+    tasks_per_second: number;
     tasks_per_minute: number;
   };
   latencies_ms: {
-    queue_wait: LatencyPercentiles;
-    attempt_duration: LatencyPercentiles;
+    queue_wait: LatencyPercentileSummary;
+    handler_duration: LatencyPercentileSummary;
+    worker_lease_tenure: LatencyPercentileSummary;
   };
   cluster: null | {
     queue_depth_by_priority: Record<"critical" | "high" | "medium" | "low", number>;
@@ -251,9 +278,32 @@ export interface MonitoringSummaryResponse {
 }
 ```
 
-### 3.4 Registered Task Type Discovery (`GET /api/v1/task-types`)
-- **Required Scope:** `require_scope("tasks:read")`
-- **Response:** Returns the canonical list of registered handlers from `TaskRegistry` (`src/taskforge/tasks/handlers.py` — 17 handlers) so the Submit Task page never drifts from the backend registry.
+### 3.4 `R4` Resolution — Registered Task-Type Catalog (`GET /api/v1/task-types`)
+- **Required Scope:** `require_scope("tasks:read")`.
+- **Contract (`R4`):** Returns structured metadata for every task handler defined in `src/taskforge/tasks/handlers.py` alongside live `TaskRegistry` registration checks (`available: boolean`) and authoritative submission bounds (`TaskCreateRequest`). Frontend form checks mirror these schemas solely for UX convenience; backend Pydantic + `TaskService` remain authoritative.
+
+```typescript
+export interface TaskTypeCatalogItem {
+  task_type: string;
+  display_name: string;
+  category: "workload" | "benchmark" | "fault_injection";
+  description: string;
+  available: boolean;
+  default_payload: Record<string, unknown>;
+  payload_schema: Record<string, unknown>; // JSON Schema describing fields & limits
+}
+
+export interface TaskTypesCatalogResponse {
+  items: TaskTypeCatalogItem[];
+  submission_constraints: {
+    priority: { min: 1; max: 4; default: 2 };
+    timeout_seconds: { min: 1; max: 3600; default: 60 };
+    max_retries: { min: 0; max: 10; default: 3 };
+    task_name: { min_length: 1; max_length: 128 };
+    idempotency_key: { max_length: 128 };
+  };
+}
+```
 
 ---
 

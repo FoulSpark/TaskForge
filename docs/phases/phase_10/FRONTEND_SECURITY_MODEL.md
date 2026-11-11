@@ -17,10 +17,13 @@ TaskForge is a multi-tenant task processing platform protected by scoped API key
 ### 2.1 In-Memory Token Policy (Phase 10 Prototype Model)
 - **Entry Mechanism:** On launch without an active principal, the application renders a minimal Sign-In Gate prompting the user for an API key (`<input type="password">`).
 - **Validation Step:** The frontend validates the key by calling `GET /api/v1/auth/me` with `Authorization: Bearer <token>`. On `200 OK`, React stores the plaintext token **exclusively in React in-memory state** (`AuthContext` closure / `useRef`) alongside the parsed `AuthPrincipalResponse` (`key_id`, `tenant_id`, `name`, `scopes`).
-- **Hard Prohibitions:**
+- **Hard Prohibitions (`R3`):**
   1. **Zero Browser Persistence:** `localStorage`, `sessionStorage`, `IndexedDB`, and non-HttpOnly `document.cookie` are strictly forbidden for storing API keys.
-  2. **Zero URL / Console / Bundle Exposure:** API keys must never be placed in URL query strings, hash fragments, React `window` globals, `VITE_*` build-time env vars, `console.*` logs, or error boundaries.
-  3. **Explicit Clear Paths:** Full page reload, browser tab close, clicking **Sign Out**, or receiving HTTP `401 Unauthorized` immediately zeros the in-memory token reference and reverts to the Sign-In Gate.
+  2. **Zero URL / Console / Bundle / Debug Exposure:** API keys must never be placed in URL query strings, hash fragments, React `window` globals, `VITE_*` build-time env vars, `console.*` logs, telemetry/analytics payloads, error messages, or serialized debug/state dumps.
+  3. **Explicit `401` vs. `403` Lifecycle Handling (`R3`):**
+     - **HTTP `401 Unauthorized` (missing, invalid, expired, or revoked key):** Immediately clears the in-memory token and cached React tenant data (`stats`, `tasks`, `monitoring`), stops polling timers, and returns to the Sign-In Gate with an authentication-expired notice.
+     - **HTTP `403 Forbidden` (insufficient scope):** Preserves the authenticated session and token in memory, displays an inline authorization error specifying the denied action/scope, and never logs the key.
+     - **Explicit Sign Out / Reload / Tab Close:** Zeros the in-memory token reference and resets state immediately.
 
 ### 2.2 Future Production Upgrade Path
 In-memory API-key authentication is appropriate for a local-first single-user demonstration console. For a multi-user browser deployment, the recommended upgrade replaces direct API-key entry with an **OAuth2 / BFF Session Exchange** setting an `HttpOnly`, `Secure`, `SameSite=Strict` session cookie backed by CSRF double-submit or custom header verification—eliminating bearer tokens from JavaScript memory entirely.
@@ -45,7 +48,7 @@ In-memory API-key authentication is appropriate for a local-first single-user de
 
 1. **Lease Token Non-Exposure:** `TaskResponse` omits `tasks.lease_token` and `tasks.lease_expires_at` at the Pydantic serialization boundary (`src/taskforge/api/schemas.py`). The UI renders operational context cleanly using `attempts[]` (`attempt_number`, `worker_id`, `status`, `error_message`, `duration_ms`) and `events[]` (`LEASE_EXPIRED_RECOVERED`) without ever receiving lease tokens.
 2. **Error Sanitization & Correlation IDs:** Backend `mask_secret_string()` masks DB URLs, `tf_live_...` secrets, and lease tokens before returning errors. The UI renders `error.message` and `error.correlation_id` as plain text (React JSX auto-escaping; zero `dangerouslySetInnerHTML`).
-3. **XSS & JSON Rendering Safety:** Task payloads, return values, and tracebacks are formatted strictly as escaped text nodes (`JSON.stringify(..., null, 2)` inside `<pre>`), never evaluated or injected as HTML.
+3. **XSS, CSP & JSON Rendering Safety (`R3`):** Because in-memory JavaScript tokens do not mitigate successful XSS attacks, built static UI responses must include a strict `Content-Security-Policy` header (`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`). Task payloads, return values, and tracebacks are formatted strictly as escaped text nodes (`JSON.stringify(..., null, 2)` inside `<pre>`), with `dangerouslySetInnerHTML` and raw HTML interpolation strictly prohibited.
 
 ---
 
