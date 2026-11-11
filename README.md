@@ -218,6 +218,7 @@ alembic upgrade head
 
 ## Architecture Documentation & Phase 9 Provenance
 
+- **Engineering Case Study:** [`docs/case-study/TASKFORGE_ENGINEERING_CASE_STUDY.md`](docs/case-study/TASKFORGE_ENGINEERING_CASE_STUDY.md)
 - **Architecture Whitepaper:** [`docs/whitepaper/ARCHITECTURE.md`](docs/whitepaper/ARCHITECTURE.md)
 - **Phase 9 Final Synthesis & Closure Report:** [`docs/phases/phase_09/31_phase9_final_synthesis_and_closure.md`](docs/phases/phase_09/31_phase9_final_synthesis_and_closure.md)
 - **Phase 9 Document Index (`00`–`31`):** [`docs/phases/phase_09/README.md`](docs/phases/phase_09/README.md)
