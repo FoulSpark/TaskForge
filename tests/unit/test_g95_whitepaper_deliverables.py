@@ -135,6 +135,7 @@ def test_documentation_links_and_referenced_paths_resolve():
         WHITEPAPER_PATH,
         REPO_ROOT / "docs" / "phases" / "phase_09" / "29_g95_stage3_whitepaper_and_diagrams_report.md",
         REPO_ROOT / "docs" / "phases" / "phase_09" / "30_g95_stage3_reconciliation_addendum.md",
+        REPO_ROOT / "docs" / "phases" / "phase_09" / "31_phase9_final_synthesis_and_closure.md",
         REPO_ROOT / "docs" / "phases" / "phase_09" / "README.md",
     ]
     path_pattern = re.compile(

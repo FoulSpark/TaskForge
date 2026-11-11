@@ -37,6 +37,7 @@ This directory contains the milestone specifications, threat model, trust bounda
 29. [28_g95_stage2_reconciliation_addendum.md](28_g95_stage2_reconciliation_addendum.md): Gate G9.5 Stage 2 reconciliation addendum (R1 latency decomposition arithmetic, R2 clean provenance lock, outcome accounting).
 30. [29_g95_stage3_whitepaper_and_diagrams_report.md](29_g95_stage3_whitepaper_and_diagrams_report.md): Gate G9.5 Stage 3 whitepaper (`docs/whitepaper/ARCHITECTURE.md`) and Mermaid diagram (`docs/whitepaper/diagrams/*.mmd`) verification report.
 31. [30_g95_stage3_reconciliation_addendum.md](30_g95_stage3_reconciliation_addendum.md): Gate G9.5 Stage 3 reconciliation addendum (R1 `mmdc` v12.2.0 / `mermaid` v12.3.0 parse & SVG render verification, R2 Markdown link/path validation).
+32. [31_phase9_final_synthesis_and_closure.md](31_phase9_final_synthesis_and_closure.md): Gate G9.5 Stage 4 Phase 9 final engineering synthesis, provenance lineage, acceptance-criteria matrix, performance synthesis, and release-readiness closure report.
 
 
 
