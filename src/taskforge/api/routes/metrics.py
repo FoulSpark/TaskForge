@@ -1,18 +1,27 @@
 import time
 
-from fastapi import APIRouter, Depends, Response
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
-from taskforge.core.state_machine import TaskStatus
-from taskforge.database.models import Task, TaskAttempt
+from taskforge.api.dependencies import require_scope
+from taskforge.api.schemas import (
+    MonitoringSummaryResponse,
+    TenantStatsPerformanceSummary,
+    TenantStatsResponse,
+    WorkersSummary,
+)
+from taskforge.core.auth import AuthenticatedPrincipal
 from taskforge.database.session import get_db
 from taskforge.monitoring.metrics import (
     CONTENT_TYPE_LATEST,
     get_metrics_content,
 )
+from taskforge.monitoring.summary import (
+    build_monitoring_summary,
+    build_workers_summary,
+    collect_task_status_counts,
+)
 from taskforge.queue.broker import get_broker
-from taskforge.workers.heartbeat import get_active_workers
 
 router = APIRouter(tags=["Metrics & Observability"])
 
@@ -22,54 +31,72 @@ def prometheus_metrics():
     return Response(content=get_metrics_content(), media_type=CONTENT_TYPE_LATEST)
 
 
-@router.get("/api/v1/stats", summary="Real-time system telemetry and summary statistics")
-def system_stats(db: Session = Depends(get_db)):
-    # Total counts by status
-    stmt = select(Task.status, func.count(Task.id)).group_by(Task.status)
-    status_counts = dict(db.execute(stmt).all())
+@router.get(
+    "/api/v1/stats",
+    response_model=TenantStatsResponse,
+    summary="Tenant-scoped task statistics",
+    description="Returns status counts and execution duration scoped strictly to the authenticated tenant. Operator tokens additionally receive cluster queue depth and active workers.",
+)
+def system_stats(
+    db: Session = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(require_scope("tasks:read")),
+):
+    tasks_summary, avg_dur = collect_task_status_counts(db, tenant_id=principal.tenant_id)
+    is_operator = "admin:operator" in principal.scopes
 
-    total = sum(status_counts.values())
-    pending = status_counts.get(TaskStatus.PENDING.value, 0)
-    queued = status_counts.get(TaskStatus.QUEUED.value, 0)
-    running = status_counts.get(TaskStatus.RUNNING.value, 0)
-    succeeded = status_counts.get(TaskStatus.SUCCESS.value, 0)
-    failed = status_counts.get(TaskStatus.FAILED.value, 0)
-    retry_wait = status_counts.get(TaskStatus.RETRY_WAIT.value, 0)
-    dead_letter = status_counts.get(TaskStatus.DEAD_LETTER.value, 0)
-    cancelled = status_counts.get(TaskStatus.CANCELLED.value, 0)
+    queue_depth: int | None = None
+    workers_summary: WorkersSummary | None = None
+    if is_operator:
+        try:
+            broker = get_broker()
+            queue_depth = broker.get_queue_depth()
+        except Exception:
+            queue_depth = 0
+        active_workers = build_workers_summary()
+        workers_summary = WorkersSummary(
+            active_count=len(active_workers),
+            list=active_workers,
+        )
 
-    # Calculate average attempt duration in ms
-    avg_dur = (
-        db.scalar(select(func.avg(TaskAttempt.duration_ms)).where(TaskAttempt.status == "SUCCESS"))
-        or 0.0
+    return TenantStatsResponse(
+        timestamp=time.time(),
+        tenant_id=principal.tenant_id,
+        scope="tenant",
+        tasks=tasks_summary,
+        performance=TenantStatsPerformanceSummary(
+            avg_execution_ms=avg_dur,
+            queue_depth=queue_depth,
+        ),
+        workers=workers_summary,
     )
 
-    # Broker queue depth
-    broker = get_broker()
-    queue_depth = broker.get_queue_depth()
 
-    # Active workers
-    active_workers = get_active_workers()
+@router.get(
+    "/api/v1/monitoring/summary",
+    response_model=MonitoringSummaryResponse,
+    summary="Tenant-scoped JSON monitoring summary",
+    description="Returns rolling-window throughput, non-conflated lifecycle latency percentiles, service health, and operator-gated cluster state.",
+)
+def monitoring_summary(
+    request: Request,
+    window_minutes: int = Query(5, ge=1, le=60, description="Observation window in minutes"),
+    db: Session = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(require_scope("tasks:read")),
+):
+    is_operator = "admin:operator" in principal.scopes
+    broker = None
+    if is_operator:
+        try:
+            broker = get_broker()
+        except Exception:
+            broker = None
+    redis_client = getattr(getattr(request.app, "state", None), "redis", None)
 
-    return {
-        "timestamp": time.time(),
-        "tasks": {
-            "total": total,
-            "pending": pending,
-            "queued": queued,
-            "running": running,
-            "succeeded": succeeded,
-            "failed": failed,
-            "retry_wait": retry_wait,
-            "dead_letter": dead_letter,
-            "cancelled": cancelled,
-        },
-        "performance": {
-            "avg_execution_ms": round(avg_dur, 2),
-            "queue_depth": queue_depth,
-        },
-        "workers": {
-            "active_count": len(active_workers),
-            "list": active_workers,
-        },
-    }
+    return build_monitoring_summary(
+        db=db,
+        tenant_id=principal.tenant_id,
+        is_operator=is_operator,
+        window_minutes=window_minutes,
+        broker=broker,
+        redis_client=redis_client,
+    )

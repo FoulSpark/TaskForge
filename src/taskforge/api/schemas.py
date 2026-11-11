@@ -106,3 +106,148 @@ class ErrorDetail(BaseModel):
 
 class APIErrorResponse(BaseModel):
     error: ErrorDetail
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 (F1-A) Web Console Contract Schemas
+# ---------------------------------------------------------------------------
+
+
+class AuthPrincipalResponse(BaseModel):
+    key_id: str
+    tenant_id: str
+    name: str
+    scopes: list[str]
+
+
+class TenantStatsTasksSummary(BaseModel):
+    total: int
+    pending: int
+    queued: int
+    running: int
+    succeeded: int
+    failed: int
+    retry_wait: int
+    dead_letter: int
+    cancelled: int
+
+
+class TenantStatsPerformanceSummary(BaseModel):
+    avg_execution_ms: float
+    queue_depth: int | None = None
+
+
+class WorkerHeartbeatInfo(BaseModel):
+    worker_id: str
+    hostname: str
+    concurrency: int
+    active_tasks: int
+    started_at: str
+    last_heartbeat: str
+    status: str
+
+
+class WorkersSummary(BaseModel):
+    active_count: int
+    list: list[WorkerHeartbeatInfo]
+
+
+class TenantStatsResponse(BaseModel):
+    timestamp: float
+    tenant_id: str
+    scope: str = "tenant"
+    tasks: TenantStatsTasksSummary
+    performance: TenantStatsPerformanceSummary
+    workers: WorkersSummary | None = None
+
+
+class OperatorSystemPerformanceSummary(BaseModel):
+    avg_execution_ms: float
+    queue_depth: int
+    queue_depth_by_priority: dict[str, int]
+
+
+class OperatorSystemStatsResponse(BaseModel):
+    timestamp: float
+    scope: str = "system"
+    tasks: TenantStatsTasksSummary
+    performance: OperatorSystemPerformanceSummary
+    workers: WorkersSummary
+
+
+class LatencyPercentileSummary(BaseModel):
+    sample_count: int
+    sufficient_sample_size: bool
+    minimum_recommended_samples: int = 20
+    method: str = "exact_sql_observations"
+    population: str
+    p50_ms: float | None = None
+    p95_ms: float | None = None
+    p99_ms: float | None = None
+
+
+class MonitoringHealthSummary(BaseModel):
+    overall: str
+    database: str
+    redis: str
+
+
+class MonitoringThroughputSummary(BaseModel):
+    observation_count: int
+    tasks_per_second: float
+    tasks_per_minute: float
+
+
+class MonitoringLatenciesSummary(BaseModel):
+    outbox_dwell: LatencyPercentileSummary
+    queue_dwell: LatencyPercentileSummary
+    submission_to_start: LatencyPercentileSummary
+    handler_duration: LatencyPercentileSummary
+    worker_lease_tenure: LatencyPercentileSummary
+    end_to_end: LatencyPercentileSummary
+
+
+class MonitoringClusterWorkersSummary(BaseModel):
+    active_count: int
+    total_concurrency: int
+    active_tasks: int
+
+
+class MonitoringClusterDbPoolSummary(BaseModel):
+    checked_out: int
+    idle: int
+    overflow: int
+
+
+class MonitoringClusterSummary(BaseModel):
+    queue_depth_by_priority: dict[str, int]
+    outbox_pending_events: int
+    outbox_lag_seconds: float
+    workers: MonitoringClusterWorkersSummary
+    db_pool: MonitoringClusterDbPoolSummary
+
+
+class MonitoringSummaryResponse(BaseModel):
+    timestamp_utc: str
+    window_minutes: int
+    window_seconds: int
+    tenant_id: str
+    health: MonitoringHealthSummary
+    throughput: MonitoringThroughputSummary
+    latencies_ms: MonitoringLatenciesSummary
+    cluster: MonitoringClusterSummary | None = None
+
+
+class TaskTypeCatalogItem(BaseModel):
+    task_type: str
+    display_name: str
+    category: str
+    description: str
+    available: bool
+    default_payload: dict[str, Any]
+    payload_schema: dict[str, Any]
+
+
+class TaskTypesCatalogResponse(BaseModel):
+    items: list[TaskTypeCatalogItem]
+    submission_constraints: dict[str, Any]

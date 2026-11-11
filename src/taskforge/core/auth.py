@@ -93,8 +93,14 @@ class ApiKeyService:
             return None
 
         now = datetime.now(UTC)
-        if record.expires_at and record.expires_at < now:
-            return None
+        if record.expires_at:
+            exp = (
+                record.expires_at.replace(tzinfo=UTC)
+                if record.expires_at.tzinfo is None
+                else record.expires_at.astimezone(UTC)
+            )
+            if exp < now:
+                return None
 
         expected_hash = hash_token_secret(key_id, secret)
         if not hmac.compare_digest(record.hashed_secret, expected_hash):

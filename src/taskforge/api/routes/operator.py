@@ -1,25 +1,71 @@
-"""Operator administrative endpoints for Milestone G9.1.3.
+"""Operator administrative endpoints for Milestone G9.1.3 & Phase 10.
 
 Guarded strictly by scope `admin:operator`. Provides endpoints for:
+- System-wide task and worker statistics across all tenants
 - Triggering expired lease recovery sweeps
 - Outbox publisher sweeps
-- Active worker pool inspection
 - Emergency queue purging with audit logging
 """
+
+import time
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from taskforge.api.dependencies import require_scope
+from taskforge.api.schemas import (
+    OperatorSystemPerformanceSummary,
+    OperatorSystemStatsResponse,
+    WorkersSummary,
+)
 from taskforge.core.auth import AuthenticatedPrincipal
 from taskforge.database.models import TaskEvent, get_utc_now
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import get_db
+from taskforge.monitoring.summary import (
+    build_workers_summary,
+    collect_task_status_counts,
+    get_broker_queue_depths,
+)
 from taskforge.queue.broker import get_broker
 from taskforge.queue.outbox import publish_pending_outbox_events
 
 router = APIRouter(prefix="/operator", tags=["Operator"])
+
+
+@router.get(
+    "/system-stats",
+    response_model=OperatorSystemStatsResponse,
+    summary="Cluster-wide system statistics",
+    description="Returns global task status counts across all tenants, priority queue depths, and active workers.",
+)
+def get_system_stats(
+    db: Session = Depends(get_db),
+    _principal: AuthenticatedPrincipal = Depends(require_scope("admin:operator")),
+):
+    tasks_summary, avg_dur = collect_task_status_counts(db, tenant_id=None)
+    try:
+        broker = get_broker()
+    except Exception:
+        broker = None
+    total_depth, by_priority = get_broker_queue_depths(broker)
+    active_workers = build_workers_summary()
+
+    return OperatorSystemStatsResponse(
+        timestamp=time.time(),
+        scope="system",
+        tasks=tasks_summary,
+        performance=OperatorSystemPerformanceSummary(
+            avg_execution_ms=avg_dur,
+            queue_depth=total_depth,
+            queue_depth_by_priority=by_priority,
+        ),
+        workers=WorkersSummary(
+            active_count=len(active_workers),
+            list=active_workers,
+        ),
+    )
 
 
 class RecoveryResponse(BaseModel):
