@@ -355,7 +355,7 @@ export function MonitoringPage() {
                 </span>
               </div>
             </section>
-          ) : summary.cluster === null ? (
+          ) : summary.cluster == null ? (
             <section className="card" aria-label="Operator Cluster Telemetry">
               <h2 className="card-title">
                 Cluster Saturation &amp; Outbox (Operator Scope)

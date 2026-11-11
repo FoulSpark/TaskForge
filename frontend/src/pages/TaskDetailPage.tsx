@@ -170,7 +170,7 @@ export function TaskDetailPage() {
         </div>
       ) : submissionNotice === "scheduled" ? (
         <div className="banner banner-info" role="status">
-          Task persisted and scheduled for future execution (waiting in PENDING until due).
+          Task persisted and scheduled for future execution (waiting until due).
         </div>
       ) : null}
 

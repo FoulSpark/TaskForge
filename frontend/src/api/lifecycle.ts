@@ -41,11 +41,11 @@ export function canRetryStatus(status: TaskStatus): boolean {
 }
 
 export function isFutureScheduled(task: Pick<TaskItem, "status" | "scheduled_at">): boolean {
-  if (task.status !== "PENDING" || !task.scheduled_at) {
+  if ((task.status !== "PENDING" && task.status !== "QUEUED") || !task.scheduled_at) {
     return false;
   }
   const ts = Date.parse(task.scheduled_at);
-  return Number.isFinite(ts);
+  return Number.isFinite(ts) && ts > Date.now();
 }
 
 export function getLifecycleStateLabel(
@@ -60,9 +60,12 @@ export function getLifecycleStateLabel(
     case "RETRY_WAIT":
       return "Waiting — Auto-Retry Backoff (Inactive)";
     case "PENDING":
-      return task.scheduled_at
+    case "QUEUED":
+      return isFutureScheduled(task)
         ? "Waiting — Scheduled Future Execution (Inactive)"
-        : "Waiting — Outbox Dispatch";
+        : task.status === "PENDING"
+          ? "Waiting — Outbox Dispatch"
+          : null;
     case "FAILED":
       return "Failed — Manual Retry Eligible";
     default:

@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import {
   canCancelStatus,
   canRetryStatus,
+  isFutureScheduled,
   isImmutableTerminalStatus,
 } from "../api/lifecycle";
 import type { TaskItem, TaskStatus } from "../api/types";
@@ -453,7 +454,7 @@ export function TaskExplorerPage() {
                           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
                             Backoff wait (inactive)
                           </div>
-                        ) : task.status === "PENDING" && task.scheduled_at ? (
+                        ) : isFutureScheduled(task) ? (
                           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
                             Scheduled wait
                           </div>

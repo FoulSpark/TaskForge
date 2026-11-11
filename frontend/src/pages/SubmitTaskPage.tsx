@@ -329,8 +329,8 @@ export function SubmitTaskPage() {
                       required
                     />
                     <span className="field-hint">
-                      Scheduled tasks enter <span className="mono">PENDING</span> wait
-                      state until due (not active execution).
+                      Scheduled tasks remain queued/waiting until{" "}
+                      <span className="mono">scheduled_at</span> (inactive until due).
                     </span>
                   </>
                 ) : null}
