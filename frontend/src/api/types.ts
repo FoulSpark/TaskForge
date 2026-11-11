@@ -18,29 +18,29 @@ export interface AuthPrincipal {
 }
 
 export interface TaskAttemptItem {
-  id: string;
+  id: number;
   attempt_number: number;
-  worker_id: string;
+  worker_id: string | null;
   status: string;
-  started_at: string | null;
+  started_at: string;
   completed_at: string | null;
   duration_ms: number | null;
   error_message: string | null;
 }
 
 export interface TaskResultData {
-  id: string;
-  return_value: unknown;
-  result_size_bytes: number;
+  id: number;
+  return_value: Record<string, unknown> | null;
+  execution_metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
 export interface TaskEventItem {
-  id: string;
+  id: number;
   event_type: string;
-  from_status: string | null;
-  to_status: string | null;
-  reason: string | null;
+  from_state: string | null;
+  to_state: string;
+  metadata_json: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -51,7 +51,6 @@ export interface TaskItem {
   payload: Record<string, unknown>;
   status: TaskStatus;
   priority: TaskPriority;
-  tenant_id: string;
   idempotency_key: string | null;
   retry_count: number;
   max_retries: number;
@@ -61,11 +60,9 @@ export interface TaskItem {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
-  error_message: string | null;
-  error_type: string | null;
-  attempts?: TaskAttemptItem[];
-  result?: TaskResultData | null;
-  events?: TaskEventItem[];
+  attempts: TaskAttemptItem[];
+  result: TaskResultData | null;
+  events: TaskEventItem[];
 }
 
 export interface TaskListResponse {

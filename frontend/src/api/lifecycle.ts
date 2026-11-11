@@ -1,4 +1,4 @@
-import type { TaskItem, TaskStatus } from "./types";
+import type { TaskAttemptItem, TaskEventItem, TaskItem, TaskStatus } from "./types";
 
 export const TERMINAL_STATES: ReadonlySet<TaskStatus> = new Set([
   "SUCCESS",
@@ -68,5 +68,58 @@ export function getLifecycleStateLabel(
     default:
       return null;
   }
+}
+
+export function sortAttemptsAsc(attempts: TaskAttemptItem[] | undefined): TaskAttemptItem[] {
+  return [...(attempts ?? [])].sort((a, b) => a.attempt_number - b.attempt_number);
+}
+
+export function sortEventsChronological(events: TaskEventItem[] | undefined): TaskEventItem[] {
+  return [...(events ?? [])].sort((a, b) => {
+    const timeDiff = Date.parse(a.created_at) - Date.parse(b.created_at);
+    if (Number.isFinite(timeDiff) && timeDiff !== 0) {
+      return timeDiff;
+    }
+    if (a.created_at !== b.created_at) {
+      return a.created_at < b.created_at ? -1 : 1;
+    }
+    return a.id - b.id;
+  });
+}
+
+export function computeElapsedMs(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+): number | null {
+  if (!startIso || !endIso) {
+    return null;
+  }
+  const start = Date.parse(startIso);
+  const end = Date.parse(endIso);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return null;
+  }
+  return Math.max(0, end - start);
+}
+
+const SENSITIVE_KEY_PATTERN = /(lease_token|owner_token|fence_token|fencing|api_key|secret|password|authorization)/i;
+
+export function sanitizeMetadataForDisplay(
+  raw: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (SENSITIVE_KEY_PATTERN.test(key)) {
+      cleaned[key] = "[REDACTED]";
+    } else if (val && typeof val === "object" && !Array.isArray(val)) {
+      cleaned[key] = sanitizeMetadataForDisplay(val as Record<string, unknown>);
+    } else {
+      cleaned[key] = val;
+    }
+  }
+  return Object.keys(cleaned).length > 0 ? cleaned : null;
 }
 

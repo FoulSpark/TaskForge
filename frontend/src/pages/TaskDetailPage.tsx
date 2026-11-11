@@ -4,14 +4,22 @@ import { ApiError } from "../api/client";
 import {
   canCancelStatus,
   canRetryStatus,
+  computeElapsedMs,
   getLifecycleStateLabel,
   isImmutableTerminalStatus,
   isTerminalStatus,
+  sanitizeMetadataForDisplay,
+  sortAttemptsAsc,
+  sortEventsChronological,
 } from "../api/lifecycle";
 import type { TaskItem } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
 import { useVisibilityPolling } from "../hooks/useVisibilityPolling";
+
+function formatMsValue(ms: number | null): string {
+  return ms !== null ? `${ms.toFixed(1)} ms` : "—";
+}
 
 export function TaskDetailPage() {
   const { taskId = "" } = useParams();
@@ -19,7 +27,7 @@ export function TaskDetailPage() {
   const submissionNotice = (
     location.state as { submissionNotice?: string } | null
   )?.submissionNotice;
-  const { client, isAuthenticated, sessionEpoch, hasScope } = useAuth();
+  const { client, principal, isAuthenticated, sessionEpoch, hasScope } = useAuth();
   const canWrite = hasScope("tasks:write");
 
   const [task, setTask] = useState<TaskItem | null>(null);
@@ -82,10 +90,36 @@ export function TaskDetailPage() {
     }
   };
 
-  const attempts = task?.attempts ?? [];
-  const events = task?.events ?? [];
-  const latestWorkerId =
-    attempts.length > 0 ? attempts[attempts.length - 1].worker_id : "—";
+  const attempts = task ? sortAttemptsAsc(task.attempts) : [];
+  const events = task ? sortEventsChronological(task.events) : [];
+  const latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
+  const latestWorkerId = latestAttempt?.worker_id ?? "—";
+
+  const handlerDurationMs =
+    latestAttempt?.duration_ms !== null && latestAttempt?.duration_ms !== undefined
+      ? latestAttempt.duration_ms
+      : null;
+  const workerLeaseTenureMs = task
+    ? computeElapsedMs(latestAttempt?.started_at, task.completed_at)
+    : null;
+  const endToEndMs = task
+    ? computeElapsedMs(task.created_at, task.completed_at)
+    : null;
+
+  const failedAttempts = attempts.filter(
+    (att) => Boolean(att.error_message) || att.status === "FAILED" || att.status === "TIMEOUT",
+  );
+  const eventsWithDiagnostics = events.filter(
+    (ev) => sanitizeMetadataForDisplay(ev.metadata_json) !== null,
+  );
+  const showFailureDiagnostics =
+    failedAttempts.length > 0 ||
+    task?.status === "FAILED" ||
+    task?.status === "DEAD_LETTER";
+
+  const sanitizedResultMetadata = sanitizeMetadataForDisplay(
+    task?.result?.execution_metadata,
+  );
 
   return (
     <>
@@ -154,7 +188,7 @@ export function TaskDetailPage() {
 
       {task ? (
         <>
-          <section className="card">
+          <section className="card" aria-label="Task-Level Summary">
             <div
               style={{
                 display: "flex",
@@ -177,11 +211,11 @@ export function TaskDetailPage() {
 
             <div className="detail-grid">
               <div className="kv-item">
-                <span className="kv-label">Tenant</span>
-                <span className="kv-val mono">{task.tenant_id}</span>
+                <span className="kv-label">Tenant Scope</span>
+                <span className="kv-val mono">{principal?.tenant_id ?? "—"}</span>
               </div>
               <div className="kv-item">
-                <span className="kv-label">Worker ID</span>
+                <span className="kv-label">Latest Worker ID</span>
                 <span className="kv-val mono">{latestWorkerId}</span>
               </div>
               <div className="kv-item">
@@ -197,6 +231,14 @@ export function TaskDetailPage() {
               <div className="kv-item">
                 <span className="kv-label">Idempotency Key</span>
                 <span className="kv-val mono">{task.idempotency_key ?? "—"}</span>
+              </div>
+              <div className="kv-item">
+                <span className="kv-label">Scheduled At</span>
+                <span className="kv-val tabular">
+                  {task.scheduled_at
+                    ? new Date(task.scheduled_at).toLocaleString()
+                    : "Immediate"}
+                </span>
               </div>
               <div className="kv-item">
                 <span className="kv-label">Created At</span>
@@ -221,26 +263,113 @@ export function TaskDetailPage() {
             </div>
           </section>
 
-          {task.error_message || task.error_type ? (
-            <section className="card" style={{ borderColor: "#fecaca" }}>
+          <section className="card" aria-label="Execution Timing Breakdown">
+            <h2 className="card-title">
+              Execution Timing Breakdown (Attempt vs Task Scope)
+            </h2>
+            <div className="kpi-grid">
+              <div className="kpi-card">
+                <div className="kpi-label">Latest Handler Duration</div>
+                <div className="kpi-value">{formatMsValue(handlerDurationMs)}</div>
+                <div className="kpi-sub">
+                  TaskAttempt.duration_ms (pure handler runtime)
+                </div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-label">Worker Lease Tenure</div>
+                <div className="kpi-value">{formatMsValue(workerLeaseTenureMs)}</div>
+                <div className="kpi-sub">
+                  Completed − final attempt started (incl. lease &amp; DB persistence overhead)
+                </div>
+              </div>
+              <div className="kpi-card">
+                <div className="kpi-label">End-to-End Task Elapsed</div>
+                <div className="kpi-value">{formatMsValue(endToEndMs)}</div>
+                <div className="kpi-sub">
+                  Task completed − task ingested (full task-level lifecycle)
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {showFailureDiagnostics ? (
+            <section
+              className="card"
+              aria-label="Failure Diagnostics"
+              style={{ borderColor: "#fecaca" }}
+            >
               <h2 className="card-title" style={{ color: "#991b1b" }}>
-                Error Details ({task.error_type ?? "ExecutionError"})
+                Failure Diagnostics ({task.status})
               </h2>
-              <pre className="code-block">{task.error_message ?? "Unknown error"}</pre>
+              {failedAttempts.length === 0 ? (
+                <p style={{ margin: 0, color: "var(--text-secondary)" }}>
+                  Task is in {task.status}; check lifecycle events below for transition
+                  details.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {failedAttempts.map((att) => (
+                    <div
+                      key={att.id}
+                      style={{
+                        border: "1px solid #fecaca",
+                        borderRadius: 8,
+                        padding: 12,
+                        background: "#fef2f2",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#991b1b",
+                          marginBottom: 6,
+                        }}
+                      >
+                        Attempt #{att.attempt_number} • Status:{" "}
+                        <span className="mono">{att.status}</span> • Worker:{" "}
+                        <span className="mono">{att.worker_id ?? "—"}</span>
+                      </div>
+                      <pre className="code-block">
+                        {att.error_message ?? "No error message recorded on attempt."}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {eventsWithDiagnostics.length > 0 ? (
+                <div style={{ marginTop: 12, fontSize: 12.5, color: "var(--text-secondary)" }}>
+                  Event diagnostics also recorded on {eventsWithDiagnostics.length}{" "}
+                  lifecycle event(s) below.
+                </div>
+              ) : null}
             </section>
           ) : null}
 
-          <section className="card">
+          <section className="card" aria-label="Execution Result">
             <h2 className="card-title">Execution Result</h2>
             {task.result ? (
               <>
                 <div style={{ marginBottom: 8, fontSize: 12, color: "var(--text-muted)" }}>
-                  Recorded {new Date(task.result.created_at).toLocaleString()} •{" "}
-                  {task.result.result_size_bytes} bytes
+                  Result ID #{task.result.id} • Recorded{" "}
+                  {new Date(task.result.created_at).toLocaleString()}
                 </div>
                 <pre className="code-block">
                   {JSON.stringify(task.result.return_value, null, 2)}
                 </pre>
+                {sanitizedResultMetadata ? (
+                  <div style={{ marginTop: 12 }}>
+                    <div
+                      className="kv-label"
+                      style={{ marginBottom: 6 }}
+                    >
+                      Execution Metadata
+                    </div>
+                    <pre className="code-block">
+                      {JSON.stringify(sanitizedResultMetadata, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
               </>
             ) : (
               <p style={{ margin: 0, color: "var(--text-muted)" }}>
@@ -251,12 +380,12 @@ export function TaskDetailPage() {
             )}
           </section>
 
-          <section className="card">
+          <section className="card" aria-label="Input Payload">
             <h2 className="card-title">Input Payload</h2>
             <pre className="code-block">{JSON.stringify(task.payload, null, 2)}</pre>
           </section>
 
-          <section className="card">
+          <section className="card" aria-label="Attempt History">
             <h2 className="card-title">Attempt History ({attempts.length})</h2>
             <div className="table-wrap">
               <table className="data-table">
@@ -265,7 +394,7 @@ export function TaskDetailPage() {
                     <th>Attempt</th>
                     <th>Worker ID</th>
                     <th>Status</th>
-                    <th>Duration</th>
+                    <th>Handler Duration</th>
                     <th>Started</th>
                     <th>Completed</th>
                     <th>Error</th>
@@ -282,12 +411,10 @@ export function TaskDetailPage() {
                     attempts.map((att) => (
                       <tr key={att.id}>
                         <td className="tabular">#{att.attempt_number}</td>
-                        <td className="mono">{att.worker_id}</td>
+                        <td className="mono">{att.worker_id ?? "—"}</td>
                         <td className="mono">{att.status}</td>
                         <td className="tabular">
-                          {att.duration_ms !== null
-                            ? `${att.duration_ms.toFixed(1)} ms`
-                            : "—"}
+                          {formatMsValue(att.duration_ms)}
                         </td>
                         <td className="tabular">
                           {att.started_at
@@ -310,7 +437,7 @@ export function TaskDetailPage() {
             </div>
           </section>
 
-          <section className="card">
+          <section className="card" aria-label="Lifecycle Events">
             <h2 className="card-title">Lifecycle Events ({events.length})</h2>
             <div className="table-wrap">
               <table className="data-table">
@@ -319,7 +446,7 @@ export function TaskDetailPage() {
                     <th>Timestamp</th>
                     <th>Event</th>
                     <th>Transition</th>
-                    <th>Reason</th>
+                    <th>Metadata</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -330,18 +457,23 @@ export function TaskDetailPage() {
                       </td>
                     </tr>
                   ) : (
-                    events.map((ev) => (
-                      <tr key={ev.id}>
-                        <td className="tabular">
-                          {new Date(ev.created_at).toLocaleString()}
-                        </td>
-                        <td className="mono">{ev.event_type}</td>
-                        <td className="mono">
-                          {ev.from_status ?? "∅"} → {ev.to_status ?? "—"}
-                        </td>
-                        <td>{ev.reason ?? "—"}</td>
-                      </tr>
-                    ))
+                    events.map((ev) => {
+                      const cleanMeta = sanitizeMetadataForDisplay(ev.metadata_json);
+                      return (
+                        <tr key={ev.id}>
+                          <td className="tabular">
+                            {new Date(ev.created_at).toLocaleString()}
+                          </td>
+                          <td className="mono">{ev.event_type}</td>
+                          <td className="mono">
+                            {ev.from_state ?? "∅"} → {ev.to_state}
+                          </td>
+                          <td className="mono">
+                            {cleanMeta ? JSON.stringify(cleanMeta) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
