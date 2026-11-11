@@ -1,0 +1,67 @@
+flowchart TB
+    %% F0 — TaskForge Web Console Architecture (Phase 10)
+
+    User["Operator / Tenant Developer Browser"]
+
+    subgraph Hosting["Frontend Delivery & Proxy Layer"]
+        direction LR
+        ViteDev["Dev Mode: Vite Server (:5173)<br/>Proxy /api & /health -> :8000 (No CORS)"]
+        ProdStatic["Prod Mode: FastAPI Static / Nginx (:8000)<br/>Serves Built SPA dist/ + API Same-Origin"]
+    end
+
+    subgraph SPA["React + TypeScript + Vite SPA (frontend/)"]
+        direction TB
+        MemAuth["In-Memory Auth Context<br/>tf_live_... token in React state ONLY<br/>(Zero localStorage / Zero sessionStorage)"]
+        ApiClient["Typed Fetch API Client<br/>Bearer Header, AbortController Timeouts,<br/>401/403/429/503 Error & Retry-After Handler"]
+        Poller["Visibility-Aware Polling Manager<br/>2-3s Active Tab Cadence, Paused on Hidden/429/503"]
+
+        subgraph Views["Console Views"]
+            direction LR
+            V_Overview["1. Overview Dashboard<br/>Tenant KPIs & Health"]
+            V_Submit["2. Submit Task<br/>JSON Editor, Priority, Retry/Timeout"]
+            V_Explorer["3. Task Explorer<br/>Filters, Search, Pagination"]
+            V_Detail["4. Task Details<br/>Timeline, Attempts, Result"]
+            V_Monitor["5. System Monitoring<br/>Throughput, Percentiles, Pool"]
+        end
+    end
+
+    subgraph Backend["FastAPI Control Plane (Phase 10 Additive Routes)"]
+        direction TB
+        EP_Auth["GET /api/v1/auth/me<br/>Verify Bearer & Return tenant_id + scopes"]
+        EP_Tasks["POST/GET /api/v1/tasks & /{id}/cancel|retry<br/>Tenant-Scoped TaskRepository"]
+        EP_TenantStats["GET /api/v1/stats (Phase 10 Hardened)<br/>require_scope('tasks:read') + tenant_id filter"]
+        EP_Monitor["GET /api/v1/monitoring/summary (New JSON)<br/>Percentiles, Throughput, Pool/Outbox Snapshot"]
+        EP_Operator["POST /api/v1/operator/* & System Stats<br/>Strictly Guarded by admin:operator"]
+        EP_Health["GET /health/live & /health/ready"]
+    end
+
+    subgraph CoreInfra["Frozen Phase 9 Engine & Storage"]
+        direction LR
+        PG[("PostgreSQL 16<br/>tasks, outbox_events, attempts, results")]
+        Redis[("Redis 7<br/>ZSET Queue, Rate Limiter, Heartbeats")]
+        Obs["Prometheus & Grafana<br/>Deeper Engineering Observability"]
+    end
+
+    User --> ViteDev
+    User --> ProdStatic
+    ViteDev --> SPA
+    ProdStatic --> SPA
+
+    Views --> Poller
+    Poller --> ApiClient
+    Views --> ApiClient
+    MemAuth -->|"Inject Bearer Token"| ApiClient
+
+    ApiClient -->|"Same-Origin JSON / HTTP"| Backend
+    EP_Auth --> PG
+    EP_Tasks --> PG
+    EP_TenantStats --> PG
+    EP_Monitor --> PG
+    EP_Monitor --> Redis
+    EP_Operator --> PG
+    EP_Operator --> Redis
+    EP_Health --> PG
+    EP_Health --> Redis
+
+    Obs -.->|"Complimentary Deep Telemetry"| Backend
+
