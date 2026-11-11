@@ -41,9 +41,17 @@
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Frontend Unit & Lifecycle Tests (Vitest) | `npm test` (`frontend/`) | `2` files passed, `4 passed` (`auth_memory.test.tsx`, `vertical_slice.test.tsx`) |
+| Frontend Unit & Lifecycle Tests (Vitest) | `npm test` (`frontend/`) | `2` files passed, `5 passed` (`auth_memory.test.tsx`, `vertical_slice.test.tsx`, including concurrent in-flight `401` session-abort race test & secret non-leakage check) |
 | Production TypeScript + Vite Build | `npm run build` (`frontend/`) | `tsc -b` + `vite build` exit `0` (`dist/index.html`, JS + CSS bundles) |
-| Frontend Contract, E2E Serving & CSP Tests | `.venv\Scripts\pytest -v tests/integration/test_f1b_frontend_e2e_serving.py tests/integration/test_f1a_frontend_api_contracts.py tests/integration/test_health.py tests/integration/test_observability.py` | `14 passed in 2.70s` |
-| Live PostgreSQL 16 + Redis 7 E2E Smoke Test | `uvicorn taskforge.main:app` against healthy `taskforge-postgres` + `taskforge-redis` | `LIVE_E2E_SMOKE_PASS` (HTML SPA + CSP, JSON `/`, `/auth/me`, `/task-types`, submit `compute_prime` -> worker `SUCCESS` -> `/monitoring/summary`) |
+| Frontend Contract, R1–R3 Serving & Isolation Tests | `.venv\Scripts\pytest -v tests/integration/test_f1b_frontend_e2e_serving.py tests/integration/test_f1a_frontend_api_contracts.py tests/integration/test_health.py tests/integration/test_observability.py tests/unit/test_f0_frontend_contract_docs.py` | `20 passed in 2.98s` |
 | Docker Multi-Stage Build | `docker compose build api` | Exit `0` (`Image taskforge-api Built`) |
-| Full Backend Regression Suite | `.venv\Scripts\pytest -q` | `280 passed in 499.37s`, `0` failures, `0` skips |
+| Docker Container Runtime Smoke (`taskforge-api` + `taskforge-postgres` + `taskforge-redis`) | `docker compose up -d --no-deps api` + HTTP runtime probes against `http://127.0.0.1:8000` | `DOCKER_RUNTIME_SMOKE_PASS` (`/assets/index-LOT2Bd-k.js`, HTML SPA on `/`, `/ui`, `/submit`, `/tasks`, `/tasks/{id}`, `/monitoring` with `script-src 'self'`, `404` JSON on `/api/v1/nonexistent-endpoint`, JSON on `GET /` for non-HTML `Accept`, live `compute_prime` -> `SUCCESS` -> `/monitoring/summary`) |
+| Full Backend Regression Suite | `.venv\Scripts\pytest -q` | `280 passed in 499.37s`, `0` failures, `0` skips (prior to `R1`/`R2`/`R3` doc/client hardening; `20` targeted integration/contract tests re-run afterward) |
+
+---
+
+## 3. R1 / R2 / R3 Closure Checklist
+- **R1 Monitoring Metric Semantics:** [FRONTEND_API_CONTRACT.md](FRONTEND_API_CONTRACT.md) Section 3.3 explicitly locks all six SQL formulas (`outbox.published_at - task.created_at`, `attempt.started_at - outbox.published_at`, `attempt.started_at - task.created_at`, `TaskAttempt.duration_ms`, `task.completed_at - attempt.started_at`, `task.completed_at - task.created_at`), rolling-window anchors, attempt vs task retry accounting, `null` empty-window quantiles, and `minimum_recommended_samples = 20`.
+- **R2 Auth Race & Tenant Isolation:** `AuthContext.tsx` + `TaskForgeClient` abort in-flight session signals (`AbortController`) and check captured `sessionEpoch` before returning responses or firing `onUnauthorized`; `403` leaves sessions intact; Tenant A `?tenant_id=tenant-b` parameter manipulation and key redaction verified in `test_f1b_frontend_e2e_serving.py`.
+- **R3 Container Runtime Serving & CSP:** Verified inside running `taskforge-api` container over HTTP `8000` across direct deep-link SPA routes, compiled JS bundle delivery, strict `script-src 'self'` CSP, `404` JSON on unknown `/api/*` paths, and non-HTML `GET /` JSON negotiation.
+

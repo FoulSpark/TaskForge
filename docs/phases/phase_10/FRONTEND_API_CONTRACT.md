@@ -215,18 +215,28 @@ export interface OperatorSystemStatsResponse {
 ```
 
 ### 3.3 Gap `G2` & `R1`/`R2` Resolution — Scoped JSON Monitoring Summary (`GET /api/v1/monitoring/summary`)
-- **Required Scope:** `require_scope("tasks:read")`, query param `window_minutes: int = Query(5, ge=1, le=60)` (default rolling **5-minute** window). **Never** accept a client `tenant_id` override; tenant identity comes strictly from `principal.tenant_id`.
-- **Exact Non-Conflated Lifecycle Metric Semantics (`R1`):**
-  - **Throughput:** Completed tenant tasks (`status IN ('SUCCESS', 'DEAD_LETTER', 'CANCELLED')` with `completed_at` in `[now - window, now]`) returning `observation_count`, `window_seconds`, `tasks_per_second` (`observation_count / window_seconds`), and `tasks_per_minute`.
-  - **Population Isolation Rule:** Completed-task/attempt observations (`population: "completed_tasks_only"` or `"completed_attempts_only"`) **never** mix active `RUNNING` attempts into completed latency percentiles.
-  - **Strict Lifecycle Stage Definitions (matching Phase 9 Stage 2 R1):**
-    * **`outbox_dwell`:** `outbox.published_at - task.created_at` ($t_{\text{published}} - t_{\text{ingested}}$) over published `TASK_SUBMITTED` outbox events belonging to completed/published tenant tasks inside the rolling window (`population: "published_submitted_outbox_events"`).
-    * **`queue_dwell`:** `attempt.started_at - outbox.published_at` ($t_{\text{started}} - t_{\text{published}}$) over completed initial attempts joined to their published `TASK_SUBMITTED` outbox event (`population: "completed_initial_attempts_with_outbox"`). **Strictly excludes outbox publication delay.**
-    * **`submission_to_start`:** `attempt.started_at - task.created_at` ($t_{\text{started}} - t_{\text{ingested}}$) explicitly labeled as total pre-execution submission-to-start latency over completed attempts (`population: "completed_attempts_only"`). Never mislabeled as `queue_wait`.
-    * **`handler_duration`:** `TaskAttempt.duration_ms` strictly over completed attempts (`completed_at IS NOT NULL AND duration_ms IS NOT NULL`, `population: "completed_attempts_only"`).
-    * **`worker_lease_tenure`:** `task.completed_at - attempt.started_at` ($t_{\text{completed}} - t_{\text{started}}$) over completed tasks/final successful attempts (`population: "completed_tasks_with_attempt"`), including lease ownership and durable PostgreSQL persistence overhead.
-    * **`end_to_end`:** `task.completed_at - task.created_at` ($t_{\text{completed}} - t_{\text{ingested}}$) over completed tenant tasks in `[now - window, now]` (`population: "completed_tasks_only"`).
-  - **Empty & Low-Sample Behavior:** When `sample_count === 0`, `p50_ms`, `p95_ms`, and `p99_ms` MUST be `null` (never fabricated `0.0`). Includes `minimum_recommended_samples: 20` and `sufficient_sample_size: sample_count >= 20` so the UI surfaces an insufficient-sample notice instead of misleading tail precision.
+- **Required Scope:** `require_scope("tasks:read")`, query param `window_minutes: int = Query(5, ge=1, le=60)` (default rolling **5-minute** window, `window_start = now_utc - timedelta(minutes=window_minutes)`). **Never** accept a client `tenant_id` override; tenant identity comes strictly from `principal.tenant_id`.
+- **Window Selection, Population Isolation & Retry Accounting Rules (`R1`):**
+  - **Terminal Statuses (`TERMINAL_STATES`):** `SUCCESS`, `FAILED`, `DEAD_LETTER`, `CANCELLED`.
+  - **Window Selection Anchor:**
+    * Throughput (`observation_count`, `tasks_per_second = observation_count / window_seconds`, `tasks_per_minute = observation_count / window_minutes`) and task-level latencies (`worker_lease_tenure`, `end_to_end`) select tenant tasks with `Task.status IN TERMINAL_STATES` and **`Task.completed_at >= window_start`**.
+    * Attempt-level latencies (`submission_to_start`, `handler_duration`, and initial-attempt `queue_dwell`) select completed `TaskAttempt` rows belonging to the tenant with **`TaskAttempt.completed_at >= window_start`** (`completed_at IS NOT NULL`). Active `RUNNING` or `PENDING` rows never enter completed percentile populations.
+    * Outbox dwell (`outbox_dwell`) selects published `TASK_SUBMITTED` outbox rows belonging to the tenant with `OutboxEvent.status = 'PUBLISHED'` and **`OutboxEvent.published_at >= window_start`**.
+  - **Retry Accounting Consistency:**
+    * Attempt-level metrics (`submission_to_start`, `handler_duration`) emit **1 observation per completed `TaskAttempt`** (including retry attempts).
+    * Initial broker `queue_dwell` is restricted strictly to **`TaskAttempt.attempt_number == 1`** joined to `OutboxEvent` (`TASK_SUBMITTED`), so `RETRY_WAIT` backoff delays do not masquerade as broker queue dwell.
+    * Task-level metrics (`throughput`, `worker_lease_tenure`, `end_to_end`) emit **1 observation per completed `Task`**, using `final_attempt = max(completed_attempts, key=attempt_number)`.
+- **Exact Formulas (`R1` — matching `src/taskforge/monitoring/summary.py`):**
+  * **`outbox_dwell` (`Published - ingested`):** `outbox.published_at - task.created_at` ($t_{\text{published}} - t_{\text{ingested}}$, clamped $\ge 0$, `population: "published_submitted_outbox_events"`).
+  * **`queue_dwell` (`Started - published`):** `attempt.started_at - outbox.published_at` ($t_{\text{started}} - t_{\text{published}}$, clamped $\ge 0$, initial attempt only, `population: "completed_initial_attempts_with_outbox"`). Strictly excludes outbox publication delay.
+  * **`submission_to_start` (`Started - ingested`):** `attempt.started_at - task.created_at` ($t_{\text{started}} - t_{\text{ingested}}$, clamped $\ge 0$, `population: "completed_attempts_only"`). Explicitly distinct from `queue_dwell`.
+  * **`handler_duration` (`TaskAttempt.duration_ms`):** `max(0.0, float(TaskAttempt.duration_ms))` strictly over completed attempts (`population: "completed_attempts_only"`).
+  * **`worker_lease_tenure` (`Completed - started`):** `task.completed_at - attempt.started_at` ($t_{\text{completed}} - t_{\text{started}}$ using final attempt's `started_at`, clamped $\ge 0$, `population: "completed_tasks_with_final_attempt"`), capturing handler runtime plus lease ownership and durable completion persistence overhead.
+  * **`end_to_end` (`Completed - ingested`):** `task.completed_at - task.created_at` ($t_{\text{completed}} - t_{\text{ingested}}$, clamped $\ge 0$, `population: "completed_tasks_only"`).
+- **Percentile Method, Empty Populations & Sample Sufficiency:**
+  * Uses continuous linear-interpolated exact observations (`method: "exact_sql_observations"`, matching SQL `PERCENTILE_CONT`).
+  * When `sample_count === 0`, `p50_ms`, `p95_ms`, and `p99_ms` MUST be **`null`** (never fabricated `0.0`).
+  * Includes `minimum_recommended_samples: 20` and `sufficient_sample_size: sample_count >= 20`; the UI must visibly flag `Low N (<20)` or `No observations` rather than presenting low-count quantiles as statistically reliable.
 - **Authorization & Data Scope (`R2`):**
   - `throughput` and `latencies_ms`: strictly filtered by `principal.tenant_id`.
   - `health`: ordinary tenants see only coarse service availability `{ overall: "healthy" | "degraded", database: "healthy" | "unavailable", redis: "healthy" | "unavailable" }` with zero hostnames, URLs, ports, DSNs, or pool internals.

@@ -56,17 +56,48 @@ function parseRetryAfter(headerValue: string | null, status: number): number | n
 
 export interface ApiClientHandlers {
   getToken: () => string | null;
+  getSessionEpoch?: () => number;
+  getSessionSignal?: () => AbortSignal | undefined;
   onUnauthorized?: () => void;
   onForbidden?: (error: ApiError) => void;
 }
 
+function buildCombinedSignal(
+  timeoutMs: number,
+  sessionSignal?: AbortSignal,
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  const onSessionAbort = () => controller.abort();
+  if (sessionSignal) {
+    if (sessionSignal.aborted) {
+      controller.abort();
+    } else {
+      sessionSignal.addEventListener("abort", onSessionAbort, { once: true });
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      window.clearTimeout(timer);
+      sessionSignal?.removeEventListener("abort", onSessionAbort);
+    },
+  };
+}
+
 export class TaskForgeClient {
   private readonly getToken: () => string | null;
+  private readonly getSessionEpoch?: () => number;
+  private readonly getSessionSignal?: () => AbortSignal | undefined;
   private readonly onUnauthorized?: () => void;
   private readonly onForbidden?: (error: ApiError) => void;
 
   constructor(handlers: ApiClientHandlers) {
     this.getToken = handlers.getToken;
+    this.getSessionEpoch = handlers.getSessionEpoch;
+    this.getSessionSignal = handlers.getSessionSignal;
     this.onUnauthorized = handlers.onUnauthorized;
     this.onForbidden = handlers.onForbidden;
   }
@@ -77,6 +108,12 @@ export class TaskForgeClient {
   ): Promise<T> {
     const { tokenOverride, skipAuthHeader, headers: extraHeaders, ...fetchOptions } = options;
     const token = tokenOverride ?? this.getToken();
+    const requestEpoch = this.getSessionEpoch?.();
+    const isStaleSession = () =>
+      !tokenOverride &&
+      !skipAuthHeader &&
+      this.getSessionEpoch !== undefined &&
+      this.getSessionEpoch() !== requestEpoch;
 
     const headers = new Headers(extraHeaders);
     headers.set("Accept", "application/json");
@@ -87,18 +124,21 @@ export class TaskForgeClient {
       headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    const sessionSignal = !tokenOverride && !skipAuthHeader ? this.getSessionSignal?.() : undefined;
+    const { signal, cleanup } = buildCombinedSignal(DEFAULT_TIMEOUT_MS, sessionSignal);
 
     let response: Response;
     try {
       response = await fetch(path, {
         ...fetchOptions,
         headers,
-        signal: controller.signal,
+        signal,
       });
     } catch (err) {
-      window.clearTimeout(timer);
+      cleanup();
+      if (isStaleSession()) {
+        throw new ApiError("Session cleared while request was in flight", 401, "SESSION_INVALIDATED");
+      }
       if (err instanceof DOMException && err.name === "AbortError") {
         throw new ApiError("Request timed out after 5 seconds", 0, "TIMEOUT");
       }
@@ -108,7 +148,11 @@ export class TaskForgeClient {
         "NETWORK_ERROR",
       );
     }
-    window.clearTimeout(timer);
+    cleanup();
+
+    if (isStaleSession()) {
+      throw new ApiError("Session cleared while request was in flight", 401, "SESSION_INVALIDATED");
+    }
 
     if (!response.ok) {
       let body: ApiErrorBody | null = null;
@@ -116,6 +160,10 @@ export class TaskForgeClient {
         body = (await response.json()) as ApiErrorBody;
       } catch {
         body = null;
+      }
+
+      if (isStaleSession()) {
+        throw new ApiError("Session cleared while request was in flight", 401, "SESSION_INVALIDATED");
       }
 
       const code = body?.error?.code ?? `HTTP_${response.status}`;
@@ -141,7 +189,11 @@ export class TaskForgeClient {
       throw apiErr;
     }
 
-    return (await response.json()) as T;
+    const parsed = (await response.json()) as T;
+    if (isStaleSession()) {
+      throw new ApiError("Session cleared while request was in flight", 401, "SESSION_INVALIDATED");
+    }
+    return parsed;
   }
 
   getAuthMe(tokenOverride?: string): Promise<AuthPrincipal> {

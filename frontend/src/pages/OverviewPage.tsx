@@ -144,7 +144,7 @@ export function OverviewPage() {
           <div className="kpi-grid">
             <div className="kpi-card">
               <div className="kpi-label">Global Queue Depth</div>
-              <div className="kpi-value">{operatorStats.performance.queue_depth_total}</div>
+              <div className="kpi-value">{operatorStats.performance.queue_depth}</div>
               <div className="kpi-sub">
                 C:{operatorStats.performance.queue_depth_by_priority.critical ?? 0} H:
                 {operatorStats.performance.queue_depth_by_priority.high ?? 0} M:

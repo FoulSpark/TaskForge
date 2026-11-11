@@ -128,33 +128,38 @@ export interface TenantStatsPerformanceSummary {
 
 export interface WorkerHeartbeatInfo {
   worker_id: string;
-  hostname?: string | null;
-  concurrency?: number;
-  active_tasks?: number;
-  status?: string;
-  last_heartbeat?: string | null;
+  hostname: string;
+  concurrency: number;
+  active_tasks: number;
+  started_at: string;
+  last_heartbeat: string;
+  status: string;
+}
+
+export interface WorkersSummary {
+  active_count: number;
+  list: WorkerHeartbeatInfo[];
 }
 
 export interface TenantStatsResponse {
+  timestamp: number;
   scope: "tenant";
   tenant_id: string;
   tasks: TenantStatsTasksSummary;
   performance: TenantStatsPerformanceSummary;
-  workers: WorkerHeartbeatInfo[] | null;
+  workers: WorkersSummary | null;
 }
 
 export interface OperatorSystemStatsResponse {
+  timestamp: number;
   scope: "system";
   tasks: TenantStatsTasksSummary;
   performance: {
     avg_execution_ms: number;
-    queue_depth_total: number;
+    queue_depth: number;
     queue_depth_by_priority: Record<string, number>;
   };
-  workers: {
-    active_count: number;
-    items: WorkerHeartbeatInfo[];
-  };
+  workers: WorkersSummary;
 }
 
 export interface LatencyPercentileSummary {

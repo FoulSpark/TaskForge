@@ -62,20 +62,39 @@ def test_spa_serving_csp_and_root_json_contract():
     """Verify FastAPI serves built Vite SPA with strict CSP for browsers while preserving JSON at /."""
     assert (FRONTEND_DIST_DIR / "index.html").exists(), "frontend/dist/index.html must be built"
 
-    with TestClient(app) as client:
-        # Non-HTML Accept on / must return API JSON (preserves Phase 9 root contract)
-        json_root = client.get("/", headers={"Accept": "application/json"})
-        assert json_root.status_code == 200
-        assert json_root.json()["application"] == "TaskForge"
+    # Strict CSP verification: no unsafe-inline script execution or eval
+    csp_directives = {
+        part.strip().split(" ", 1)[0]: part.strip()
+        for part in FRONTEND_CSP.split(";")
+        if part.strip()
+    }
+    assert csp_directives["script-src"] == "script-src 'self'"
+    assert "'unsafe-eval'" not in FRONTEND_CSP
 
-        # HTML browser requests on / and SPA routes serve built React SPA + strict CSP
-        for route in ("/", "/ui", "/submit", "/tasks", "/monitoring"):
+    with TestClient(app) as client:
+        # Non-HTML Accept headers on / must return API JSON (preserves Phase 9 root contract)
+        for accept_hdr in ("application/json", "*/*"):
+            json_root = client.get("/", headers={"Accept": accept_hdr})
+            assert json_root.status_code == 200
+            assert "application/json" in json_root.headers["content-type"]
+            assert json_root.json()["application"] == "TaskForge"
+
+        # HTML browser requests on /, /ui, and direct SPA deep-links serve built React SPA + strict CSP
+        sample_task_id = "123e4567-e89b-12d3-a456-426614174000"
+        for route in ("/", "/ui", "/submit", "/tasks", f"/tasks/{sample_task_id}", "/monitoring"):
             res = client.get(route, headers={"Accept": "text/html"})
             assert res.status_code == 200
             assert "text/html" in res.headers["content-type"]
             assert res.headers.get("Content-Security-Policy") == FRONTEND_CSP
             assert "TaskForge" in res.text
             assert "/assets/" in res.text
+
+        # Unknown /api/* routes must return JSON API errors even if client accepts text/html
+        for bad_api_route in ("/api/v1/nonexistent-endpoint", "/api/unknown"):
+            bad_res = client.get(bad_api_route, headers={"Accept": "text/html,application/json"})
+            assert bad_res.status_code == 404
+            assert "application/json" in bad_res.headers["content-type"]
+            assert "<html" not in bad_res.text.lower()
 
         # Built JS and CSS bundles under frontend/dist/assets must resolve cleanly
         assets_dir = Path(FRONTEND_DIST_DIR / "assets")
@@ -84,6 +103,72 @@ def test_spa_serving_csp_and_root_json_contract():
         for asset_path in bundle_files:
             asset_res = client.get(f"/assets/{asset_path.name}")
             assert asset_res.status_code == 200
+
+
+def test_r2_tenant_param_tampering_and_secret_log_redaction(caplog):
+    """Verify Tenant A cannot tamper tenant_id params to read Tenant B, and plaintext keys stay absent from logs/errors."""
+    with TestingSessionLocal() as db:
+        svc = ApiKeyService(db)
+        key_a, _ = svc.create_api_key(
+            tenant_id="tenant-a",
+            name="key-a",
+            scopes=["tasks:read", "tasks:write"],
+        )
+        key_b, _ = svc.create_api_key(
+            tenant_id="tenant-b",
+            name="key-b",
+            scopes=["tasks:read", "tasks:write"],
+        )
+
+    headers_a = {"Authorization": f"Bearer {key_a}"}
+    headers_b = {"Authorization": f"Bearer {key_b}"}
+
+    with caplog.at_level("DEBUG"):
+        with TestClient(app) as client:
+            b_task_res = client.post(
+                "/api/v1/tasks",
+                headers=headers_b,
+                json={"task_name": "Tenant B Secret Job", "task_type": "noop", "payload": {}},
+            )
+            assert b_task_res.status_code == 201
+            b_task_id = b_task_res.json()["id"]
+
+            # Attempt parameter manipulation by Tenant A
+            assert client.get(
+                f"/api/v1/tasks/{b_task_id}", headers=headers_a
+            ).status_code == 404
+            list_a = client.get(
+                "/api/v1/tasks?tenant_id=tenant-b", headers=headers_a
+            )
+            assert list_a.status_code == 200
+            assert list_a.json()["total"] == 0
+
+            stats_a = client.get(
+                "/api/v1/stats?tenant_id=tenant-b", headers=headers_a
+            )
+            assert stats_a.status_code == 200
+            assert stats_a.json()["tenant_id"] == "tenant-a"
+            assert stats_a.json()["tasks"]["total"] == 0
+
+            mon_a = client.get(
+                "/api/v1/monitoring/summary?tenant_id=tenant-b", headers=headers_a
+            )
+            assert mon_a.status_code == 200
+            assert mon_a.json()["tenant_id"] == "tenant-a"
+
+            # Trigger an auth failure error and confirm secret never appears in response body
+            bad_token = "tf_live_never_echo_this_secret_value"
+            err_res = client.get(
+                "/api/v1/auth/me",
+                headers={"Authorization": f"Bearer {bad_token}"},
+            )
+            assert err_res.status_code == 401
+            assert bad_token not in err_res.text
+
+    log_blob = "\n".join(rec.getMessage() for rec in caplog.records)
+    assert key_a not in log_blob
+    assert key_b not in log_blob
+    assert "tf_live_never_echo_this_secret_value" not in log_blob
 
 
 def test_vertical_slice_e2e_api_to_worker_execution(setup_e2e_env):

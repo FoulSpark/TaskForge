@@ -20,17 +20,22 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Strict in-memory credential storage only — never persisted to Web Storage or cookies.
   const tokenRef = useRef<string | null>(null);
+  const epochRef = useRef(0);
+  const sessionAbortRef = useRef(new AbortController());
   const [principal, setPrincipal] = useState<AuthPrincipal | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [forbiddenNotice, setForbiddenNotice] = useState<string | null>(null);
   const [sessionEpoch, setSessionEpoch] = useState(0);
 
   const clearSession = useCallback((notice: string | null) => {
+    epochRef.current += 1;
     tokenRef.current = null;
+    sessionAbortRef.current.abort();
+    sessionAbortRef.current = new AbortController();
     setPrincipal(null);
     setForbiddenNotice(null);
     setAuthNotice(notice);
-    setSessionEpoch((n) => n + 1);
+    setSessionEpoch(epochRef.current);
   }, []);
 
   const handleUnauthorized = useCallback(() => {
@@ -51,6 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () =>
       new TaskForgeClient({
         getToken: () => tokenRef.current,
+        getSessionEpoch: () => epochRef.current,
+        getSessionSignal: () => sessionAbortRef.current.signal,
         onUnauthorized: handleUnauthorized,
         onForbidden: handleForbidden,
       }),
@@ -64,11 +71,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new ApiError("Please enter an API key.", 400, "MISSING_KEY");
       }
       const verified = await client.getAuthMe(trimmed);
+      epochRef.current += 1;
+      sessionAbortRef.current.abort();
+      sessionAbortRef.current = new AbortController();
       tokenRef.current = trimmed;
       setPrincipal(verified);
       setAuthNotice(null);
       setForbiddenNotice(null);
-      setSessionEpoch((n) => n + 1);
+      setSessionEpoch(epochRef.current);
     },
     [client],
   );

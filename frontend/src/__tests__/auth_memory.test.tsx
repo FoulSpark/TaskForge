@@ -295,4 +295,98 @@ describe("In-memory auth lifecycle & R3 polling isolation", () => {
     // Still signed in!
     expect(screen.getByRole("button", { name: /Sign Out/i })).toBeInTheDocument();
   });
+
+  it("ignores late in-flight 200 polling responses that resolve after a concurrent 401", async () => {
+    let resolveLateTasks!: (res: Response) => void;
+    let statsCallCount = 0;
+    const rawKey = "tf_live_concurrent_race_secret";
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      // Verify secret never appears in request URLs
+      expect(url).not.toContain(rawKey);
+
+      if (url.endsWith("/api/v1/auth/me")) {
+        return jsonResponse({
+          key_id: "key-race",
+          tenant_id: "tenant-race",
+          name: "race-key",
+          scopes: ["tasks:read"],
+        });
+      }
+      if (url.endsWith("/health/ready")) {
+        return jsonResponse({ status: "ready" });
+      }
+      if (url.endsWith("/api/v1/stats")) {
+        statsCallCount += 1;
+        // Immediately trigger 401 on initial concurrent poll
+        return jsonResponse(
+          { error: { code: "HTTP_401", message: "Key revoked during poll" } },
+          401,
+        );
+      }
+      if (url.includes("/api/v1/tasks")) {
+        // Hold this concurrent request in-flight until AFTER 401 has cleared the session
+        return new Promise<Response>((resolve) => {
+          resolveLateTasks = resolve;
+        });
+      }
+      return jsonResponse({}, 404);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.type(screen.getByLabelText(/API Key/i), rawKey);
+    await user.click(screen.getByRole("button", { name: /Sign In/i }));
+
+    // Stats fails with 401 -> user is booted back to SignInPage while /tasks is still in flight
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Sign In/i })).toBeInTheDocument();
+    });
+    expect(statsCallCount).toBe(1);
+
+    // Late 200 response from the pre-401 concurrent /tasks fetch resolves now
+    await act(async () => {
+      resolveLateTasks(
+        jsonResponse({
+          items: [
+            {
+              id: "task-late-stale-1",
+              task_name: "Late Stale Tenant Task",
+              task_type: "noop",
+              payload: {},
+              status: "SUCCESS",
+              priority: 2,
+              tenant_id: "tenant-race",
+              idempotency_key: null,
+              retry_count: 0,
+              max_retries: 3,
+              timeout_seconds: 60,
+              scheduled_at: null,
+              started_at: null,
+              completed_at: null,
+              created_at: "2026-11-12T00:00:00Z",
+              updated_at: "2026-11-12T00:00:01Z",
+              error_message: null,
+              error_type: null,
+            },
+          ],
+          total: 1,
+          limit: 8,
+          offset: 0,
+          has_more: false,
+        }),
+      );
+    });
+
+    // Late stale payload must NEVER re-populate tenant UI or authenticate session
+    expect(screen.queryByText("Late Stale Tenant Task")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sign In/i })).toBeInTheDocument();
+    // Plaintext key must never appear anywhere in rendered text/errors or storage
+    expect(document.body.textContent ?? "").not.toContain(rawKey);
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+  });
 });
