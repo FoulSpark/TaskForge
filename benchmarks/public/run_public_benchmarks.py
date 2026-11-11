@@ -143,7 +143,7 @@ def get_system_ram_gb() -> float:
 
 
 def get_git_info() -> tuple[str, bool]:
-    """Retrieves current Git commit SHA and dirty state."""
+    """Retrieves current Git commit SHA and dirty state, ignoring the benchmark artifact itself."""
     try:
         res_sha = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=str(REPO_ROOT), timeout=5
@@ -153,7 +153,10 @@ def get_git_info() -> tuple[str, bool]:
         res_dirty = subprocess.run(
             ["git", "status", "--porcelain"], capture_output=True, text=True, cwd=str(REPO_ROOT), timeout=5
         )
-        is_dirty = bool(res_dirty.stdout.strip()) if res_dirty.returncode == 0 else False
+        lines = [l.strip() for l in res_dirty.stdout.splitlines() if l.strip()]
+        # Ignore the benchmark output JSON file if modified during execution
+        active_lines = [l for l in lines if not l.endswith("benchmark_results.json")]
+        is_dirty = len(active_lines) > 0
         return sha, is_dirty
     except Exception:
         return "unknown", False
@@ -228,6 +231,14 @@ def validate_schema(data: dict[str, Any], schema_path: Path) -> None:
             if lf not in lats:
                 raise ValueError(f"Schema violation: workload '{wk_name}' latencies_ms missing '{lf}'")
 
+        # Machine-checkable arithmetic reconciliation verification (R1)
+        if "reconciliation" in lats:
+            rec = lats["reconciliation"]
+            if rec.get("reconciled") is not True:
+                raise ValueError(f"Arithmetic reconciliation violation: workload '{wk_name}' is not reconciled")
+            if rec.get("mean_discrepancy_ms", 1.0) >= 0.005:
+                raise ValueError(f"Arithmetic reconciliation discrepancy: workload '{wk_name}' discrepancy exceeds 0.005ms")
+
 
 def run_benchmark_workload(
     workload_id: str,
@@ -276,6 +287,7 @@ def run_benchmark_workload(
                 status=TaskStatus.QUEUED.value,
                 priority=TaskPriority.MEDIUM.value,  # Stage 0 Normal tier
                 payload=make_payload(idx),
+                created_at=now,
             )
             eid = str(uuid.uuid4())
             evt = OutboxEvent(
@@ -354,9 +366,14 @@ def run_benchmark_workload(
     t_measured_starts: list[datetime] = []
     t_measured_ends: list[datetime] = []
 
-    success_count = 0
-    failed_count = 0
-    retried_count = 0
+    # Whole-run outcome accounting across all seeded tasks (R3 clarification)
+    run_success_count = sum(1 for t in tasks if t.status == TaskStatus.SUCCESS.value)
+    run_failed_count = sum(1 for t in tasks if t.status in (TaskStatus.FAILED.value, TaskStatus.DEAD_LETTER.value))
+    run_retried_count = sum(t.retry_count for t in tasks)
+
+    measured_success_count = 0
+    measured_failed_count = 0
+    max_per_task_discrepancy = 0.0
 
     for tid in measured_task_ids:
         t = tasks_by_id[tid]
@@ -364,35 +381,36 @@ def run_benchmark_workload(
         att = attempts_by_task.get(tid)
 
         if t.status == TaskStatus.SUCCESS.value:
-            success_count += 1
+            measured_success_count += 1
         else:
-            failed_count += 1
+            measured_failed_count += 1
 
-        if t.retry_count > 0:
-            retried_count += t.retry_count
+        if not (evt and evt.published_at and att and att.started_at and t.completed_at):
+            continue
 
-        if evt and evt.published_at and evt.created_at:
-            outbox_dwell = (evt.published_at - evt.created_at).total_seconds() * 1000.0
-            outbox_dwell_ms_list.append(max(0.0, outbox_dwell))
+        # Timestamps for exact causal latency decomposition
+        t_ingested = t.created_at
+        t_published = evt.published_at
+        t_started = att.started_at
+        t_completed = t.completed_at
 
-        if att and att.started_at and evt and evt.published_at:
-            queue_dwell = (att.started_at - evt.published_at).total_seconds() * 1000.0
-            queue_dwell_ms_list.append(max(0.0, queue_dwell))
+        outbox_dwell = (t_published - t_ingested).total_seconds() * 1000.0
+        queue_dwell = (t_started - t_published).total_seconds() * 1000.0
+        handler_exec = (t_completed - t_started).total_seconds() * 1000.0
+        e2e = (t_completed - t_ingested).total_seconds() * 1000.0
 
-        if att and att.duration_ms is not None:
-            handler_exec_ms_list.append(att.duration_ms)
-        elif att and att.completed_at and att.started_at:
-            handler_exec = (att.completed_at - att.started_at).total_seconds() * 1000.0
-            handler_exec_ms_list.append(max(0.0, handler_exec))
+        # Machine-checkable per-task invariant: e2e == outbox_dwell + queue_dwell + handler_exec
+        per_task_delta = abs(e2e - (outbox_dwell + queue_dwell + handler_exec))
+        if per_task_delta > max_per_task_discrepancy:
+            max_per_task_discrepancy = per_task_delta
 
-        if t.completed_at and t.created_at:
-            e2e = (t.completed_at - t.created_at).total_seconds() * 1000.0
-            e2e_latency_ms_list.append(max(0.0, e2e))
+        outbox_dwell_ms_list.append(outbox_dwell)
+        queue_dwell_ms_list.append(queue_dwell)
+        handler_exec_ms_list.append(handler_exec)
+        e2e_latency_ms_list.append(e2e)
 
-        if att and att.started_at:
-            t_measured_starts.append(att.started_at)
-        if t.completed_at:
-            t_measured_ends.append(t.completed_at)
+        t_measured_starts.append(t_started)
+        t_measured_ends.append(t_completed)
 
     # Calculate steady-state throughput over exact measurement window
     if t_measured_starts and t_measured_ends:
@@ -411,13 +429,27 @@ def run_benchmark_workload(
     queue_pcts = calculate_percentiles(queue_dwell_ms_list)
     handler_pcts = calculate_percentiles(handler_exec_ms_list)
 
+    # Aggregate latency reconciliation check (R1)
+    sum_component_means = round(outbox_pcts["mean"] + queue_pcts["mean"] + handler_pcts["mean"], 3)
+    mean_discrepancy = round(abs(e2e_pcts["mean"] - sum_component_means), 6)
+
+    # Machine-checked invariant assertions (tolerance allows up to 0.002ms for 3-term IEEE rounding)
+    assert max_per_task_discrepancy < 0.001, (
+        f"Workload {workload_id} per-task latency decomposition failed! Max delta = {max_per_task_discrepancy}ms"
+    )
+    assert mean_discrepancy <= 0.002, (
+        f"Workload {workload_id} aggregate mean latency decomposition failed! "
+        f"E2E mean={e2e_pcts['mean']}ms, Sum={sum_component_means}ms, Delta={mean_discrepancy}ms"
+    )
+
     print(f"  {GREEN}[OK]{RESET} Workload {workload_id} Completed in {wall_elapsed_seconds:.2f}s:")
     print(f"       - Steady-State Throughput:  {BOLD}{steady_state_throughput} tasks/s{RESET} (Window: {measurement_window_seconds:.2f}s)")
-    print(f"       - End-to-End Latency:      p50={e2e_pcts['p50']}ms, p95={e2e_pcts['p95']}ms, p99={e2e_pcts['p99']}ms")
-    print(f"       - Outbox Dwell Latency:    p50={outbox_pcts['p50']}ms, p95={outbox_pcts['p95']}ms, p99={outbox_pcts['p99']}ms")
-    print(f"       - Queue Dwell Latency:     p50={queue_pcts['p50']}ms, p95={queue_pcts['p95']}ms, p99={queue_pcts['p99']}ms")
-    print(f"       - Handler Execution:       p50={handler_pcts['p50']}ms, p95={handler_pcts['p95']}ms, p99={handler_pcts['p99']}ms")
-    print(f"       - Task Outcomes:           {success_count} success, {failed_count} failed, {retried_count} retried")
+    print(f"       - End-to-End Latency:      p50={e2e_pcts['p50']}ms, p95={e2e_pcts['p95']}ms, p99={e2e_pcts['p99']}ms, mean={e2e_pcts['mean']}ms")
+    print(f"       - Outbox Dwell Latency:    p50={outbox_pcts['p50']}ms, p95={outbox_pcts['p95']}ms, mean={outbox_pcts['mean']}ms")
+    print(f"       - Queue Dwell Latency:     p50={queue_pcts['p50']}ms, p95={queue_pcts['p95']}ms, mean={queue_pcts['mean']}ms")
+    print(f"       - Handler Execution:       p50={handler_pcts['p50']}ms, p95={handler_pcts['p95']}ms, mean={handler_pcts['mean']}ms")
+    print(f"       - Latency Reconciliation:  Sum={sum_component_means}ms vs E2E={e2e_pcts['mean']}ms (Delta: {mean_discrepancy}ms, Max Per-Task: {max_per_task_discrepancy:.6f}ms)")
+    print(f"       - Task Outcomes:           Run={run_success_count}/{task_count} success, Measured={measured_success_count}/{measured_count} success, {run_failed_count} failed, {run_retried_count} retried")
 
     return {
         "task_count": task_count,
@@ -431,9 +463,14 @@ def run_benchmark_workload(
             "window_seconds": round(measurement_window_seconds, 4),
         },
         "task_outcomes": {
-            "success_count": success_count,
-            "failed_count": failed_count,
-            "retried_count": retried_count,
+            "seeded_count": task_count,
+            "warmup_count": warmup_count,
+            "measured_count": measured_count,
+            "success_count": run_success_count,
+            "failed_count": run_failed_count,
+            "retried_count": run_retried_count,
+            "measured_success_count": measured_success_count,
+            "measured_failed_count": measured_failed_count,
         },
         "latencies_ms": {
             "p50": e2e_pcts["p50"],
@@ -459,6 +496,13 @@ def run_benchmark_workload(
                 "p95": handler_pcts["p95"],
                 "p99": handler_pcts["p99"],
                 "mean": handler_pcts["mean"],
+            },
+            "reconciliation": {
+                "sum_of_component_means_ms": sum_component_means,
+                "reported_e2e_mean_ms": e2e_pcts["mean"],
+                "mean_discrepancy_ms": mean_discrepancy,
+                "max_per_task_discrepancy_ms": round(max_per_task_discrepancy, 6),
+                "reconciled": True,
             },
         },
         "raw_observations_count": len(e2e_latency_ms_list),

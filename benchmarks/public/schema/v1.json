@@ -79,9 +79,14 @@
           "task_outcomes": {
             "type": "object",
             "properties": {
+              "seeded_count": { "type": "integer" },
+              "warmup_count": { "type": "integer" },
+              "measured_count": { "type": "integer" },
               "success_count": { "type": "integer" },
               "failed_count": { "type": "integer" },
-              "retried_count": { "type": "integer" }
+              "retried_count": { "type": "integer" },
+              "measured_success_count": { "type": "integer" },
+              "measured_failed_count": { "type": "integer" }
             }
           },
           "latencies_ms": {
@@ -119,6 +124,16 @@
                   "p95": { "type": "number" },
                   "p99": { "type": "number" },
                   "mean": { "type": "number" }
+                }
+              },
+              "reconciliation": {
+                "type": "object",
+                "properties": {
+                  "sum_of_component_means_ms": { "type": "number" },
+                  "reported_e2e_mean_ms": { "type": "number" },
+                  "mean_discrepancy_ms": { "type": "number" },
+                  "max_per_task_discrepancy_ms": { "type": "number" },
+                  "reconciled": { "type": "boolean" }
                 }
               }
             }
