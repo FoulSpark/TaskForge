@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -132,6 +133,19 @@ app.include_router(metrics_router)
 app.include_router(api_v1_router)
 
 STATIC_DIR = Path(__file__).parent / "static"
+FRONTEND_DIST_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+FRONTEND_ASSETS_DIR = FRONTEND_DIST_DIR / "assets"
+FRONTEND_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "frame-ancestors 'none'"
+)
+
+if FRONTEND_ASSETS_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_ASSETS_DIR), name="frontend-assets")
 
 
 def check_database() -> bool:
@@ -218,14 +232,33 @@ async def readiness(request: Request):
     )
 
 
+def _resolve_ui_index() -> Path | None:
+    dist_index = FRONTEND_DIST_DIR / "index.html"
+    if dist_index.exists():
+        return dist_index
+    legacy_index = STATIC_DIR / "index.html"
+    if legacy_index.exists():
+        return legacy_index
+    return None
+
+
+def _serve_ui_response() -> FileResponse:
+    index_path = _resolve_ui_index()
+    if index_path is None:
+        return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+    return FileResponse(
+        index_path,
+        media_type="text/html",
+        headers={"Content-Security-Policy": FRONTEND_CSP},
+    )
+
+
 @app.get("/", tags=["UI"])
 async def serve_dashboard(request: Request):
-    """Serves the interactive TaskForge Mission Control Dashboard for browsers, or API JSON for clients."""
+    """Serves the TaskForge Web Console for browsers, or API JSON for non-HTML clients."""
     accept = request.headers.get("accept", "")
-    if "text/html" in accept:
-        index_path = STATIC_DIR / "index.html"
-        if index_path.exists():
-            return FileResponse(index_path, media_type="text/html")
+    if "text/html" in accept and _resolve_ui_index() is not None:
+        return _serve_ui_response()
 
     return JSONResponse(
         content={
@@ -237,6 +270,11 @@ async def serve_dashboard(request: Request):
 
 
 @app.get("/ui", tags=["UI"], response_class=HTMLResponse)
-async def serve_ui_alias():
-    index_path = STATIC_DIR / "index.html"
-    return FileResponse(index_path, media_type="text/html")
+@app.get("/submit", tags=["UI"], response_class=HTMLResponse)
+@app.get("/tasks", tags=["UI"], response_class=HTMLResponse)
+@app.get("/tasks/{task_id}", tags=["UI"], response_class=HTMLResponse)
+@app.get("/monitoring", tags=["UI"], response_class=HTMLResponse)
+async def serve_ui_spa_routes(task_id: str | None = None):
+    """Serve the built React SPA entrypoint with strict Content-Security-Policy."""
+    _ = task_id
+    return _serve_ui_response()
