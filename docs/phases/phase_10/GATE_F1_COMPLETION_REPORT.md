@@ -44,9 +44,9 @@
 | Frontend Unit & Lifecycle Tests (Vitest) | `npm test` (`frontend/`) | `2` files passed, `5 passed` (`auth_memory.test.tsx`, `vertical_slice.test.tsx`, including concurrent in-flight `401` session-abort race test & secret non-leakage check) |
 | Production TypeScript + Vite Build | `npm run build` (`frontend/`) | `tsc -b` + `vite build` exit `0` (`dist/index.html`, JS + CSS bundles) |
 | Frontend Contract, R1–R3 Serving & Isolation Tests | `.venv\Scripts\pytest -v tests/integration/test_f1b_frontend_e2e_serving.py tests/integration/test_f1a_frontend_api_contracts.py tests/integration/test_health.py tests/integration/test_observability.py tests/unit/test_f0_frontend_contract_docs.py` | `20 passed in 2.98s` |
-| Docker Multi-Stage Build | `docker compose build api` | Exit `0` (`Image taskforge-api Built`) |
+| Docker Build | `docker compose build api` | Exit `0` (`Image taskforge-api Built`) |
 | Docker Container Runtime Smoke (`taskforge-api` + `taskforge-postgres` + `taskforge-redis`) | `docker compose up -d --no-deps api` + HTTP runtime probes against `http://127.0.0.1:8000` | `DOCKER_RUNTIME_SMOKE_PASS` (`/assets/index-LOT2Bd-k.js`, HTML SPA on `/`, `/ui`, `/submit`, `/tasks`, `/tasks/{id}`, `/monitoring` with `script-src 'self'`, `404` JSON on `/api/v1/nonexistent-endpoint`, JSON on `GET /` for non-HTML `Accept`, live `compute_prime` -> `SUCCESS` -> `/monitoring/summary`) |
-| Full Backend Regression Suite | `.venv\Scripts\pytest -q` | `280 passed in 499.37s`, `0` failures, `0` skips (prior to `R1`/`R2`/`R3` doc/client hardening; `20` targeted integration/contract tests re-run afterward) |
+| Historical Full Backend Regression Baseline (Pre-Closure Hardening) | `.venv\Scripts\pytest -q` (run on commit `4150bea`) | `280 passed in 499.37s`, `0` failures, `0` skips (executed before `R1` doc updates, `R2` client race guards, and the extra `test_f1b_frontend_e2e_serving.py` test in `9d304bc`; final `9d304bc` state verified by the `20 passed` targeted Python suite + `5 passed` Vitest suite + live Docker container smoke; full final-HEAD suite must be re-run before merge/release) |
 
 ---
 
