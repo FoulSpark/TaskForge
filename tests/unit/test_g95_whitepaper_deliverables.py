@@ -102,3 +102,76 @@ def test_whitepaper_links_and_embeds_all_mermaid_diagrams():
         assert src_clean in emb_clean_set, (
             f"Embedded Mermaid block matching {fname} not found in ARCHITECTURE.md"
         )
+
+
+def _github_heading_slug(heading_text: str) -> str:
+    """Compute GitHub-flavored Markdown anchor slug from heading text."""
+    slug = heading_text.strip().lower()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"\s", "-", slug)
+    return slug
+
+
+def _extract_heading_slugs(md_text: str) -> set[str]:
+    """Extract all Markdown heading anchor slugs outside fenced code blocks."""
+    slugs: set[str] = set()
+    in_fence = False
+    for line in md_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = re.match(r"^#{1,6}\s+(.+)$", stripped)
+        if match:
+            slugs.add(_github_heading_slug(match.group(1)))
+    return slugs
+
+
+def test_documentation_links_and_referenced_paths_resolve():
+    """Verify all internal Markdown links, anchors, and cited repo paths resolve on disk."""
+    doc_files = [
+        WHITEPAPER_PATH,
+        REPO_ROOT / "docs" / "phases" / "phase_09" / "29_g95_stage3_whitepaper_and_diagrams_report.md",
+        REPO_ROOT / "docs" / "phases" / "phase_09" / "30_g95_stage3_reconciliation_addendum.md",
+        REPO_ROOT / "docs" / "phases" / "phase_09" / "README.md",
+    ]
+    path_pattern = re.compile(
+        r"\b((?:src|scripts|benchmarks|infrastructure|docs|tests)/[A-Za-z0-9_./-]+|docker-compose\.yml)\b"
+    )
+
+    for doc_path in doc_files:
+        assert doc_path.is_file(), f"Documentation file missing: {doc_path}"
+        content = doc_path.read_text(encoding="utf-8")
+        heading_slugs = _extract_heading_slugs(content)
+
+        # 1. Validate Markdown links [label](target) outside fenced/inline code
+        prose_only = re.sub(r"```.*?```", "", content, flags=re.DOTALL)
+        prose_only = re.sub(r"`[^`]+`", "", prose_only)
+        for _label, target in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", prose_only):
+            if target.startswith(("http://", "https://", "mailto:")):
+                continue
+            if target.startswith("#"):
+                assert target[1:] in heading_slugs, (
+                    f"Broken anchor '{target}' in {doc_path.relative_to(REPO_ROOT)}"
+                )
+                continue
+            rel_target, _, anchor = target.partition("#")
+            resolved = (doc_path.parent / rel_target).resolve()
+            assert resolved.exists(), (
+                f"Broken relative link '{target}' (resolved '{resolved}') in {doc_path.relative_to(REPO_ROOT)}"
+            )
+            if anchor and resolved.is_file() and resolved.suffix.lower() == ".md":
+                target_slugs = _extract_heading_slugs(resolved.read_text(encoding="utf-8"))
+                assert anchor in target_slugs, (
+                    f"Broken cross-doc anchor '{target}' in {doc_path.relative_to(REPO_ROOT)}"
+                )
+
+        # 2. Validate cited repository file/directory paths in whitepaper & Stage 3 report
+        if doc_path != REPO_ROOT / "docs" / "phases" / "phase_09" / "README.md":
+            for cited_path in sorted(set(path_pattern.findall(content))):
+                resolved_path = REPO_ROOT / cited_path
+                assert resolved_path.exists(), (
+                    f"Referenced repo path '{cited_path}' does not exist on disk (cited in {doc_path.relative_to(REPO_ROOT)})"
+                )

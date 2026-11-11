@@ -374,7 +374,7 @@ sequenceDiagram
     Disp->>Disp: WorkerDispatcher: consecutive_broker_errors += 1<br/>Bounded backoff = min(5.0s, poll_interval * 2^(n-1))
     end
 
-    Note over PG,Disp: In-process threads survive without restart; durable tasks remain safe in PostgreSQL
+    Note over PG,Disp: In-process threads survive without restart, and durable tasks remain safe in PostgreSQL
 
     rect rgb(235, 250, 240)
     Note over PG,Disp: Transport Restoration & Reconciliation
