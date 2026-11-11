@@ -1,0 +1,75 @@
+flowchart LR
+    %% D1 - TaskForge System Architecture (Matches Frozen Baseline a89858b)
+
+    Client["Client / Mission Control UI"]
+
+    subgraph API["FastAPI Control Plane (src/taskforge/main.py)"]
+        direction TB
+        MW["Middleware Stack<br/>CorrelationId + RateLimit + PrometheusHttp"]
+        Auth["ApiKeyService & RBAC<br/>Bearer tf_live_... SHA-256 + Scope Check"]
+        TaskAPI["TaskService & API Routes<br/>POST /api/v1/tasks, GET /tasks, Operator/Chaos"]
+        Health["ReadinessProbeCoordinator<br/>/health/live & /health/ready (max 2 workers)"]
+        MetricsEP["/metrics & /api/v1/stats<br/>GaugeSnapshotCache (5s TTL)"]
+    end
+
+    subgraph Storage["Authoritative State Store (PostgreSQL 16)"]
+        direction TB
+        PG_Tasks[("tasks<br/>status, priority, lease_token, lease_expires_at")]
+        PG_Outbox[("outbox_events<br/>status=PENDING|PUBLISHED, available_at")]
+        PG_Audit[("task_attempts, task_results,<br/>task_events, api_keys")]
+    end
+
+    subgraph Broker["Message Broker & Rate Limit State (Redis 7)"]
+        direction TB
+        R_Ready[("Ready Queue ZSET<br/>score = priority*10^12 - seq")]
+        R_InFlight[("In-Flight ZSET<br/>visibility timeout + delivery_token")]
+        R_RL_HB[("Rate Limit ZSET &<br/>Worker Heartbeat Keys")]
+    end
+
+    subgraph Background["Background Processing Plane"]
+        direction TB
+        Publisher["OutboxPublisherWorker<br/>FOR UPDATE SKIP LOCKED, batch=50<br/>Bounded Backoff on Outage"]
+        Dispatcher["WorkerDispatcher<br/>ZPOPMAX + threading.Event Capacity Wakeup<br/>ThreadPool / Subprocess Isolation"]
+        Workers["Worker Slots & LeaseManager<br/>Auto-Renewal Loop & Reaper Recovery"]
+    end
+
+    subgraph Observability["Monitoring Stack (Docker Compose)"]
+        Prom["Prometheus v2.51.0<br/>Scrape /metrics (28 Runtime Series)"]
+        Grafana["Grafana 10.4.0<br/>taskforge_overview.json Dashboard"]
+    end
+
+    %% Request Ingress & Auth
+    Client -->|"HTTP / JSON"| MW
+    MW -->|"Sliding Window Lua Check"| R_RL_HB
+    MW --> Auth
+    Auth -->|"Verify key_id & hashed_secret"| PG_Audit
+    Auth --> TaskAPI
+
+    %% Atomic Task Submission & Outbox Write
+    TaskAPI -->|"Single ACID Transaction<br/>INSERT task + event + outbox"| PG_Tasks
+    TaskAPI -.-> PG_Outbox
+    TaskAPI -.-> PG_Audit
+
+    %% Outbox Publication
+    Publisher -->|"Poll eligible PENDING rows"| PG_Outbox
+    Publisher -->|"LUA_ENQUEUE (ZADD)"| R_Ready
+    Publisher -->|"Commit status=PUBLISHED"| PG_Outbox
+
+    %% Dispatch & Worker Execution
+    Dispatcher -->|"LUA_DEQUEUE (ZPOPMAX -> in_flight)"| R_Ready
+    Dispatcher -.->|"Track delivery envelope"| R_InFlight
+    Dispatcher -->|"Dispatch Task + Lease"| Workers
+    Workers -->|"Acquire / Renew Lease &<br/>Fenced Terminal Write"| PG_Tasks
+    Workers -->|"Persist Attempt & Result"| PG_Audit
+    Workers -->|"LUA_ACK (token match -> ZREM)"| R_InFlight
+    Workers -->|"TTL Heartbeat"| R_RL_HB
+    Dispatcher -->|"Reaper: Recover Expired Leases<br/>DB first, then LUA_RECLAIM"| PG_Tasks
+    Dispatcher -.->|"Reclaim expired in-flight"| R_InFlight
+
+    %% Observability & Probes
+    Health -->|"Probe SELECT 1 & PING"| PG_Tasks
+    Health -->|"Probe PING"| R_Ready
+    MetricsEP -->|"Dedicated Telemetry Engine<br/>Outbox Pending/Lag"| PG_Outbox
+    MetricsEP -->|"ZCARD Queue Depth & Workers"| R_Ready
+    Prom -->|"GET /metrics"| MetricsEP
+    Grafana -->|"PromQL Queries"| Prom

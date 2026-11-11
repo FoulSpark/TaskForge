@@ -1,0 +1,40 @@
+sequenceDiagram
+    autonumber
+    participant PG as PostgreSQL (outbox_events)
+    participant Pub as OutboxPublisherWorker
+    participant Redis as RedisBroker (Port 6379)
+    participant Disp as WorkerDispatcher
+
+    Note over PG,Disp: Normal Operation & Pending Outbox Events
+    PG-->>Pub: Claim PENDING events (available_at <= now, FOR UPDATE SKIP LOCKED, LIMIT 50)
+    Pub->>Redis: broker.enqueue() [LUA_ENQUEUE]
+    Redis-->>Pub: OK
+    Pub->>PG: COMMIT status='PUBLISHED'
+
+    rect rgb(255, 235, 235)
+    Note over PG,Disp: Redis Transport Interruption (e.g., TCP Reset / Refusal)
+    PG-->>Pub: Claim remaining PENDING events (Event Set E_pending)
+    Pub-xRedis: broker.enqueue() -> ConnectionError / TimeoutError
+    Pub->>PG: Increment event.retry_count, save error_message, keep status='PENDING', COMMIT
+    Pub->>Pub: OutboxPublisherWorker: consecutive_errors += 1<br/>Bounded backoff = min(5.0s, poll_interval * 2^(n-1))
+
+    Disp-xRedis: broker.dequeue() -> ConnectionError / TimeoutError
+    Disp->>Disp: WorkerDispatcher: consecutive_broker_errors += 1<br/>Bounded backoff = min(5.0s, poll_interval * 2^(n-1))
+    end
+
+    Note over PG,Disp: In-process threads survive without restart; durable tasks remain safe in PostgreSQL
+
+    rect rgb(235, 250, 240)
+    Note over PG,Disp: Transport Restoration & Reconciliation
+    Redis-->>Redis: Broker connectivity restored on same endpoint
+    Pub->>PG: Poll PENDING outbox_events (E_pending)
+    PG-->>Pub: Claim all un-published events
+    Pub->>Redis: broker.enqueue() [LUA_ENQUEUE succeeds]
+    Redis-->>Pub: OK
+    Pub->>PG: COMMIT status='PUBLISHED', reset consecutive_errors = 0
+
+    Disp->>Redis: broker.dequeue() [LUA_DEQUEUE succeeds]
+    Redis-->>Disp: Task delivery envelope, reset consecutive_broker_errors = 0
+    Disp->>PG: Execute tasks & COMMIT terminal SUCCESS + TaskResult
+    Note over PG,Disp: Reconciliation Verified: E_initial == E_final_published (0 Durable Event Loss)
+    end

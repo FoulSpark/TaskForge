@@ -1,0 +1,47 @@
+sequenceDiagram
+    autonumber
+    participant WA as Worker A (Stalled / Stale)
+    participant PG as PostgreSQL (Authoritative Lock)
+    participant Reaper as Dispatcher Reaper + RedisBroker
+    participant WB as Worker B (Replacement)
+
+    Note over WA,PG: Worker A Acquires Initial Lease T_A
+    WA->>+PG: acquire_lease(task_id, worker_A, lease_token=T_A)
+    PG-->>-WA: COMMIT (status='QUEUED'->'RUNNING', lease_token=T_A, lease_expires_at=t_exp)
+
+    Note over WA,Reaper: Worker A Stalls / Crashes — Lease Expires (now > t_exp)
+    WA--xWA: Thread stall or network partition (renewal halts)
+
+    rect rgb(255, 240, 240)
+    Note over PG,Reaper: Authoritative Two-Stage Recovery (DB First, Broker Second)
+    Reaper->>+PG: Stage 1: recover_expired_leases() [WHERE status='RUNNING' AND lease_expires_at < now FOR UPDATE SKIP LOCKED]
+    PG->>PG: Increment retry_count, status='RETRY_WAIT', lease_token=NULL, lease_expires_at=NULL
+    PG-->>-Reaper: COMMIT (RecoveredTaskInfo)
+    Reaper->>Reaper: Stage 2: LUA_RECLAIM (move expired in_flight item back to ready_queue)
+    end
+
+    rect rgb(235, 250, 240)
+    Note over PG,WB: Worker B Claims Replacement Ownership with Token T_B
+    Reaper-->>WB: LUA_DEQUEUE (new delivery_token_B)
+    WB->>+PG: acquire_lease(task_id, worker_B, lease_token=T_B)
+    PG->>PG: Guard passes (status='RETRY_WAIT', lease_token=NULL) -> SET lease_token=T_B
+    PG-->>-WB: COMMIT (T_B active owner)
+    WB->>PG: update_status('RUNNING', T_B) & record_attempt(attempt=2, T_B)
+    end
+
+    rect rgb(255, 230, 230)
+    Note over WA,PG: Stale Fencing Rejection (All 5 Guarded Repository Paths)
+    WA->>+PG: Attempt complete_task_success / record_result / update_status with stale T_A
+    PG->>PG: SELECT ... FOR UPDATE (sees active lease_token = T_B != T_A)
+    PG->>PG: Increment taskforge_fencing_rejections_total (0 rows mutated)
+    PG-->>-WA: Raise PermissionError("Fencing violation")
+    WA->>WA: Catch PermissionError -> ExecutionDisposition.OWNERSHIP_REJECTED (Withholds Redis ACK)
+    end
+
+    rect rgb(235, 245, 255)
+    Note over PG,WB: Authoritative Terminal Completion by Worker B
+    WB->>+PG: complete_task_success(task_id, lease_token=T_B, return_value=Result_B)
+    PG->>PG: Verify task.lease_token == T_B -> COMMIT status='SUCCESS', TaskResult=Result_B, lease_token=NULL
+    PG-->>-WB: COMMIT Confirmed
+    WB->>Reaper: LUA_ACK(task_id, delivery_token_B)
+    end

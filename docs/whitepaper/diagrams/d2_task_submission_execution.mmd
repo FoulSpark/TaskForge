@@ -1,0 +1,60 @@
+sequenceDiagram
+    autonumber
+    participant Client
+    participant API as FastAPI + TaskRepository
+    participant PG as PostgreSQL (Authoritative State)
+    participant Pub as OutboxPublisherWorker
+    participant Redis as RedisBroker (Lua Scripts)
+    participant Disp as WorkerDispatcher
+    participant Worker as Worker Slot + LeaseManager
+
+    %% Phase 1: Durable Submission
+    rect rgb(235, 245, 255)
+    Note over Client,PG: Phase 1 — Atomic Task Submission (t_ingested)
+    Client->>+API: POST /api/v1/tasks (Bearer token, Idempotency-Key)
+    API->>API: RateLimitMiddleware (Lua) & Scope Check
+    API->>+PG: BEGIN TRANSACTION
+    PG->>PG: Check idempotency_key uniqueness (SQLSTATE 23505)
+    PG->>PG: INSERT tasks (status='QUEUED', created_at=t_ingested)
+    PG->>PG: INSERT task_events ('TASK_CREATED')
+    PG->>PG: INSERT outbox_events (status='PENDING', available_at)
+    PG-->>-API: COMMIT
+    API-->>-Client: 201 Created (task_id, status='QUEUED')
+    end
+
+    %% Phase 2: Outbox Publication
+    rect rgb(240, 250, 240)
+    Note over PG,Redis: Phase 2 — Transactional Outbox Dwell (L_outbox = t_published - t_ingested)
+    Pub->>+PG: SELECT outbox_events WHERE status='PENDING' AND available_at <= now FOR UPDATE SKIP LOCKED LIMIT 50
+    PG-->>-Pub: Claimed batch of events
+    Pub->>+Redis: EVALSHA LUA_ENQUEUE (INCR seq_key:p, ZADD ready_queue score=(p*10^12)-seq)
+    Redis-->>-Pub: Enqueued seq
+    Pub->>+PG: UPDATE outbox_events SET status='PUBLISHED', published_at=t_published
+    PG-->>-Pub: COMMIT
+    end
+
+    %% Phase 3: Dequeue & Lease Acquisition
+    rect rgb(255, 248, 235)
+    Note over Redis,Worker: Phase 3 — Queue Dwell (L_queue = t_started - t_published)
+    Disp->>+Redis: EVALSHA LUA_DEQUEUE (ZPOPMAX ready_queue -> ZADD in_flight with delivery_token)
+    Redis-->>-Disp: {task_id, delivery_token, raw_message}
+    Disp->>+Worker: Submit _task_wrapper to ThreadPoolExecutor
+    Worker->>+PG: acquire_lease(): SELECT ... FOR UPDATE, set lease_token & lease_expires_at
+    PG-->>-Worker: Lease granted (starts background LeaseManager renewal thread)
+    Worker->>PG: update_status('RUNNING') & record_attempt(started_at=t_started)
+    end
+
+    %% Phase 4: Execution & Fenced Terminal Persistence
+    rect rgb(245, 240, 255)
+    Note over PG,Worker: Phase 4 — Worker Execution / Lease Tenure (L_worker = t_completed - t_started)
+    Worker->>Worker: Execute handler(payload) under timeout_seconds
+    Worker->>+PG: complete_task_success() [FOR UPDATE + verify task.lease_token == token]
+    PG->>PG: UPDATE tasks SET status='SUCCESS', completed_at=t_completed, lease_token=NULL
+    PG->>PG: INSERT task_results & task_events, UPDATE task_attempts
+    PG-->>-Worker: COMMIT
+    Worker->>Worker: lease.release() (halts renewal thread)
+    Worker-->>-Disp: ExecutionDisposition.COMPLETED
+    Disp->>+Redis: EVALSHA LUA_ACK (verify delivery_token match -> ZREM in_flight)
+    Redis-->>-Disp: 1 (ACK confirmed)
+    Disp->>Disp: Decrement _active_tasks & trigger _capacity_event.set()
+    end
