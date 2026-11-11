@@ -1,14 +1,14 @@
 {
-  "run_id": "a25eea5b",
-  "timestamp_utc": "2026-11-10T22:47:13.679154+00:00",
+  "run_id": "a510d9fa",
+  "timestamp_utc": "2026-11-11T09:26:17.711902+00:00",
   "provenance": {
     "authorized_base_commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
     "frozen_tag": "v0.8.0-phase8-freeze (da27047f56fe2eec75acdb8502f505542cf61202)",
     "git_commit": "3eb1d51"
   },
   "disposable_resources": {
-    "database_name": "taskforge_demo_a25eea5b",
-    "redis_prefix": "taskforge:demo:a25eea5b:"
+    "database_name": "taskforge_demo_a510d9fa",
+    "redis_prefix": "taskforge:demo:a510d9fa:"
   },
   "acceptance_criteria": {
     "D1_environment_validation": true,
@@ -18,19 +18,34 @@
       "total_tasks": 30,
       "high_count": 10,
       "normal_count": 10,
-      "low_count": 10
+      "low_count": 10,
+      "priority_enum_reconciliation": {
+        "High": {
+          "enum": "TaskPriority.HIGH",
+          "value": 3
+        },
+        "Normal": {
+          "enum": "TaskPriority.MEDIUM",
+          "value": 2,
+          "stage0_label": "Normal"
+        },
+        "Low": {
+          "enum": "TaskPriority.LOW",
+          "value": 1
+        }
+      }
     },
     "D5_priority_ordering": {
       "high_before_normal": true,
       "normal_before_low": true,
       "fifo_within_tiers": true,
       "dequeue_order_sample": [
-        "demo-a25eea5b-high-00",
-        "demo-a25eea5b-high-01",
-        "demo-a25eea5b-high-02",
-        "demo-a25eea5b-high-03",
-        "demo-a25eea5b-high-04",
-        "demo-a25eea5b-high-05"
+        "demo-a510d9fa-high-00",
+        "demo-a510d9fa-high-01",
+        "demo-a510d9fa-high-02",
+        "demo-a510d9fa-high-03",
+        "demo-a510d9fa-high-04",
+        "demo-a510d9fa-high-05"
       ]
     },
     "D6_broker_outage_recovery": {
@@ -40,8 +55,18 @@
       "threads_survived_without_restart": true
     },
     "D7_stale_lease_fencing": {
+      "worker_a_lease_token": "tok-a-a510d9fa",
+      "worker_b_replacement_token": "tok-b-a510d9fa",
+      "guarded_sql_statement": "UPDATE tasks SET status = :status, completed_at = :now, updated_at = :now, lease_token = NULL WHERE id = :task_id AND lease_token = :lease_token",
+      "guarded_sql_stale_affected_rows": 0,
       "stale_commit_rejected": true,
+      "rejection_exception": "Fencing violation: supplied lease token does not match active task lease",
+      "fencing_counter_increment": 1.0,
+      "worker_b_commit_success": true,
+      "final_persisted_status": "SUCCESS",
+      "final_persisted_lease_token": null,
       "authoritative_winner": "Worker B",
+      "production_path_without_mocking": true,
       "state_corrupted": false
     },
     "D8_terminal_duplicate_suppression": {
@@ -49,10 +74,21 @@
       "authoritative_result_preserved": true
     },
     "D9_identity_reconciliation": {
-      "total_demo_tasks": 41,
-      "set_equality_tasks": true,
-      "set_equality_results": true,
-      "set_equality_events": true,
+      "initial_task_count": 41,
+      "final_success_task_count": 41,
+      "task_identity_set_equality": true,
+      "missing_task_ids": [],
+      "unexpected_task_ids": [],
+      "initial_event_count": 41,
+      "final_published_event_count": 41,
+      "event_identity_set_equality": true,
+      "missing_event_ids": [],
+      "unexpected_event_ids": [],
+      "task_result_count": 41,
+      "task_result_set_equality": true,
+      "tasks_missing_results": [],
+      "unaccounted_tasks_count": 0,
+      "unaccounted_events_count": 0,
       "durable_outbox_event_loss": 0
     },
     "D10_terminal_completion": {
@@ -61,7 +97,27 @@
       "pending_count": 0,
       "completion_percentage": 100.0
     },
-    "D11_safe_teardown": true
+    "D11_safe_teardown": {
+      "status": "completed",
+      "db_ownership_verified": true,
+      "redis_ownership_verified": true,
+      "manifest_run_id": "a510d9fa"
+    }
+  },
+  "resource_manifest": {
+    "run_id": "a510d9fa",
+    "provisioned_at_utc": "2026-11-11T09:26:17.901770+00:00",
+    "database": {
+      "name": "taskforge_demo_a510d9fa",
+      "owner": "taskforge",
+      "created_by_run": true,
+      "pre_existed": false
+    },
+    "redis": {
+      "namespace_prefix": "taskforge:demo:a510d9fa:",
+      "pre_existing_keys_count": 0,
+      "owned_by_run": true
+    }
   },
   "exit_code": 0,
   "status": "SUCCESS"

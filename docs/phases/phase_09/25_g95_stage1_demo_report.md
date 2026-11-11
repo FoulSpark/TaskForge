@@ -296,3 +296,4 @@ With Stage 1 verified and closed, TaskForge is fully prepared to enter **Stage 2
 Stage 1 is complete. All 12 criteria (D1–D12) are empirically verified and regression-tested.
 
 We respectfully request formal review and acceptance of **Gate G9.5 Stage 1** and authorization to commence **Stage 2 (Public Benchmark Suite)**.
+

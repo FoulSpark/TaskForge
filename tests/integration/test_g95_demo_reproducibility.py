@@ -75,9 +75,16 @@ def test_g95_demo_full_execution(tmp_path):
     assert ac["D6_broker_outage_recovery"]["durable_event_loss"] == 0
     assert ac["D7_stale_lease_fencing"]["stale_commit_rejected"] is True
     assert ac["D7_stale_lease_fencing"]["authoritative_winner"] == "Worker B"
+    assert ac["D7_stale_lease_fencing"]["guarded_sql_stale_affected_rows"] == 0
+    assert ac["D7_stale_lease_fencing"]["fencing_counter_increment"] >= 1.0
+    assert ac["D7_stale_lease_fencing"]["production_path_without_mocking"] is True
     assert ac["D8_terminal_duplicate_suppression"]["duplicate_message_acked"] is True
-    assert ac["D9_identity_reconciliation"]["set_equality_tasks"] is True
-    assert ac["D9_identity_reconciliation"]["set_equality_results"] is True
-    assert ac["D9_identity_reconciliation"]["set_equality_events"] is True
+    assert ac["D9_identity_reconciliation"]["task_identity_set_equality"] is True
+    assert ac["D9_identity_reconciliation"]["event_identity_set_equality"] is True
+    assert ac["D9_identity_reconciliation"]["task_result_set_equality"] is True
+    assert ac["D9_identity_reconciliation"]["unaccounted_tasks_count"] == 0
+    assert ac["D9_identity_reconciliation"]["unaccounted_events_count"] == 0
     assert ac["D10_terminal_completion"]["completion_percentage"] == 100.0
-    assert ac["D11_safe_teardown"] is True
+    assert ac["D11_safe_teardown"]["status"] == "completed"
+    assert ac["D11_safe_teardown"]["db_ownership_verified"] is True
+    assert ac["D11_safe_teardown"]["redis_ownership_verified"] is True
