@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 490" width="980" height="490">
+<style>
+  .bg { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+  .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 21px; font-weight: 700; fill: #0f172a; }
+  .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: #475569; }
+  .axis-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #334155; }
+  .tick-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #64748b; }
+  .bar-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #0f172a; }
+  .bar-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #475569; }
+  .legend-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #1e293b; }
+  .grid { stroke: #e2e8f0; stroke-width: 1; stroke-dasharray: 3,3; }
+  .axis { stroke: #94a3b8; stroke-width: 1.5; }
+  .footer { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; fill: #64748b; }
+  .note-box { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1; }
+  .note-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #334155; }
+</style>
+<rect class="bg" x="1" y="1" width="978" height="488" rx="12"/>
+<text class="title" x="36" y="42">TaskForge Public Benchmark — Causal Stage Latency Decomposition (Mean ms)</text>
+<text class="subtitle" x="36" y="66">Exact additive identity: Outbox Dwell + Queue Dwell + Worker Execution / Lease Tenure = End-to-End (max per-task delta = 0.000000 ms).</text>
+<rect x="36" y="88" width="14" height="14" rx="3" fill="#f59e0b"/>
+<text class="legend-text" x="56" y="100">Outbox Dwell (t_pub - t_ing)</text>
+<rect x="306" y="88" width="14" height="14" rx="3" fill="#3b82f6"/>
+<text class="legend-text" x="326" y="100">Queue Dwell (t_start - t_pub)</text>
+<rect x="576" y="88" width="14" height="14" rx="3" fill="#10b981"/>
+<text class="legend-text" x="596" y="100">Worker Execution / Lease Tenure (t_comp - t_start)</text>
+<line class="grid" x1="205.0" y1="130" x2="205.0" y2="340"/>
+<text class="tick-label" x="205.0" y="358" text-anchor="middle">0 ms</text>
+<line class="grid" x1="272.8" y1="130" x2="272.8" y2="340"/>
+<text class="tick-label" x="272.8" y="358" text-anchor="middle">500 ms</text>
+<line class="grid" x1="340.6" y1="130" x2="340.6" y2="340"/>
+<text class="tick-label" x="340.6" y="358" text-anchor="middle">1,000 ms</text>
+<line class="grid" x1="408.3" y1="130" x2="408.3" y2="340"/>
+<text class="tick-label" x="408.3" y="358" text-anchor="middle">1,500 ms</text>
+<line class="grid" x1="476.1" y1="130" x2="476.1" y2="340"/>
+<text class="tick-label" x="476.1" y="358" text-anchor="middle">2,000 ms</text>
+<line class="grid" x1="543.9" y1="130" x2="543.9" y2="340"/>
+<text class="tick-label" x="543.9" y="358" text-anchor="middle">2,500 ms</text>
+<line class="grid" x1="611.7" y1="130" x2="611.7" y2="340"/>
+<text class="tick-label" x="611.7" y="358" text-anchor="middle">3,000 ms</text>
+<line class="grid" x1="679.4" y1="130" x2="679.4" y2="340"/>
+<text class="tick-label" x="679.4" y="358" text-anchor="middle">3,500 ms</text>
+<line class="grid" x1="747.2" y1="130" x2="747.2" y2="340"/>
+<text class="tick-label" x="747.2" y="358" text-anchor="middle">4,000 ms</text>
+<line class="grid" x1="815.0" y1="130" x2="815.0" y2="340"/>
+<text class="tick-label" x="815.0" y="358" text-anchor="middle">4,500 ms</text>
+<line class="axis" x1="205" y1="130" x2="205" y2="340"/>
+<line class="axis" x1="205" y1="340" x2="815" y2="340"/>
+<text class="axis-label" x="191" y="161.0" text-anchor="end">W-01: No-op Baseline</text>
+<text class="bar-sub" x="191" y="178.0" text-anchor="end">noop (framework overhead)</text>
+<rect x="205.0" y="147.0" width="129.5" height="36" fill="#f59e0b"/>
+<text x="269.7" y="169.0" text-anchor="middle" style="font-family:Segoe UI,Arial,sans-serif;font-size:10.5px;font-weight:700;fill:#ffffff">955 ms (23.3%)</text>
+<rect x="334.5" y="147.0" width="418.1" height="36" fill="#3b82f6"/>
+<text x="543.6" y="169.0" text-anchor="middle" style="font-family:Segoe UI,Arial,sans-serif;font-size:10.5px;font-weight:700;fill:#ffffff">3,085 ms (75.4%)</text>
+<rect x="752.6" y="147.0" width="7.1" height="36" fill="#10b981"/>
+<text class="bar-label" x="769.7" y="163.0" style="font-size:12px">4,092.136 ms</text>
+<text class="bar-sub" x="769.7" y="178.0">Worker: 52.3 ms (1.3%)</text>
+<text class="axis-label" x="191" y="231.0" text-anchor="end">W-02: CPU Prime Sieve</text>
+<text class="bar-sub" x="191" y="248.0" text-anchor="end">cpu_bound (n=500 primes)</text>
+<rect x="205.0" y="217.0" width="81.3" height="36" fill="#f59e0b"/>
+<text x="245.7" y="239.0" text-anchor="middle" style="font-family:Segoe UI,Arial,sans-serif;font-size:10.5px;font-weight:700;fill:#ffffff">600 ms (21.2%)</text>
+<rect x="286.3" y="217.0" width="294.7" height="36" fill="#3b82f6"/>
+<text x="433.7" y="239.0" text-anchor="middle" style="font-family:Segoe UI,Arial,sans-serif;font-size:10.5px;font-weight:700;fill:#ffffff">2,174 ms (76.9%)</text>
+<rect x="581.0" y="217.0" width="7.3" height="36" fill="#10b981"/>
+<text class="bar-label" x="598.3" y="233.0" style="font-size:12px">2,827.287 ms</text>
+<text class="bar-sub" x="598.3" y="248.0">Worker: 53.5 ms (1.9%)</text>
+<text class="axis-label" x="191" y="301.0" text-anchor="end">W-03: I/O-Bound Service</text>
+<text class="bar-sub" x="191" y="318.0" text-anchor="end">io_bound (50 ms sleep)</text>
+<rect x="205.0" y="287.0" width="42.9" height="36" fill="#f59e0b"/>
+<text x="226.4" y="309.0" text-anchor="middle" style="font-family:Segoe UI,Arial,sans-serif;font-size:10px;font-weight:700;fill:#ffffff">316 ms</text>
+<rect x="247.9" y="287.0" width="254.4" height="36" fill="#3b82f6"/>
+<text x="375.0" y="309.0" text-anchor="middle" style="font-family:Segoe UI,Arial,sans-serif;font-size:10.5px;font-weight:700;fill:#ffffff">1,877 ms (81.7%)</text>
+<rect x="502.2" y="287.0" width="14.0" height="36" fill="#10b981"/>
+<text class="bar-label" x="526.2" y="303.0" style="font-size:12px">2,296.029 ms</text>
+<text class="bar-sub" x="526.2" y="318.0">Worker: 103.3 ms (4.5%)</text>
+<rect class="note-box" x="36" y="372" width="908" height="56" rx="6"/>
+<text class="legend-text" x="50" y="393">Arithmetic Reconciliation &amp; Attribution Summary:</text>
+<text class="note-text" x="50" y="412">W-01: 955.318 + 3,084.507 + 52.310 = 4,092.135 vs 4,092.136 ms (Delta=0.001 ms)  |  W-02: Delta=0.000 ms  |  W-03: Delta=0.000 ms.  Queue dwell: 75.4%-81.7%.</text>
+<line x1="36" y1="444" x2="944" y2="444" stroke="#e2e8f0" stroke-width="1"/>
+<text class="footer" x="36" y="462">Source: benchmarks/public/benchmark_results.json  |  Run ID: fc557f14  |  Harness Commit: 1d4a76c (git_dirty=false)  |  Measured: 2026-11-11 11:29:47 UTC</text>
+<text class="footer" x="36" y="477">Measured Environment (Local Single-Host, c=4): Windows 11 (AMD64) · 12 logical cores · 15.65 GB RAM · PostgreSQL 16.15 · Redis v7.4.12. Not general cluster capacity.</text>
+</svg>

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 480" width="980" height="480">
+<style>
+  .bg { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+  .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 21px; font-weight: 700; fill: #0f172a; }
+  .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: #475569; }
+  .axis-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #334155; }
+  .tick-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #64748b; }
+  .bar-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #0f172a; }
+  .bar-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #475569; }
+  .legend-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #1e293b; }
+  .grid { stroke: #e2e8f0; stroke-width: 1; stroke-dasharray: 3,3; }
+  .axis { stroke: #94a3b8; stroke-width: 1.5; }
+  .footer { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; fill: #64748b; }
+  .note-box { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1; }
+  .note-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #334155; }
+</style>
+<rect class="bg" x="1" y="1" width="978" height="478" rx="12"/>
+<text class="title" x="36" y="42">TaskForge Public Benchmark — Steady-State Throughput (Tasks / Second)</text>
+<text class="subtitle" x="36" y="66">Non-warmup steady-state completions divided by active measurement window (initial 10% warmup excluded; 100% completion across all runs).</text>
+<line class="grid" x1="95" y1="375.0" x2="645" y2="375.0"/>
+<text class="tick-label" x="83" y="379.0" text-anchor="end">0</text>
+<line class="grid" x1="95" y1="327.7" x2="645" y2="327.7"/>
+<text class="tick-label" x="83" y="331.7" text-anchor="end">10</text>
+<line class="grid" x1="95" y1="280.5" x2="645" y2="280.5"/>
+<text class="tick-label" x="83" y="284.5" text-anchor="end">20</text>
+<line class="grid" x1="95" y1="233.2" x2="645" y2="233.2"/>
+<text class="tick-label" x="83" y="237.2" text-anchor="end">30</text>
+<line class="grid" x1="95" y1="185.9" x2="645" y2="185.9"/>
+<text class="tick-label" x="83" y="189.9" text-anchor="end">40</text>
+<line class="grid" x1="95" y1="138.6" x2="645" y2="138.6"/>
+<text class="tick-label" x="83" y="142.6" text-anchor="end">50</text>
+<line class="axis" x1="95" y1="115" x2="95" y2="375"/>
+<line class="axis" x1="95" y1="375" x2="645" y2="375"/>
+<text class="axis-label" transform="translate(34, 245.0) rotate(-90)" text-anchor="middle">Throughput (tasks / sec)</text>
+<rect x="142.7" y="163.3" width="88" height="211.7" rx="6" fill="#2563eb"/>
+<text class="bar-label" x="186.7" y="153.3" text-anchor="middle">44.78 tasks/s</text>
+<text class="axis-label" x="186.7" y="397" text-anchor="middle">W-01: No-op Baseline</text>
+<text class="bar-sub" x="186.7" y="413" text-anchor="middle">noop (framework overhead)</text>
+<text class="bar-sub" x="186.7" y="428" text-anchor="middle">270/300 meas. · 6.03s · 300/300 OK</text>
+<rect x="326.0" y="164.2" width="88" height="210.8" rx="6" fill="#0d9488"/>
+<text class="bar-label" x="370.0" y="154.2" text-anchor="middle">44.59 tasks/s</text>
+<text class="axis-label" x="370.0" y="397" text-anchor="middle">W-02: CPU Prime Sieve</text>
+<text class="bar-sub" x="370.0" y="413" text-anchor="middle">cpu_bound (n=500 primes)</text>
+<text class="bar-sub" x="370.0" y="428" text-anchor="middle">180/200 meas. · 4.04s · 200/200 OK</text>
+<rect x="509.3" y="238.8" width="88" height="136.2" rx="6" fill="#d97706"/>
+<text class="bar-label" x="553.3" y="228.8" text-anchor="middle">28.82 tasks/s</text>
+<text class="axis-label" x="553.3" y="397" text-anchor="middle">W-03: I/O-Bound Service</text>
+<text class="bar-sub" x="553.3" y="413" text-anchor="middle">io_bound (50 ms sleep)</text>
+<text class="bar-sub" x="553.3" y="428" text-anchor="middle">90/100 meas. · 3.12s · 100/100 OK</text>
+<rect class="note-box" x="672" y="115" width="272" height="260" rx="8"/>
+<text class="axis-label" x="688" y="143">Key Empirical Findings</text>
+<text class="legend-text" x="688" y="167">No-Op vs. CPU Sieve Parity:</text>
+<text class="note-text" x="688" y="181.5">W-01 (44.78/s) &amp; W-02 (44.59/s)</text>
+<text class="note-text" x="688" y="196.0">match (52.3 vs 53.5 ms worker</text>
+<text class="note-text" x="688" y="210.5">lease tenure): DB persistence</text>
+<text class="note-text" x="688" y="225.0">dwarfs Python sieve compute.</text>
+<text class="legend-text" x="688" y="254.0">I/O-Bound Pacing (W-03):</text>
+<text class="note-text" x="688" y="268.5">28.82 tasks/s reflects 50 ms</text>
+<text class="note-text" x="688" y="283.0">blocking sleep + DB lease/commit</text>
+<text class="note-text" x="688" y="297.5">overhead (103.29 ms mean worker</text>
+<text class="note-text" x="688" y="312.0">execution / lease tenure, c=4).</text>
+<text class="legend-text" x="688" y="341.0">Zero Task Loss / Retries:</text>
+<text class="note-text" x="688" y="355.5">600/600 total tasks succeeded.</text>
+<line x1="36" y1="434" x2="944" y2="434" stroke="#e2e8f0" stroke-width="1"/>
+<text class="footer" x="36" y="452">Source: benchmarks/public/benchmark_results.json  |  Run ID: fc557f14  |  Harness Commit: 1d4a76c (git_dirty=false)  |  Measured: 2026-11-11 11:29:47 UTC</text>
+<text class="footer" x="36" y="467">Measured Environment (Local Single-Host, c=4): Windows 11 (AMD64) · 12 logical cores · 15.65 GB RAM · PostgreSQL 16.15 · Redis v7.4.12. Not general cluster capacity.</text>
+</svg>

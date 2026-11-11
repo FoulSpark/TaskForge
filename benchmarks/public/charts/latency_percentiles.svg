@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 500" width="980" height="500">
+<style>
+  .bg { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; }
+  .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 21px; font-weight: 700; fill: #0f172a; }
+  .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; fill: #475569; }
+  .axis-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #334155; }
+  .tick-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #64748b; }
+  .bar-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #0f172a; }
+  .bar-sub { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #475569; }
+  .legend-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #1e293b; }
+  .grid { stroke: #e2e8f0; stroke-width: 1; stroke-dasharray: 3,3; }
+  .axis { stroke: #94a3b8; stroke-width: 1.5; }
+  .footer { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; fill: #64748b; }
+  .note-box { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1; }
+  .note-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; fill: #334155; }
+</style>
+<rect class="bg" x="1" y="1" width="978" height="498" rx="12"/>
+<text class="title" x="36" y="42">TaskForge Public Benchmark — End-to-End Latency Percentiles (p50 / p95 / p99)</text>
+<text class="subtitle" x="36" y="66">Ingestion-to-durable-completion wall-clock latency across measured steady-state tasks (batch-seeded burst arrival).</text>
+<rect x="585" y="88" width="14" height="14" rx="3" fill="#3b82f6"/>
+<text class="legend-text" x="605" y="100">p50 (Median)</text>
+<rect x="720" y="88" width="14" height="14" rx="3" fill="#6366f1"/>
+<text class="legend-text" x="740" y="100">p95</text>
+<rect x="820" y="88" width="14" height="14" rx="3" fill="#db2777"/>
+<text class="legend-text" x="840" y="100">p99</text>
+<line class="grid" x1="95" y1="395.0" x2="935" y2="395.0"/>
+<text class="tick-label" x="85" y="399.0" text-anchor="end">0</text>
+<line class="grid" x1="95" y1="361.9" x2="935" y2="361.9"/>
+<text class="tick-label" x="85" y="365.9" text-anchor="end">1,000</text>
+<line class="grid" x1="95" y1="328.8" x2="935" y2="328.8"/>
+<text class="tick-label" x="85" y="332.8" text-anchor="end">2,000</text>
+<line class="grid" x1="95" y1="295.6" x2="935" y2="295.6"/>
+<text class="tick-label" x="85" y="299.6" text-anchor="end">3,000</text>
+<line class="grid" x1="95" y1="262.5" x2="935" y2="262.5"/>
+<text class="tick-label" x="85" y="266.5" text-anchor="end">4,000</text>
+<line class="grid" x1="95" y1="229.4" x2="935" y2="229.4"/>
+<text class="tick-label" x="85" y="233.4" text-anchor="end">5,000</text>
+<line class="grid" x1="95" y1="196.2" x2="935" y2="196.2"/>
+<text class="tick-label" x="85" y="200.2" text-anchor="end">6,000</text>
+<line class="grid" x1="95" y1="163.1" x2="935" y2="163.1"/>
+<text class="tick-label" x="85" y="167.1" text-anchor="end">7,000</text>
+<line class="grid" x1="95" y1="130.0" x2="935" y2="130.0"/>
+<text class="tick-label" x="85" y="134.0" text-anchor="end">8,000</text>
+<line class="axis" x1="95" y1="130" x2="95" y2="395"/>
+<line class="axis" x1="95" y1="395" x2="935" y2="395"/>
+<text class="axis-label" transform="translate(30, 262.5) rotate(-90)" text-anchor="middle">End-to-End Latency (ms)</text>
+<rect x="139.0" y="260.4" width="56" height="134.6" rx="5" fill="#3b82f6"/>
+<text class="bar-label" x="167.0" y="252.4" text-anchor="middle" style="font-size:11.5px">4,064</text>
+<rect x="207.0" y="171.2" width="56" height="223.8" rx="5" fill="#6366f1"/>
+<text class="bar-label" x="235.0" y="163.2" text-anchor="middle" style="font-size:11.5px">6,757</text>
+<rect x="275.0" y="163.0" width="56" height="232.0" rx="5" fill="#db2777"/>
+<text class="bar-label" x="303.0" y="155.0" text-anchor="middle" style="font-size:11.5px">7,003</text>
+<text class="axis-label" x="235.0" y="417" text-anchor="middle">W-01: No-op Baseline</text>
+<text class="bar-sub" x="235.0" y="433" text-anchor="middle">noop (framework overhead) · 270/300 meas.</text>
+<text class="bar-sub" x="235.0" y="448" text-anchor="middle">Mean: 4,092.1 | Min: 1,088.1 | Max: 7,050.6 ms</text>
+<rect x="419.0" y="300.8" width="56" height="94.2" rx="5" fill="#3b82f6"/>
+<text class="bar-label" x="447.0" y="292.8" text-anchor="middle" style="font-size:11.5px">2,843</text>
+<rect x="487.0" y="242.4" width="56" height="152.6" rx="5" fill="#6366f1"/>
+<text class="bar-label" x="515.0" y="234.4" text-anchor="middle" style="font-size:11.5px">4,608</text>
+<rect x="555.0" y="237.9" width="56" height="157.1" rx="5" fill="#db2777"/>
+<text class="bar-label" x="583.0" y="229.9" text-anchor="middle" style="font-size:11.5px">4,743</text>
+<text class="axis-label" x="515.0" y="417" text-anchor="middle">W-02: CPU Prime Sieve</text>
+<text class="bar-sub" x="515.0" y="433" text-anchor="middle">cpu_bound (n=500 primes) · 180/200 meas.</text>
+<text class="bar-sub" x="515.0" y="448" text-anchor="middle">Mean: 2,827.3 | Min: 827.9 | Max: 4,783.3 ms</text>
+<rect x="699.0" y="318.5" width="56" height="76.5" rx="5" fill="#3b82f6"/>
+<text class="bar-label" x="727.0" y="310.5" text-anchor="middle" style="font-size:11.5px">2,309</text>
+<rect x="767.0" y="277.2" width="56" height="117.8" rx="5" fill="#6366f1"/>
+<text class="bar-label" x="795.0" y="269.2" text-anchor="middle" style="font-size:11.5px">3,556</text>
+<rect x="835.0" y="273.3" width="56" height="121.7" rx="5" fill="#db2777"/>
+<text class="bar-label" x="863.0" y="265.3" text-anchor="middle" style="font-size:11.5px">3,675</text>
+<text class="axis-label" x="795.0" y="417" text-anchor="middle">W-03: I/O-Bound Service</text>
+<text class="bar-sub" x="795.0" y="433" text-anchor="middle">io_bound (50 ms sleep) · 90/100 meas.</text>
+<text class="bar-sub" x="795.0" y="448" text-anchor="middle">Mean: 2,296.0 | Min: 651.0 | Max: 3,679.0 ms</text>
+<line x1="36" y1="454" x2="944" y2="454" stroke="#e2e8f0" stroke-width="1"/>
+<text class="footer" x="36" y="472">Source: benchmarks/public/benchmark_results.json  |  Run ID: fc557f14  |  Harness Commit: 1d4a76c (git_dirty=false)  |  Measured: 2026-11-11 11:29:47 UTC</text>
+<text class="footer" x="36" y="487">Measured Environment (Local Single-Host, c=4): Windows 11 (AMD64) · 12 logical cores · 15.65 GB RAM · PostgreSQL 16.15 · Redis v7.4.12. Not general cluster capacity.</text>
+</svg>

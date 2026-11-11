@@ -140,6 +140,16 @@ Canonical benchmarks (`benchmarks/public/run_public_benchmarks.py`, Run `fc557f1
 
 Every individual measured task (`540/540`) satisfies the exact causal additive identity $L_{\text{outbox}} + L_{\text{queue}} + L_{\text{worker}} \equiv L_{\text{e2e}}$ with `max_per_task_discrepancy_ms = 0.000000 ms`.
 
+### Benchmark Visualizations (`benchmarks/public/charts/`)
+
+![Steady-State Throughput Comparison](benchmarks/public/charts/throughput_comparison.svg)
+
+![End-to-End Latency Percentiles](benchmarks/public/charts/latency_percentiles.svg)
+
+![Causal Stage Latency Decomposition](benchmarks/public/charts/latency_decomposition.svg)
+
+*Charts are generated directly from [`benchmarks/public/benchmark_results.json`](benchmarks/public/benchmark_results.json) via [`benchmarks/public/generate_charts.py`](benchmarks/public/generate_charts.py) (with `--png` copies saved alongside SVGs).*
+
 ---
 
 ## Quickstart & Reproducible Verification
