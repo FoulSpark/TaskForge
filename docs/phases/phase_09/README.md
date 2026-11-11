@@ -31,6 +31,7 @@ This directory contains the milestone specifications, threat model, trust bounda
 23. [22_g94_operational_resilience_and_reliability_synthesis.md](22_g94_operational_resilience_and_reliability_synthesis.md): Gate G9.4 definitive operational resilience synthesis and closure report.
 24. [23_g95_stage0_protocol_and_provenance_lock.md](23_g95_stage0_protocol_and_provenance_lock.md): Gate G9.5 Stage 0 protocol, provenance, metric contract, and benchmark schema lock.
 25. [24_g95_stage0_reconciliation_addendum.md](24_g95_stage0_reconciliation_addendum.md): Gate G9.5 Stage 0 reconciliation addendum (R2 dequeue direction, R3 cardinality, R4 demo contract).
+26. [25_g95_stage1_demo_report.md](25_g95_stage1_demo_report.md): Gate G9.5 Stage 1 demonstration harness verification report (D1–D12 compliance).
 
 
 

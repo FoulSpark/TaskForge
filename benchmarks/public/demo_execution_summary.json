@@ -1,0 +1,68 @@
+{
+  "run_id": "a25eea5b",
+  "timestamp_utc": "2026-11-10T22:47:13.679154+00:00",
+  "provenance": {
+    "authorized_base_commit": "a89858b73f8488e05cbcc2393a61f3080ffc7a38",
+    "frozen_tag": "v0.8.0-phase8-freeze (da27047f56fe2eec75acdb8502f505542cf61202)",
+    "git_commit": "3eb1d51"
+  },
+  "disposable_resources": {
+    "database_name": "taskforge_demo_a25eea5b",
+    "redis_prefix": "taskforge:demo:a25eea5b:"
+  },
+  "acceptance_criteria": {
+    "D1_environment_validation": true,
+    "D2_isolated_resources": true,
+    "D3_automatic_migrations": true,
+    "D4_deterministic_workload": {
+      "total_tasks": 30,
+      "high_count": 10,
+      "normal_count": 10,
+      "low_count": 10
+    },
+    "D5_priority_ordering": {
+      "high_before_normal": true,
+      "normal_before_low": true,
+      "fifo_within_tiers": true,
+      "dequeue_order_sample": [
+        "demo-a25eea5b-high-00",
+        "demo-a25eea5b-high-01",
+        "demo-a25eea5b-high-02",
+        "demo-a25eea5b-high-03",
+        "demo-a25eea5b-high-04",
+        "demo-a25eea5b-high-05"
+      ]
+    },
+    "D6_broker_outage_recovery": {
+      "outage_duration_seconds": 3.11,
+      "tasks_completed_success": 10,
+      "durable_event_loss": 0,
+      "threads_survived_without_restart": true
+    },
+    "D7_stale_lease_fencing": {
+      "stale_commit_rejected": true,
+      "authoritative_winner": "Worker B",
+      "state_corrupted": false
+    },
+    "D8_terminal_duplicate_suppression": {
+      "duplicate_message_acked": true,
+      "authoritative_result_preserved": true
+    },
+    "D9_identity_reconciliation": {
+      "total_demo_tasks": 41,
+      "set_equality_tasks": true,
+      "set_equality_results": true,
+      "set_equality_events": true,
+      "durable_outbox_event_loss": 0
+    },
+    "D10_terminal_completion": {
+      "success_count": 41,
+      "failed_count": 0,
+      "pending_count": 0,
+      "completion_percentage": 100.0
+    },
+    "D11_safe_teardown": true
+  },
+  "exit_code": 0,
+  "status": "SUCCESS"
+}
