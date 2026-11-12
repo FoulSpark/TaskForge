@@ -43,27 +43,29 @@ class DefinitionPolicyError(DefinitionServiceError):
     """Raised when execution_type or payload violates security/policy constraints."""
 
 
-def _scan_for_prohibited_secrets(value: Any, path: str = "") -> None:
-    """Reject raw credentials or API key strings inside ordinary definition JSON."""
+def _scan_for_prohibited_secrets(
+    value: Any, path: str = "", *, check_keys: bool = True
+) -> None:
+    """Reject raw credentials or API key strings inside definition JSON, schemas, or reports."""
     if isinstance(value, str):
-        if value.strip().startswith("tf_live_"):
+        if "tf_live_" in value:
             raise DefinitionPolicyError(
                 f"Prohibited TaskForge API key secret detected at '{path or 'root'}'."
             )
         return
     if isinstance(value, list):
         for idx, item in enumerate(value):
-            _scan_for_prohibited_secrets(item, f"{path}[{idx}]")
+            _scan_for_prohibited_secrets(item, f"{path}[{idx}]", check_keys=check_keys)
         return
     if isinstance(value, dict):
         for key, item in value.items():
             key_str = str(key)
             next_path = f"{path}.{key_str}" if path else key_str
-            if SENSITIVE_CONFIG_KEY_RE.search(key_str) and item not in (None, ""):
+            if check_keys and SENSITIVE_CONFIG_KEY_RE.search(key_str) and item not in (None, ""):
                 raise DefinitionPolicyError(
                     f"Prohibited credential-like configuration field '{next_path}'."
                 )
-            _scan_for_prohibited_secrets(item, next_path)
+            _scan_for_prohibited_secrets(item, next_path, check_keys=check_keys)
 
 
 class DefinitionService:
@@ -81,6 +83,8 @@ class DefinitionService:
         execution_type: str,
         configuration_json: dict[str, Any],
         execution_policy_json: dict[str, Any],
+        input_schema_json: dict[str, Any] | None = None,
+        output_schema_json: dict[str, Any] | None = None,
     ) -> None:
         if name is not None:
             stripped = name.strip()
@@ -88,17 +92,26 @@ class DefinitionService:
                 raise DefinitionValidationError(
                     "Definition name must be between 1 and 160 characters."
                 )
-        if description is not None and len(description) > 4000:
-            raise DefinitionValidationError(
-                "Definition description must not exceed 4000 characters."
-            )
+        if description is not None:
+            if len(description) > 4000:
+                raise DefinitionValidationError(
+                    "Definition description must not exceed 4000 characters."
+                )
+            if "tf_live_" in description:
+                raise DefinitionPolicyError(
+                    "Prohibited TaskForge API key secret detected in definition description."
+                )
         if execution_type not in SUPPORTED_EXECUTION_TYPES:
             raise DefinitionPolicyError(
                 f"Unsupported execution_type '{execution_type}'. "
                 f"Supported in Phase 11: {sorted(SUPPORTED_EXECUTION_TYPES)}."
             )
-        _scan_for_prohibited_secrets(configuration_json, "configuration_json")
-        _scan_for_prohibited_secrets(execution_policy_json, "execution_policy_json")
+        _scan_for_prohibited_secrets(configuration_json, "configuration_json", check_keys=True)
+        _scan_for_prohibited_secrets(execution_policy_json, "execution_policy_json", check_keys=True)
+        if input_schema_json:
+            _scan_for_prohibited_secrets(input_schema_json, "input_schema_json", check_keys=False)
+        if output_schema_json:
+            _scan_for_prohibited_secrets(output_schema_json, "output_schema_json", check_keys=False)
 
     def create_definition(
         self,
@@ -120,6 +133,8 @@ class DefinitionService:
             execution_type=execution_type,
             configuration_json=configuration_json,
             execution_policy_json=policy,
+            input_schema_json=input_schema_json,
+            output_schema_json=output_schema_json,
         )
         try:
             content_hash = compute_definition_content_hash(
@@ -239,6 +254,8 @@ class DefinitionService:
             execution_type=execution_type,
             configuration_json=configuration_json,
             execution_policy_json=policy,
+            input_schema_json=input_schema_json,
+            output_schema_json=output_schema_json,
         )
         try:
             content_hash = compute_definition_content_hash(
@@ -336,6 +353,7 @@ class DefinitionService:
         report: dict[str, Any],
     ) -> TaskDefinitionVersion:
         """Persist version validation status & report alongside VERSION_VALIDATED audit event."""
+        _scan_for_prohibited_secrets(report, "validation_report_json", check_keys=False)
         try:
             ver = self.repo.get_version(
                 definition_id, version_number, principal.tenant_id

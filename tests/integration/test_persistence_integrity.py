@@ -35,6 +35,14 @@ def test_idempotency_key_returns_existing_task(db_session):
     count = db_session.scalar(select(func.count(Task.id)).where(Task.idempotency_key == idemp_key))
     assert count == 1
 
+    # Cleanup test task to prevent leaving an unmanaged PENDING outbox record
+    from sqlalchemy import text
+
+    db_session.execute(text("DELETE FROM outbox_events WHERE aggregate_id = :id"), {"id": first.id})
+    db_session.execute(text("DELETE FROM task_events WHERE task_id = :id"), {"id": first.id})
+    db_session.execute(text("DELETE FROM tasks WHERE id = :id"), {"id": first.id})
+    db_session.commit()
+
 
 def test_task_creation_atomic_rollback(db_session, monkeypatch):
     """

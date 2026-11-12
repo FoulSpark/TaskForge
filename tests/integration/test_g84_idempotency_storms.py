@@ -471,6 +471,14 @@ def test_idempotency_conflict_rejection_on_scheduled_at(client: TestClient):
     assert res_conflict.status_code == 409
     assert res_conflict.json()["error"]["code"] == "IDEMPOTENCY_CONFLICT"
 
+    # Cleanup: publish pending outbox event so it is not permanently stranded in PENDING
+    from unittest.mock import MagicMock
+    from taskforge.queue.outbox import publish_pending_outbox_events
+
+    with SessionLocal() as db:
+        mock_b = MagicMock()
+        publish_pending_outbox_events(db, mock_b, event_id=outbox.id)
+
 
 def test_scheduled_at_outbox_propagation_and_delayed_dispatch():
     """Verify that tasks scheduled in the future remain in PENDING status in the outbox

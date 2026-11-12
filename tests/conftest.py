@@ -21,6 +21,19 @@ def verify_test_database_isolation():
     )
 
 
+@pytest.fixture(scope="session", autouse=True)
+def purge_stale_outbox_on_session_start():
+    """Ensure uncleaned PENDING outbox events from historical aborted test runs do not leak into audit tests."""
+    from sqlalchemy import text
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("DELETE FROM outbox_events WHERE status = 'PENDING'"))
+            db.commit()
+    except Exception:
+        pass
+
+
 @pytest.fixture
 def db_session():
     """Provides a database session for tests, closing it upon test teardown."""

@@ -254,6 +254,114 @@ class TestCreateDefinitionPolicyGuards:
             )
 
 
+class TestSecretScanningEdgeCases:
+    def test_nested_dictionary_credential_rejected(self, db):
+        svc = _make_service(db)
+        with pytest.raises(DefinitionPolicyError, match="credential-like"):
+            svc.create_definition(
+                principal=PRINCIPAL_A,
+                name="Nested Password",
+                description=None,
+                execution_type="builtin",
+                task_type="noop",
+                configuration_json={"level1": {"level2": {"password": "topsecret"}}},
+                input_schema_json={"type": "object"},
+            )
+
+    def test_case_variations_sensitive_keys_rejected(self, db):
+        svc = _make_service(db)
+        variations = ["API_KEY", "Api_Key", "SECRET", "Private_Key", "ACCESS_TOKEN", "Bearer_Token", "AUTHORIZATION"]
+        for key in variations:
+            with pytest.raises(DefinitionPolicyError, match="credential-like"):
+                svc.create_definition(
+                    principal=PRINCIPAL_A,
+                    name=f"Case {key}",
+                    description=None,
+                    execution_type="builtin",
+                    task_type="noop",
+                    configuration_json={key: "some_secret_val"},
+                    input_schema_json={"type": "object"},
+                )
+
+    def test_lists_containing_nested_credential_objects_rejected(self, db):
+        svc = _make_service(db)
+        with pytest.raises(DefinitionPolicyError, match="credential-like"):
+            svc.create_definition(
+                principal=PRINCIPAL_A,
+                name="List Credential",
+                description=None,
+                execution_type="builtin",
+                task_type="noop",
+                configuration_json={"endpoints": [{"name": "primary"}, {"api_key": "val"}]},
+                input_schema_json={"type": "object"},
+            )
+
+    def test_token_strings_embedded_inside_larger_strings_rejected(self, db):
+        svc = _make_service(db)
+        embedded_cases = [
+            "Bearer tf_live_012345678901_secrettokenstring12345",
+            "https://api.internal/v1?token=tf_live_abcdef1234567890",
+            "prefix-tf_live_suffix",
+        ]
+        for token_str in embedded_cases:
+            with pytest.raises(DefinitionPolicyError, match="API key secret"):
+                svc.create_definition(
+                    principal=PRINCIPAL_A,
+                    name=f"Embedded {uuid.uuid4().hex[:6]}",
+                    description=None,
+                    execution_type="builtin",
+                    task_type="noop",
+                    configuration_json={"url_or_auth": token_str},
+                    input_schema_json={"type": "object"},
+                )
+
+    def test_definition_description_with_tf_live_secret_rejected(self, db):
+        svc = _make_service(db)
+        with pytest.raises(DefinitionPolicyError, match="API key secret detected in definition description"):
+            svc.create_definition(
+                principal=PRINCIPAL_A,
+                name="Secret in Desc",
+                description="This definition uses key tf_live_leakedsecret12345678",
+                execution_type="builtin",
+                task_type="noop",
+                configuration_json={},
+                input_schema_json={"type": "object"},
+            )
+
+    def test_schema_description_with_tf_live_secret_rejected(self, db):
+        svc = _make_service(db)
+        with pytest.raises(DefinitionPolicyError, match="API key secret"):
+            svc.create_definition(
+                principal=PRINCIPAL_A,
+                name="Secret in Schema Desc",
+                description=None,
+                execution_type="builtin",
+                task_type="noop",
+                configuration_json={},
+                input_schema_json={
+                    "type": "object",
+                    "properties": {
+                        "param": {
+                            "type": "string",
+                            "description": "Auth with tf_live_leaked_schema_key",
+                        }
+                    },
+                },
+            )
+
+    def test_validation_report_with_tf_live_secret_rejected(self, db):
+        svc = _make_service(db)
+        defn, _ = _create_simple_definition(svc, name="Report Secret Test")
+        with pytest.raises(DefinitionPolicyError, match="API key secret"):
+            svc.record_validation_result(
+                principal=PRINCIPAL_A,
+                definition_id=defn.id,
+                version_number=1,
+                is_valid=False,
+                report={"error": "Schema rejected key tf_live_embedded_in_error"},
+            )
+
+
 # ---------------------------------------------------------------------------
 # Content hashing
 # ---------------------------------------------------------------------------
