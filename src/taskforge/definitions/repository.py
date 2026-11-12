@@ -57,12 +57,14 @@ class DefinitionRepository:
         return definition
 
     def get_definition(
-        self, definition_id: str, tenant_id: str
+        self, definition_id: str, tenant_id: str, *, for_update: bool = False
     ) -> TaskDefinition | None:
         stmt = select(TaskDefinition).where(
             TaskDefinition.id == definition_id,
             TaskDefinition.tenant_id == tenant_id,
         )
+        if for_update:
+            stmt = stmt.with_for_update()
         return self.db.scalars(stmt).first()
 
     def list_definitions(
@@ -152,6 +154,24 @@ class DefinitionRepository:
         raise ImmutableVersionError(
             "TaskDefinitionVersion records are immutable; create a new version instead."
         )
+
+    def set_version_validation(
+        self,
+        *,
+        version: TaskDefinitionVersion,
+        validation_status: str,
+        validation_report_json: dict[str, Any],
+        commit: bool = True,
+    ) -> TaskDefinitionVersion:
+        """Update only validation status/report without touching executable content."""
+        version.validation_status = validation_status
+        version.validation_report_json = validation_report_json
+        if commit:
+            self.db.commit()
+            self.db.refresh(version)
+        else:
+            self.db.flush()
+        return version
 
     def get_next_version_number(self, definition_id: str) -> int:
         max_ver = self.db.scalar(
