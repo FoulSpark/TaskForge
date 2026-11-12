@@ -38,10 +38,13 @@ from taskforge.definitions.validation import (
     ERR_SCHEMA_DEPTH_EXCEEDED,
     ERR_SCHEMA_SIZE_EXCEEDED,
     ERR_UNKNOWN_TASK_TYPE,
+    ERR_UNRESOLVED_REFERENCE,
     ERR_UNSUPPORTED_EXECUTION_TYPE,
     ERR_UNSUPPORTED_SCHEMA_DRAFT,
     MAX_VALIDATION_ERRORS,
+    compile_schema,
     validate_definition_version,
+    validate_schema_instance,
 )
 
 # ---------------------------------------------------------------------------
@@ -108,7 +111,10 @@ class TestValidSchemas:
             task_type="compute_prime",
             execution_type="builtin",
             configuration_json={},
-            input_schema_json={"type": "object", "properties": {"n": {"type": "integer"}, "ratio": {"type": "number"}}},
+            input_schema_json={
+                "type": "object",
+                "properties": {"n": {"type": "integer"}, "ratio": {"type": "number"}},
+            },
         )
         assert res.is_valid is True
 
@@ -117,7 +123,10 @@ class TestValidSchemas:
             task_type="json_transform",
             execution_type="builtin",
             configuration_json={},
-            input_schema_json={"type": "object", "properties": {"records": {"type": "array", "items": {"type": "integer"}}}},
+            input_schema_json={
+                "type": "object",
+                "properties": {"records": {"type": "array", "items": {"type": "integer"}}},
+            },
         )
         assert res.is_valid is True
 
@@ -380,9 +389,7 @@ class TestLocalRefResolution:
     def test_nested_local_pointer_traversal(self):
         schema = {
             "entities": {
-                "geo": {
-                    "location": {"type": "object", "properties": {"lat": {"type": "number"}}}
-                }
+                "geo": {"location": {"type": "object", "properties": {"lat": {"type": "number"}}}}
             },
             "type": "object",
             "properties": {"origin": {"$ref": "#/entities/geo/location"}},
@@ -497,7 +504,10 @@ class TestRemoteRefRejection:
 class TestResourceLimits:
     def test_schema_size_within_limit_passes(self):
         # 1 KB schema
-        schema = {"type": "object", "properties": {f"field_{i}": {"type": "string"} for i in range(20)}}
+        schema = {
+            "type": "object",
+            "properties": {f"field_{i}": {"type": "string"} for i in range(20)},
+        }
         res = validate_definition_version(
             task_type="noop",
             execution_type="builtin",
@@ -508,7 +518,10 @@ class TestResourceLimits:
 
     def test_schema_size_exceeding_64kb_fails(self):
         # Generate schema exceeding MAX_SCHEMA_SIZE_BYTES (65,536 bytes)
-        large_dict = {f"huge_field_name_padding_{i}": {"type": "string", "description": "x" * 200} for i in range(400)}
+        large_dict = {
+            f"huge_field_name_padding_{i}": {"type": "string", "description": "x" * 200}
+            for i in range(400)
+        }
         schema = {"type": "object", "properties": large_dict}
         res = validate_definition_version(
             task_type="noop",
@@ -567,7 +580,7 @@ class TestResourceLimits:
 
     def test_reference_traversal_exceeding_max_hops_fails(self):
         # Chain of 12 hops (limit is 10)
-        defs = {f"node_{i}": {"$ref": f"#/$defs/node_{i+1}"} for i in range(12)}
+        defs = {f"node_{i}": {"$ref": f"#/$defs/node_{i + 1}"} for i in range(12)}
         defs["node_12"] = {"type": "string"}
         schema = {"$defs": defs, "$ref": "#/$defs/node_0"}
         res = validate_definition_version(
@@ -912,7 +925,10 @@ class TestFailureAndSecurityHandling:
 
     def test_unexpected_validator_exception_produces_invalid(self):
         # Simulate unexpected internal failure inside Draft202012Validator
-        with patch("taskforge.definitions.validation.Draft202012Validator.check_schema", side_effect=RuntimeError("injected_crash")):
+        with patch(
+            "taskforge.definitions.validation.Draft202012Validator.check_schema",
+            side_effect=RuntimeError("injected_crash"),
+        ):
             res = validate_definition_version(
                 task_type="noop",
                 execution_type="builtin",
@@ -923,7 +939,10 @@ class TestFailureAndSecurityHandling:
             assert res.status == "INVALID"
 
     def test_internal_exception_error_code_is_internal_validator_error(self):
-        with patch("taskforge.definitions.validation.Draft202012Validator.check_schema", side_effect=ZeroDivisionError("unexpected")):
+        with patch(
+            "taskforge.definitions.validation.Draft202012Validator.check_schema",
+            side_effect=ZeroDivisionError("unexpected"),
+        ):
             res = validate_definition_version(
                 task_type="noop",
                 execution_type="builtin",
@@ -1000,3 +1019,533 @@ class TestFailureAndSecurityHandling:
         )
         assert activated_defn.status == "ACTIVE"
         assert activated_defn.active_version_id is not None
+
+
+# ===========================================================================
+# Category 10: Recursive Schema Semantics (G11.3-R1)
+# ===========================================================================
+class TestRecursiveSchemaSemantics:
+    """Verifies Draft 2020-12 recursive schema semantics, distinguishing valid
+    recursion from malformed cycles, unresolvable pointers, and resource exhaustion.
+    """
+
+    def test_valid_recursive_tree_schema_accepted(self):
+        """Tree nodes referencing their own schema definition via $defs are valid Draft 2020-12."""
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "treeNode": {
+                    "type": "object",
+                    "required": ["val"],
+                    "properties": {
+                        "val": {"type": "integer"},
+                        "children": {
+                            "type": "array",
+                            "items": {"$ref": "#/$defs/treeNode"},
+                        },
+                    },
+                }
+            },
+            "$ref": "#/$defs/treeNode",
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is True
+        assert res.status == "VALID"
+        assert len(res.errors) == 0
+
+    def test_valid_mutually_recursive_schemas_accepted(self):
+        """Mutually recursive schemas (nodeA -> nodeB -> nodeA) are valid when property-bounded."""
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "nodeA": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "next_b": {"$ref": "#/$defs/nodeB"},
+                    },
+                },
+                "nodeB": {
+                    "type": "object",
+                    "properties": {
+                        "weight": {"type": "number"},
+                        "next_a": {"$ref": "#/$defs/nodeA"},
+                    },
+                },
+            },
+            "$ref": "#/$defs/nodeA",
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is True
+        assert res.status == "VALID"
+
+    def test_valid_dynamic_ref_recursion_accepted(self):
+        """Recursive schemas using $dynamicRef and $dynamicAnchor are valid in Draft 2020-12."""
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "node": {
+                    "$dynamicAnchor": "treeItem",
+                    "type": "object",
+                    "properties": {
+                        "data": {"type": "string"},
+                        "sub": {"$dynamicRef": "#treeItem"},
+                    },
+                }
+            },
+            "$dynamicRef": "#treeItem",
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is True
+        assert res.status == "VALID"
+
+    def test_schema_compilation_distinguished_from_instance_validation(self):
+        """G11.3 establishes schema contract validity without executing task handlers."""
+        schema = {
+            "type": "object",
+            "properties": {"count": {"type": "integer"}},
+        }
+        # Compiling schema does not call any handlers
+        validator = compile_schema(schema)
+        assert validator is not None
+        # Instance validation confirms the schema contract against valid and invalid payloads
+        assert validate_schema_instance(schema, {"count": 42}) == []
+        errs = validate_schema_instance(schema, {"count": "not_an_int"})
+        assert len(errs) > 0
+        assert any("count" in e for e in errs)
+
+    def test_legitimate_recursive_instance_structures_accepted(self):
+        """Legitimate deeply nested recursive instances are accepted by the compiled schema."""
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "node": {
+                    "type": "object",
+                    "required": ["val"],
+                    "properties": {
+                        "val": {"type": "integer"},
+                        "left": {"$ref": "#/$defs/node"},
+                        "right": {"$ref": "#/$defs/node"},
+                    },
+                }
+            },
+            "$ref": "#/$defs/node",
+        }
+        errs = validate_schema_instance(schema, {"val": 1, "left": {"val": 2, "left": {"val": 3}}})
+        assert errs == []
+
+    def test_invalid_recursive_instance_data_rejected_with_precise_path(self):
+        """An invalid data field at a deep recursive level is reported at its exact JSON path."""
+        schema = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$defs": {
+                "node": {
+                    "type": "object",
+                    "required": ["val"],
+                    "properties": {
+                        "val": {"type": "integer"},
+                        "child": {"$ref": "#/$defs/node"},
+                    },
+                }
+            },
+            "$ref": "#/$defs/node",
+        }
+        bad_instance = {
+            "val": 1,
+            "child": {
+                "val": 2,
+                "child": {
+                    "val": "invalid_string_not_int",
+                },
+            },
+        }
+        errs = validate_schema_instance(schema, bad_instance)
+        assert len(errs) > 0
+        assert any("val" in e for e in errs)
+
+    def test_malformed_pure_alias_loop_rejected_as_circular(self):
+        """A pure reference loop with no structural definitions is rejected as circular."""
+        schema = {
+            "$defs": {
+                "a": {"$ref": "#/$defs/b"},
+                "b": {"$ref": "#/$defs/a"},
+            },
+            "$ref": "#/$defs/a",
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_CIRCULAR_REFERENCE_DETECTED for e in res.errors)
+
+    def test_unresolvable_pointer_rejected_not_cycle(self):
+        """Unresolvable pointers produce ERR_UNRESOLVED_REFERENCE, not circular error."""
+        schema = {"$ref": "#/$defs/nonexistent_schema"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_UNRESOLVED_REFERENCE for e in res.errors)
+        assert not any(e.code == ERR_CIRCULAR_REFERENCE_DETECTED for e in res.errors)
+
+    def test_unresolvable_anchor_rejected(self):
+        """Unresolvable anchor references produce ERR_UNRESOLVED_REFERENCE."""
+        schema = {"$dynamicRef": "#missingAnchor"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_UNRESOLVED_REFERENCE for e in res.errors)
+
+
+# ===========================================================================
+# Category 11: Reference Security Boundaries (G11.3-R2)
+# ===========================================================================
+class TestReferenceSecurityBoundaries:
+    """Verifies local-only reference security against encoded URIs, scheme variations,
+    remote $id injection, nested references, and restricted resolver boundaries.
+    """
+
+    def test_uri_encoded_external_scheme_rejected(self):
+        """URI-encoded scheme %68%74%74%70%3a//evil.com is strictly rejected."""
+        schema = {"$ref": "%68%74%74%70%3a//evil.com/schema.json"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_uri_encoded_file_scheme_rejected(self):
+        """URI-encoded file scheme %66%69%6c%65%3a///etc/passwd is strictly rejected."""
+        schema = {"$ref": "%66%69%6c%65%3a///etc/passwd"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_double_encoded_remote_scheme_rejected(self):
+        """Double-encoded remote scheme is detected through recursive unquoting."""
+        schema = {"$ref": "%2568%2574%2574%2570%253a//evil.com"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_uppercase_scheme_variation_rejected(self):
+        """Case variations like HTTP:// and FILE:/// are strictly rejected."""
+        schema = {"$ref": "HTTP://example.com/schema.json"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_protocol_relative_reference_rejected(self):
+        """Protocol-relative URIs like //evil.com/schema.json are strictly rejected."""
+        schema = {"$ref": "//evil.com/schema.json"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_whitespace_padded_remote_reference_rejected(self):
+        """Whitespace-padded remote references are rejected."""
+        schema = {"$ref": "  https://evil.com/schema.json  "}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_fragment_smuggled_remote_scheme_rejected(self):
+        """Fragment smuggling like #http://evil.com is strictly rejected."""
+        schema = {"$ref": "#http://evil.com/schema"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_remote_id_at_root_rejected(self):
+        """Root $id pointing to remote URL is strictly rejected to protect base URI."""
+        schema = {
+            "$id": "https://evil.com/schemas/base.json",
+            "type": "object",
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_remote_id_in_subschema_rejected(self):
+        """Subschema $id pointing to external location is strictly rejected."""
+        schema = {
+            "$defs": {
+                "sub": {
+                    "$id": "http://evil.com/sub.json",
+                    "type": "string",
+                }
+            },
+            "type": "object",
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_uri_encoded_remote_id_rejected(self):
+        """URI-encoded remote $id is rejected."""
+        schema = {
+            "$id": "%68%74%74%70%3a//evil.com/base.json",
+            "type": "object",
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_nested_remote_ref_in_combinators_rejected(self):
+        """Remote reference deeply nested inside anyOf and properties is caught."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "anyOf": [
+                        {"type": "string"},
+                        {"$ref": "https://attacker.org/remote.json"},
+                    ]
+                }
+            },
+        }
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_remote_dynamic_ref_rejected(self):
+        """Remote URI in $dynamicRef is strictly rejected."""
+        schema = {"$dynamicRef": "https://evil.com/dynamic"}
+        res = validate_definition_version(
+            task_type="noop",
+            execution_type="builtin",
+            configuration_json={},
+            input_schema_json=schema,
+        )
+        assert res.is_valid is False
+        assert any(e.code == ERR_REMOTE_REFERENCE_PROHIBITED for e in res.errors)
+
+    def test_restricted_resolver_prevents_network_fallback(self):
+        """The restricted resolver strictly prevents network access and raises Unretrievable/Unresolvable."""
+        from referencing.exceptions import Unretrievable
+
+        from taskforge.definitions.validation import get_restricted_registry
+
+        # Directly verifying registry retrieval raises Unretrievable wrapping the prohibition
+        with pytest.raises(Unretrievable) as exc_info:
+            get_restricted_registry().get_or_retrieve("https://example.com/unreachable.json")
+        assert "Remote schema resolution prohibited" in str(exc_info.value.__cause__)
+
+        # Verifying validator using restricted registry blocks remote resolution
+        with pytest.raises(Exception) as val_exc:
+            validator = compile_schema({"$ref": "https://example.com/unreachable.json"})
+            validator.validate({})
+        assert "Unresolvable" in type(val_exc.value).__name__ or "Unresolvable" in str(
+            val_exc.value
+        )
+
+
+# ===========================================================================
+# Category 12: Exception Sanitization (G11.3-R3)
+# ===========================================================================
+class TestExceptionSanitization:
+    """Verifies that internal validator exceptions, stack traces, and credentials
+    are sanitized and never exposed in persisted reports.
+    """
+
+    def test_no_raw_exception_string_in_report(self):
+        """Unexpected internal exceptions produce sanitized diagnostic message."""
+        with patch(
+            "taskforge.definitions.validation.Draft202012Validator.check_schema",
+            side_effect=RuntimeError("injected_secret_token_deadbeef"),
+        ):
+            res = validate_definition_version(
+                task_type="noop",
+                execution_type="builtin",
+                configuration_json={},
+                input_schema_json={"type": "object"},
+            )
+            assert res.is_valid is False
+            err = next(e for e in res.errors if e.code == ERR_INTERNAL_VALIDATOR_ERROR)
+            assert "injected_secret_token_deadbeef" not in err.message
+            assert "RuntimeError" not in err.message
+            assert "Traceback" not in err.message
+            assert err.message == (
+                "An internal validator error occurred during schema validation. "
+                "Diagnostic details have been securely logged."
+            )
+
+    def test_no_credentials_leaked_in_internal_error(self):
+        """Exception containing database connection string with password is fully sanitized."""
+        with patch(
+            "taskforge.definitions.validation.Draft202012Validator.check_schema",
+            side_effect=RuntimeError(
+                "Connection failed to postgresql://user:super_secret_pw@db:5432/tf"
+            ),
+        ):
+            res = validate_definition_version(
+                task_type="noop",
+                execution_type="builtin",
+                configuration_json={},
+                input_schema_json={"type": "object"},
+            )
+            report_str = str(res.to_dict())
+            assert "super_secret_pw" not in report_str
+            assert "postgresql://" not in report_str
+
+    def test_internal_exception_logged_to_protected_log(self):
+        """Detailed exception with exc_info=True is logged to secure application logs."""
+        with patch("taskforge.definitions.validation.logger.error") as mock_log:
+            with patch(
+                "taskforge.definitions.validation.Draft202012Validator.check_schema",
+                side_effect=ValueError("hidden_internal_state"),
+            ):
+                validate_definition_version(
+                    task_type="noop",
+                    execution_type="builtin",
+                    configuration_json={},
+                    input_schema_json={"type": "object"},
+                )
+                mock_log.assert_called_once()
+                call_kwargs = mock_log.call_args[1]
+                assert call_kwargs.get("exc_info") is True
+
+
+# ===========================================================================
+# Category 13: Live TaskRegistry Compatibility (G11.3-R4)
+# ===========================================================================
+class TestLiveRegistryCompatibility:
+    """Verifies that task compatibility validation checks against the live TaskRegistry
+    and enforces callable execution contracts.
+    """
+
+    def test_all_17_live_registered_handlers_pass_compatibility(self):
+        """Every single one of the 17 live registered handlers validates successfully."""
+        from taskforge.tasks.registry import list_registered_handlers
+
+        handlers = list_registered_handlers()
+        assert len(handlers) == 17
+
+        for handler_name in handlers:
+            res = validate_definition_version(
+                task_type=handler_name,
+                execution_type="builtin",
+                configuration_json={},
+                input_schema_json={"type": "object"},
+            )
+            assert res.is_valid is True, f"Handler '{handler_name}' failed validation: {res.errors}"
+            assert res.summary["execution_binding"] == "PASSED"
+
+    def test_dynamically_registered_handler_passes_immediately(self):
+        """A new handler dynamically registered in TaskRegistry is immediately recognized."""
+        from taskforge.tasks.registry import _HANDLERS, register_handler
+
+        custom_name = "dynamic_reconciliation_handler"
+        try:
+
+            @register_handler(custom_name)
+            def custom_fn(payload):
+                return {"result": "ok"}
+
+            res = validate_definition_version(
+                task_type=custom_name,
+                execution_type="builtin",
+                configuration_json={},
+                input_schema_json={"type": "object"},
+            )
+            assert res.is_valid is True
+            assert res.summary["execution_binding"] == "PASSED"
+        finally:
+            _HANDLERS.pop(custom_name, None)
+
+    def test_uncallable_handler_object_rejected(self):
+        """A handler entry in the registry that is not callable violates the execution contract."""
+        from taskforge.tasks.registry import _HANDLERS
+
+        broken_name = "not_a_callable_task"
+        try:
+            _HANDLERS[broken_name] = "string_is_not_callable"  # type: ignore
+
+            res = validate_definition_version(
+                task_type=broken_name,
+                execution_type="builtin",
+                configuration_json={},
+                input_schema_json={"type": "object"},
+            )
+            assert res.is_valid is False
+            assert any(e.code == ERR_UNSUPPORTED_EXECUTION_TYPE for e in res.errors)
+        finally:
+            _HANDLERS.pop(broken_name, None)

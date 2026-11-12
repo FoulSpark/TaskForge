@@ -2,24 +2,31 @@
 
 Pure functional validation decoupled from database persistence:
 - Validates input and output schemas against JSON Schema Draft 2020-12.
-- Local-only $ref resolution; strictly rejects remote URIs and external protocols.
+- Local-only reference resolution with explicitly restricted registry (strictly rejects remote URIs,
+  URI-encoded external schemes, protocol smuggling, and network fallback).
 - Resource bounded: schema byte size, nesting depth, reference traversal depth.
-- Detects circular reference loops and unbounded traversals.
-- Validates TaskRegistry handler compatibility for builtin execution types.
-- Deterministic error reporting with standard codes, JSON paths, and error limits.
+- Distinguishes valid recursive schemas (e.g. self-referencing tree nodes) from malformed reference cycles.
+- Validates TaskRegistry handler compatibility for builtin execution types against the live registry.
+- Deterministic error reporting with sanitized diagnostics and capped error collections.
 """
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
+from referencing import Registry, Resource
+from referencing.exceptions import Unresolvable
 
 import taskforge.tasks.handlers  # noqa: F401 - ensure built-in handlers are registered
-from taskforge.tasks.registry import list_registered_handlers
+from taskforge.core.logging import get_logger
+from taskforge.tasks.registry import get_handler, list_registered_handlers
+
+logger = get_logger(__name__)
 
 # Resource and complexity limits
 MAX_SCHEMA_SIZE_BYTES: int = 65_536  # 64 KB
@@ -51,6 +58,50 @@ ERR_UNKNOWN_TASK_TYPE = "UNKNOWN_TASK_TYPE"
 ERR_UNSUPPORTED_EXECUTION_TYPE = "UNSUPPORTED_EXECUTION_TYPE"
 ERR_PROHIBITED_SECRET_DETECTED = "PROHIBITED_SECRET_DETECTED"
 ERR_INTERNAL_VALIDATOR_ERROR = "INTERNAL_VALIDATOR_ERROR"
+
+# Forbidden scheme patterns for remote/external reference detection
+FORBIDDEN_SCHEME_PATTERN = re.compile(
+    r"^(https?|file|ftp|ftps|gopher|ws|wss|tftp|ldap|data|blob|javascript|about|urn|custom|jar|view-source):",
+    re.IGNORECASE,
+)
+
+# Structural keywords that indicate a concrete schema definition rather than a pure reference alias
+STRUCTURAL_SCHEMA_KEYWORDS: frozenset[str] = frozenset(
+    {
+        "type",
+        "properties",
+        "patternProperties",
+        "additionalProperties",
+        "items",
+        "prefixItems",
+        "contains",
+        "allOf",
+        "anyOf",
+        "oneOf",
+        "not",
+        "if",
+        "then",
+        "else",
+        "enum",
+        "const",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "minProperties",
+        "maxProperties",
+        "required",
+        "dependentRequired",
+        "dependentSchemas",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -91,23 +142,160 @@ class DefinitionValidationResult:
         }
 
 
+def _sanitize_message(message: str) -> str:
+    """Sanitize diagnostic messages to redact secrets and credentials."""
+    if not message:
+        return message
+    # Redact TaskForge API key tokens
+    message = re.sub(r"tf_live_[a-zA-Z0-9_]+", "[REDACTED_API_KEY]", message)
+    # Redact credentials embedded in URIs (e.g., user:pass@host)
+    message = re.sub(r"://[^@\s]+@", "://[REDACTED_CREDENTIALS]@", message)
+    return message
+
+
+def _restricted_retrieve(uri: str) -> Resource:
+    """Strictly forbid any remote or external schema network resolution."""
+    raise Unresolvable(
+        f"Remote schema resolution prohibited for URI: '{uri}'. "
+        "TaskForge definition schemas require self-contained local references."
+    )
+
+
+def get_restricted_registry() -> Registry:
+    """Create a referencing.Registry that forbids remote network retrieval."""
+    return Registry(retrieve=_restricted_retrieve)
+
+
+def compile_schema(schema: dict[str, Any] | bool) -> Draft202012Validator:
+    """Compile a Draft 2020-12 schema using a strictly local resolver with no network-capable fallback.
+
+    This separates schema compilation from instance validation and task execution.
+    """
+    return Draft202012Validator(schema, registry=get_restricted_registry())
+
+
+def validate_schema_instance(schema: dict[str, Any] | bool, instance: Any) -> list[str]:
+    """Validate an instance payload against a compiled schema contract.
+
+    Does NOT execute task handlers. Returns list of error message strings (empty if valid).
+    """
+    validator = compile_schema(schema)
+    errors: list[str] = []
+    for err in validator.iter_errors(instance):
+        path = "$." + ".".join(str(p) for p in err.path) if err.path else "$"
+        errors.append(_sanitize_message(f"At {path}: {err.message}"))
+    return sorted(errors)
+
+
 def _measure_nesting_depth(value: Any, current_depth: int = 0) -> int:
     """Compute maximum structural nesting depth of a JSON-compatible tree."""
     if isinstance(value, dict):
         if not value:
             return current_depth + 1
-        return max(
-            _measure_nesting_depth(sub_val, current_depth + 1)
-            for sub_val in value.values()
-        )
+        return max(_measure_nesting_depth(sub_val, current_depth + 1) for sub_val in value.values())
     if isinstance(value, list):
         if not value:
             return current_depth + 1
-        return max(
-            _measure_nesting_depth(sub_item, current_depth + 1)
-            for sub_item in value
-        )
+        return max(_measure_nesting_depth(sub_item, current_depth + 1) for sub_item in value)
     return current_depth
+
+
+def _recursively_unquote(val: str, max_rounds: int = 5) -> str:
+    """Recursively decode URI-encoded characters to prevent multi-level encoding bypass."""
+    curr = val
+    for _ in range(max_rounds):
+        nxt = unquote(curr)
+        if nxt == curr:
+            break
+        curr = nxt
+    return curr
+
+
+def _check_remote_or_external_reference(ref_val: str) -> tuple[bool, str]:
+    """Inspect a reference string for remote protocols, encoded schemes, protocol-relative URIs, or non-local targets.
+
+    Returns (is_remote, reason).
+    """
+    if not isinstance(ref_val, str):
+        return True, f"Reference must be a string, got {type(ref_val).__name__}."
+
+    stripped = ref_val.strip()
+    if stripped != ref_val:
+        return True, "Reference contains leading or trailing whitespace."
+
+    if not stripped:
+        return True, "Reference cannot be empty."
+
+    unquoted = _recursively_unquote(stripped)
+
+    # Check protocol-relative: //evil.com
+    if stripped.startswith("//") or unquoted.startswith("//"):
+        return True, f"Protocol-relative remote reference '{ref_val}' is prohibited."
+
+    # Check scheme patterns in stripped and unquoted forms
+    if FORBIDDEN_SCHEME_PATTERN.search(stripped) or FORBIDDEN_SCHEME_PATTERN.search(unquoted):
+        return True, f"External scheme reference '{ref_val}' is prohibited."
+
+    # Parse scheme via urlparse
+    parsed_raw = urlparse(stripped)
+    parsed_unquoted = urlparse(unquoted)
+    if parsed_raw.scheme or parsed_unquoted.scheme:
+        return True, f"Scheme-qualified reference '{ref_val}' is prohibited."
+
+    # Must start with '#'
+    if not stripped.startswith("#"):
+        return (
+            True,
+            f"Remote reference '{ref_val}' is prohibited. Only local references starting with '#' are allowed.",
+        )
+
+    # If it starts with '#', inspect the fragment itself for smuggled schemes (e.g. #http://evil.com or #//evil.com)
+    fragment = stripped[1:]
+    fragment_unquoted = unquoted[1:] if unquoted.startswith("#") else unquoted
+    if fragment.startswith("//") or fragment_unquoted.startswith("//"):
+        return True, f"Smuggled protocol-relative URI in fragment '{ref_val}' is prohibited."
+    if FORBIDDEN_SCHEME_PATTERN.search(fragment) or FORBIDDEN_SCHEME_PATTERN.search(
+        fragment_unquoted
+    ):
+        return True, f"Smuggled external scheme in fragment '{ref_val}' is prohibited."
+
+    return False, ""
+
+
+def _check_remote_id(id_val: Any) -> tuple[bool, str]:
+    """Inspect an $id identifier to ensure it does not change the base URI to an external network location."""
+    if not isinstance(id_val, str):
+        return True, f"$id must be a string, got {type(id_val).__name__}."
+
+    stripped = id_val.strip()
+    if not stripped:
+        return True, "$id cannot be empty."
+
+    unquoted = _recursively_unquote(stripped)
+
+    if stripped.startswith("//") or unquoted.startswith("//"):
+        return True, f"Protocol-relative $id '{id_val}' is prohibited."
+
+    if FORBIDDEN_SCHEME_PATTERN.search(stripped) or FORBIDDEN_SCHEME_PATTERN.search(unquoted):
+        return (
+            True,
+            f"Remote $id '{id_val}' is prohibited. Schema identifiers must not change the base URI to an external resource.",
+        )
+
+    parsed_raw = urlparse(stripped)
+    parsed_unquoted = urlparse(unquoted)
+    if parsed_raw.scheme in ("http", "https", "file", "ftp") or parsed_unquoted.scheme in (
+        "http",
+        "https",
+        "file",
+        "ftp",
+    ):
+        return (
+            True,
+            f"Remote $id '{id_val}' is prohibited. Schema identifiers must not change the base URI to an external resource.",
+        )
+
+    return False, ""
 
 
 def _resolve_json_pointer(root: dict[str, Any], pointer: str) -> Any:
@@ -139,19 +327,57 @@ def _resolve_json_pointer(root: dict[str, Any], pointer: str) -> Any:
     return curr
 
 
+def _collect_anchors(schema: Any, anchors: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Collect all $anchor and $dynamicAnchor definitions in the schema document."""
+    if anchors is None:
+        anchors = {}
+    if isinstance(schema, dict):
+        if "$anchor" in schema and isinstance(schema["$anchor"], str):
+            anchors[schema["$anchor"]] = schema
+        if "$dynamicAnchor" in schema and isinstance(schema["$dynamicAnchor"], str):
+            anchors[schema["$dynamicAnchor"]] = schema
+        for val in schema.values():
+            if isinstance(val, (dict, list)):
+                _collect_anchors(val, anchors)
+    elif isinstance(schema, list):
+        for item in schema:
+            if isinstance(item, (dict, list)):
+                _collect_anchors(item, anchors)
+    return anchors
+
+
+def _resolve_local_reference(
+    root: dict[str, Any],
+    ref: str,
+    anchors: dict[str, Any],
+) -> Any:
+    """Resolve a local fragment reference (#, #/pointer, or #anchor) within the schema."""
+    if ref in ("#", "#/", ""):
+        return root
+    if ref.startswith("#/"):
+        return _resolve_json_pointer(root, ref)
+    if ref.startswith("#"):
+        anchor_name = ref[1:]
+        if anchor_name in anchors:
+            return anchors[anchor_name]
+        raise KeyError(f"Local anchor '{anchor_name}' not found in schema")
+    raise ValueError(f"Invalid local reference '{ref}'; must start with '#'")
+
+
 class _SchemaInspector:
-    """Validates structural constraints, remote references, circular loops, and Draft 2020-12 rules."""
+    """Validates structural constraints, remote references, circular alias loops, and Draft 2020-12 rules."""
 
     def __init__(self, target_name: str, errors: list[ValidationErrorDetail]):
         self.target_name = target_name
         self.errors = errors
+        self.anchors: dict[str, Any] = {}
 
     def _add_error(self, code: str, message: str, path: str) -> None:
         if len(self.errors) < MAX_VALIDATION_ERRORS:
             self.errors.append(
                 ValidationErrorDetail(
                     code=code,
-                    message=message,
+                    message=_sanitize_message(message),
                     path=path,
                     target=self.target_name,
                 )
@@ -181,8 +407,12 @@ class _SchemaInspector:
                     "$",
                 )
                 return
-        except (TypeError, ValueError) as exc:
-            self._add_error(ERR_INVALID_SCHEMA_SYNTAX, f"Failed to serialize schema: {exc}", "$")
+        except (TypeError, ValueError):
+            self._add_error(
+                ERR_INVALID_SCHEMA_SYNTAX,
+                "Schema cannot be serialized to valid JSON.",
+                "$",
+            )
             return
 
         # 2. Secret scanning in schema
@@ -224,54 +454,70 @@ class _SchemaInspector:
                 path_str,
             )
 
-        # 6. Reference analysis (remote rejection, traversal resolution, circular loop detection)
-        self._inspect_references(schema, schema, "$")
+        # 6. Index local anchors and dynamic anchors
+        self.anchors = _collect_anchors(schema)
 
-    def _inspect_references(
+        # 7. Walk AST: reference security, local resolution, cycle detection, and $id validation
+        self._inspect_node(schema, schema, "$")
+
+    def _inspect_node(
         self,
         current: Any,
         root_schema: dict[str, Any],
         path: str,
     ) -> None:
-        """Walk schema AST to verify local-only $ref resolution and detect cycles."""
+        """Walk schema AST to verify local-only resolution, reference security, and cycle safety."""
         if isinstance(current, dict):
+            # Check $id to prevent changing base URI to remote origins
+            if "$id" in current:
+                is_remote_id, reason_id = _check_remote_id(current["$id"])
+                if is_remote_id:
+                    self._add_error(
+                        ERR_REMOTE_REFERENCE_PROHIBITED,
+                        reason_id,
+                        f"{path}.$id",
+                    )
+
+            # Check $ref
             if "$ref" in current:
                 ref_val = current["$ref"]
-                ref_path = f"{path}.$ref"
-                self._validate_single_ref(ref_val, root_schema, ref_path)
+                self._validate_single_reference(ref_val, root_schema, f"{path}.$ref")
 
+            # Check $dynamicRef
+            if "$dynamicRef" in current:
+                dyn_val = current["$dynamicRef"]
+                self._validate_single_reference(dyn_val, root_schema, f"{path}.$dynamicRef")
+
+            # Recurse into all keys
             for key, val in current.items():
-                if key != "$ref":
-                    self._inspect_references(val, root_schema, f"{path}.{key}")
+                if key not in ("$ref", "$dynamicRef"):
+                    self._inspect_node(val, root_schema, f"{path}.{key}")
+
         elif isinstance(current, list):
             for idx, item in enumerate(current):
-                self._inspect_references(item, root_schema, f"{path}[{idx}]")
+                self._inspect_node(item, root_schema, f"{path}[{idx}]")
 
-    def _validate_single_ref(
+    def _validate_single_reference(
         self,
         ref_val: Any,
         root_schema: dict[str, Any],
         path: str,
     ) -> None:
+        """Validate reference security, local resolution, and distinguish cycles from valid recursion."""
         if not isinstance(ref_val, str):
             self._add_error(
                 ERR_INVALID_SCHEMA_SYNTAX,
-                f"$ref value must be a string, got {type(ref_val).__name__}.",
+                f"Reference value must be a string, got {type(ref_val).__name__}.",
                 path,
             )
             return
 
-        # Remote references: contain protocol schemes or do not start with '#'
-        parsed = urlparse(ref_val)
-        if parsed.scheme in ("http", "https", "file", "ftp", "urn", "custom") or not ref_val.startswith("#"):
-            self._add_error(
-                ERR_REMOTE_REFERENCE_PROHIBITED,
-                f"Remote reference '{ref_val}' is prohibited. Only local references starting with '#' are allowed.",
-                path,
-            )
+        is_remote, reason = _check_remote_or_external_reference(ref_val)
+        if is_remote:
+            self._add_error(ERR_REMOTE_REFERENCE_PROHIBITED, reason, path)
             return
 
-        # Traverse local reference chain to verify resolution and detect cycles
+        # Traverse alias chain to verify local resolution and detect circular reference loops
         visited_refs: list[str] = [ref_val]
         curr_ref = ref_val
 
@@ -285,7 +531,7 @@ class _SchemaInspector:
                 return
 
             try:
-                target_node = _resolve_json_pointer(root_schema, curr_ref)
+                target_node = _resolve_local_reference(root_schema, curr_ref, self.anchors)
             except (KeyError, IndexError, ValueError):
                 self._add_error(
                     ERR_UNRESOLVED_REFERENCE,
@@ -294,28 +540,45 @@ class _SchemaInspector:
                 )
                 return
 
-            # If target node is another $ref, continue traversing the alias chain
-            if isinstance(target_node, dict) and "$ref" in target_node:
-                next_ref = target_node["$ref"]
-                if not isinstance(next_ref, str) or not next_ref.startswith("#"):
-                    self._add_error(
-                        ERR_REMOTE_REFERENCE_PROHIBITED,
-                        f"Chained remote reference '{next_ref}' is prohibited.",
-                        path,
-                    )
-                    return
-                if next_ref in visited_refs:
-                    cycle = " -> ".join(visited_refs + [next_ref])
-                    self._add_error(
-                        ERR_CIRCULAR_REFERENCE_DETECTED,
-                        f"Circular reference detected: {cycle}.",
-                        path,
-                    )
-                    return
-                visited_refs.append(next_ref)
-                curr_ref = next_ref
+            # Check if target is a pure alias node (contains $ref or $dynamicRef without concrete structural keywords)
+            if isinstance(target_node, dict):
+                has_alias_ref = "$ref" in target_node or "$dynamicRef" in target_node
+                has_structural_definition = any(
+                    k in target_node for k in STRUCTURAL_SCHEMA_KEYWORDS
+                )
+
+                if has_alias_ref and not has_structural_definition:
+                    next_ref = target_node.get("$ref") or target_node.get("$dynamicRef")
+                    if not isinstance(next_ref, str):
+                        self._add_error(
+                            ERR_INVALID_SCHEMA_SYNTAX,
+                            f"Chained reference must be a string, got {type(next_ref).__name__}.",
+                            path,
+                        )
+                        return
+
+                    is_next_remote, next_reason = _check_remote_or_external_reference(next_ref)
+                    if is_next_remote:
+                        self._add_error(ERR_REMOTE_REFERENCE_PROHIBITED, next_reason, path)
+                        return
+
+                    if next_ref in visited_refs:
+                        cycle = " -> ".join(visited_refs + [next_ref])
+                        self._add_error(
+                            ERR_CIRCULAR_REFERENCE_DETECTED,
+                            f"Circular reference detected: {cycle}.",
+                            path,
+                        )
+                        return
+
+                    visited_refs.append(next_ref)
+                    curr_ref = next_ref
+                else:
+                    # Target is a concrete schema definition (contains structural constraints like properties, type, etc.)
+                    # Valid recursive reference resolves successfully
+                    break
             else:
-                # Target resolved to a concrete schema definition
+                # Target resolved to a boolean schema (True / False)
                 break
 
 
@@ -331,9 +594,10 @@ def validate_definition_version(
 
     Guarantees:
     - Never raises unhandled exceptions (catches internal faults and marks INVALID).
-    - Validates execution binding against live TaskRegistry.
+    - Never exposes raw exception strings or stack traces in diagnostics.
+    - Validates execution binding against live TaskRegistry and verifies callable contract.
     - Validates input and output schemas independently.
-    - Enforces local-only $ref resolution, resource bounds, and cycle safety.
+    - Enforces local-only reference resolution, resource bounds, and cycle safety.
     - Returns structured deterministic validation report.
     """
     now_iso = datetime.now(UTC).isoformat()
@@ -345,7 +609,7 @@ def validate_definition_version(
     }
 
     try:
-        # 1. Execution binding checks
+        # 1. Execution binding checks against live registry
         if execution_type != "builtin":
             errors.append(
                 ValidationErrorDetail(
@@ -374,6 +638,30 @@ def validate_definition_version(
                 )
             )
             checks["execution_binding"] = "FAILED"
+        else:
+            try:
+                handler = get_handler(task_type)
+                if not callable(handler):
+                    errors.append(
+                        ValidationErrorDetail(
+                            code=ERR_UNSUPPORTED_EXECUTION_TYPE,
+                            message=f"Handler for task type '{task_type}' does not satisfy callable execution contract.",
+                            path="$.task_type",
+                            target="execution_binding",
+                        )
+                    )
+                    checks["execution_binding"] = "FAILED"
+            except Exception:
+                logger.error("task_handler_lookup_failed", task_type=task_type, exc_info=True)
+                errors.append(
+                    ValidationErrorDetail(
+                        code=ERR_UNKNOWN_TASK_TYPE,
+                        message=f"Handler for task type '{task_type}' could not be loaded from TaskRegistry.",
+                        path="$.task_type",
+                        target="execution_binding",
+                    )
+                )
+                checks["execution_binding"] = "FAILED"
 
         # 2. Input schema validation
         input_inspector = _SchemaInspector(target_name="input_schema", errors=errors)
@@ -389,11 +677,20 @@ def validate_definition_version(
             if any(e.target == "output_schema" for e in errors):
                 checks["output_schema"] = "FAILED"
 
-    except Exception as exc:  # Safety boundary: unexpected exceptions must NEVER produce VALID
+    except Exception:  # Safety boundary: unexpected exceptions must NEVER produce VALID
+        logger.error(
+            "definition_validation_unexpected_exception",
+            task_type=task_type,
+            execution_type=execution_type,
+            exc_info=True,
+        )
         errors.append(
             ValidationErrorDetail(
                 code=ERR_INTERNAL_VALIDATOR_ERROR,
-                message=f"Internal validator exception: {exc}",
+                message=(
+                    "An internal validator error occurred during schema validation. "
+                    "Diagnostic details have been securely logged."
+                ),
                 path="$",
                 target="system",
             )
