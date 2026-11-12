@@ -15,6 +15,10 @@ from taskforge.definitions.models import (
     TaskDefinitionVersion,
 )
 from taskforge.definitions.repository import DefinitionRepository
+from taskforge.definitions.validation import (
+    DefinitionValidationResult,
+    validate_definition_version,
+)
 
 SUPPORTED_EXECUTION_TYPES: frozenset[str] = frozenset({"builtin"})
 SENSITIVE_CONFIG_KEY_RE = re.compile(
@@ -342,6 +346,31 @@ class DefinitionService:
     ) -> list[TaskDefinitionVersion]:
         self.get_definition(principal, definition_id)
         return self.repo.list_versions(definition_id, principal.tenant_id)
+
+    def validate_version(
+        self,
+        *,
+        principal: AuthenticatedPrincipal,
+        definition_id: str,
+        version_number: int,
+    ) -> tuple[TaskDefinitionVersion, DefinitionValidationResult]:
+        """Orchestrate schema and registry validation of a version and persist the report."""
+        ver = self.get_version(principal, definition_id, version_number)
+        val_result = validate_definition_version(
+            task_type=ver.task_type,
+            execution_type=ver.execution_type,
+            configuration_json=ver.configuration_json,
+            input_schema_json=ver.input_schema_json,
+            output_schema_json=ver.output_schema_json,
+        )
+        updated_ver = self.record_validation_result(
+            principal=principal,
+            definition_id=definition_id,
+            version_number=version_number,
+            is_valid=val_result.is_valid,
+            report=val_result.to_dict(),
+        )
+        return updated_ver, val_result
 
     def record_validation_result(
         self,
