@@ -5,9 +5,11 @@ from typing import Any, Optional
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     String,
@@ -56,6 +58,11 @@ class Task(Base):
         DateTime(timezone=True), nullable=True, index=True
     )
 
+    definition_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    definition_version_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False, index=True
     )
@@ -84,6 +91,17 @@ class Task(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "(definition_id IS NULL AND definition_version_id IS NULL) "
+            "OR (definition_id IS NOT NULL AND definition_version_id IS NOT NULL)",
+            name="ck_tasks_definition_ref_pair",
+        ),
+        ForeignKeyConstraint(
+            ["definition_version_id", "definition_id"],
+            ["task_definition_versions.id", "task_definition_versions.definition_id"],
+            name="fk_tasks_definition_version",
+            ondelete="RESTRICT",
+        ),
         Index("ix_tasks_status_priority", "status", "priority"),
         Index("ix_tasks_lease_recovery", "status", "lease_expires_at"),
         Index("ix_tasks_tenant_status", "tenant_id", "status"),
@@ -207,3 +225,11 @@ class ApiKey(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=get_utc_now, nullable=False
     )
+
+
+# Register Phase 11 definition models onto Base.metadata for Alembic and create_all()
+from taskforge.definitions.models import (  # noqa: E402, F401
+    DefinitionAuditEvent,
+    TaskDefinition,
+    TaskDefinitionVersion,
+)
