@@ -260,6 +260,25 @@ export function TaskDetailPage() {
                     : "—"}
                 </span>
               </div>
+              {task.definition_id ? (
+                <>
+                  <div className="kv-item">
+                    <span className="kv-label">Definition ID</span>
+                    <span className="kv-val mono">
+                      <Link
+                        to={`/definitions?id=${encodeURIComponent(task.definition_id)}`}
+                        style={{ color: "#38bdf8", textDecoration: "underline" }}
+                      >
+                        {task.definition_id}
+                      </Link>
+                    </span>
+                  </div>
+                  <div className="kv-item">
+                    <span className="kv-label">Pinned Version ID</span>
+                    <span className="kv-val mono">{task.definition_version_id ?? "—"}</span>
+                  </div>
+                </>
+              ) : null}
             </div>
           </section>
 

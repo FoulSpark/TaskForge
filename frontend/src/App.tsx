@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { ShellLayout } from "./components/ShellLayout";
+import { DefinitionsPage } from "./pages/DefinitionsPage";
 import { MonitoringPage } from "./pages/MonitoringPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SignInPage } from "./pages/SignInPage";
@@ -23,6 +24,7 @@ export function AuthenticatedRoutes() {
         <Route path="/submit" element={<SubmitTaskPage />} />
         <Route path="/tasks" element={<TaskExplorerPage />} />
         <Route path="/tasks/:taskId" element={<TaskDetailPage />} />
+        <Route path="/definitions" element={<DefinitionsPage />} />
         <Route path="/monitoring" element={<MonitoringPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

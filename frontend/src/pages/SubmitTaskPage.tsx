@@ -20,6 +20,9 @@ export function SubmitTaskPage() {
   const { client, hasScope } = useAuth();
   const navigate = useNavigate();
 
+  const [mode, setMode] = useState<"standard" | "definition">("standard");
+
+  // Standard Task form state
   const [catalog, setCatalog] = useState<TaskTypeCatalogItem[]>([]);
   const [constraints, setConstraints] =
     useState<SubmissionConstraints>(FALLBACK_CONSTRAINTS);
@@ -35,6 +38,15 @@ export function SubmitTaskPage() {
   const [idempotencyKey, setIdempotencyKey] = useState("");
   const [scheduleMode, setScheduleMode] = useState<"immediate" | "scheduled">("immediate");
   const [scheduledLocal, setScheduledLocal] = useState("");
+
+  // Definition execution state
+  const [definitionId, setDefinitionId] = useState("");
+  const [definitionVersion, setDefinitionVersion] = useState<string>("");
+  const [definitionInputText, setDefinitionInputText] = useState("{}");
+  const [definitionTaskName, setDefinitionTaskName] = useState("");
+  const [definitionPriority, setDefinitionPriority] = useState<TaskPriority>(2);
+  const [definitionTimeout, setDefinitionTimeout] = useState<string>("");
+  const [definitionIdempotencyKey, setDefinitionIdempotencyKey] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -154,16 +166,99 @@ export function SubmitTaskPage() {
     }
   };
 
+  const handleDefinitionSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+
+    if (!definitionId.trim()) {
+      setSubmitError("Definition ID is required.");
+      return;
+    }
+
+    let parsedInput: unknown;
+    try {
+      parsedInput = JSON.parse(definitionInputText || "{}");
+    } catch {
+      setSubmitError("Definition input must be valid JSON.");
+      return;
+    }
+
+    if (
+      typeof parsedInput !== "object" ||
+      parsedInput === null ||
+      Array.isArray(parsedInput)
+    ) {
+      setSubmitError("Definition input must be a JSON object.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const versionNum = definitionVersion.trim()
+        ? Number.parseInt(definitionVersion.trim(), 10)
+        : undefined;
+      const timeoutSec = definitionTimeout.trim()
+        ? Number.parseInt(definitionTimeout.trim(), 10)
+        : undefined;
+
+      const outcome = await client.executeDefinition(definitionId.trim(), {
+        input: parsedInput as Record<string, unknown>,
+        ...(versionNum && Number.isFinite(versionNum) ? { version: versionNum } : {}),
+        ...(definitionTaskName.trim() ? { task_name: definitionTaskName.trim() } : {}),
+        priority: definitionPriority,
+        ...(timeoutSec && Number.isFinite(timeoutSec) ? { timeout_seconds: timeoutSec } : {}),
+        ...(definitionIdempotencyKey.trim()
+          ? { idempotency_key: definitionIdempotencyKey.trim() }
+          : {}),
+      });
+
+      const submissionNotice = outcome.isReplay ? "idempotent_replay" : "created";
+      navigate(`/tasks/${outcome.task.id}`, {
+        state: { submissionNotice },
+      });
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 409) {
+          setSubmitError(`Idempotency or definition conflict (409): ${err.message}`);
+        } else if (err.status === 422) {
+          setSubmitError(`Schema validation failed (422): ${err.message}`);
+        } else {
+          setSubmitError(`${err.code}: ${err.message}`);
+        }
+      } else {
+        setSubmitError("Failed to execute definition.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <>
       <div className="page-header">
         <div>
           <h1 className="page-title">Submit Task</h1>
           <p className="page-subtitle">
-            Runtime-registered task handlers from{" "}
-            <span className="mono">/api/v1/task-types</span>
+            Submit registered task types or execute custom task definitions
           </p>
         </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+        <button
+          type="button"
+          className={`btn ${mode === "standard" ? "btn-primary" : ""}`}
+          onClick={() => setMode("standard")}
+        >
+          Registered Task Type
+        </button>
+        <button
+          type="button"
+          className={`btn ${mode === "definition" ? "btn-primary" : ""}`}
+          onClick={() => setMode("definition")}
+        >
+          Phase 11 Custom Definition
+        </button>
       </div>
 
       {!canWrite ? (
@@ -196,12 +291,13 @@ export function SubmitTaskPage() {
       ) : null}
 
       <div className="card">
-        {loadingCatalog ? (
-          <p style={{ margin: 0, color: "var(--text-secondary)" }}>
-            Loading registered task handlers...
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit}>
+        {mode === "standard" ? (
+          loadingCatalog ? (
+            <p style={{ margin: 0, color: "var(--text-secondary)" }}>
+              Loading registered task handlers...
+            </p>
+          ) : (
+            <form onSubmit={handleSubmit}>
             <div className="form-grid-2">
               <div className="field">
                 <label htmlFor="task-name-input">Task Name</label>
@@ -376,6 +472,113 @@ export function SubmitTaskPage() {
                 disabled={submitting || !taskType}
               >
                 {submitting ? "Submitting Task..." : "Submit Task"}
+              </button>
+            </div>
+          </form>
+        )) : (
+          <form onSubmit={handleDefinitionSubmit}>
+            <div className="banner banner-info" style={{ marginBottom: 16 }}>
+              Executes a custom task definition registered via Phase 11. The submission is validated against the active or specified version's input schema and executed under an immutable version snapshot.
+            </div>
+
+            <div className="form-grid-2">
+              <div className="field">
+                <label htmlFor="def-id-input">Definition ID</label>
+                <input
+                  id="def-id-input"
+                  className="input mono"
+                  placeholder="e.g. def_image_resizer or def_order_pipeline"
+                  value={definitionId}
+                  onChange={(e) => setDefinitionId(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="def-ver-input">Version Number (Optional)</label>
+                <input
+                  id="def-ver-input"
+                  type="number"
+                  min={1}
+                  className="input tabular"
+                  placeholder="Leave empty for active version"
+                  value={definitionVersion}
+                  onChange={(e) => setDefinitionVersion(e.target.value)}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="def-taskname-input">Task Name (Optional)</label>
+                <input
+                  id="def-taskname-input"
+                  className="input"
+                  placeholder="Optional custom display name"
+                  value={definitionTaskName}
+                  onChange={(e) => setDefinitionTaskName(e.target.value)}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="def-priority-select">Priority</label>
+                <select
+                  id="def-priority-select"
+                  className="select"
+                  value={definitionPriority}
+                  onChange={(e) =>
+                    setDefinitionPriority(Number.parseInt(e.target.value, 10) as TaskPriority)
+                  }
+                >
+                  <option value={1}>1 — Low</option>
+                  <option value={2}>2 — Medium (Default)</option>
+                  <option value={3}>3 — High</option>
+                  <option value={4}>4 — Critical</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor="def-idemp-input">Idempotency Key (Optional)</label>
+                <input
+                  id="def-idemp-input"
+                  className="input mono"
+                  placeholder="e.g. order-req-77891"
+                  value={definitionIdempotencyKey}
+                  onChange={(e) => setDefinitionIdempotencyKey(e.target.value)}
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="def-timeout-input">Timeout Seconds (Optional)</label>
+                <input
+                  id="def-timeout-input"
+                  type="number"
+                  min={1}
+                  max={3600}
+                  className="input tabular"
+                  placeholder="e.g. 120"
+                  value={definitionTimeout}
+                  onChange={(e) => setDefinitionTimeout(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="def-input-textarea">Input JSON</label>
+              <textarea
+                id="def-input-textarea"
+                rows={6}
+                className="textarea mono"
+                value={definitionInputText}
+                onChange={(e) => setDefinitionInputText(e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={submitting || !definitionId.trim()}
+              >
+                {submitting ? "Executing Definition..." : "Execute Definition"}
               </button>
             </div>
           </form>

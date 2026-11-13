@@ -81,6 +81,12 @@ export function ShellLayout() {
             Task Explorer
           </NavLink>
           <NavLink
+            to="/definitions"
+            className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
+          >
+            Definitions
+          </NavLink>
+          <NavLink
             to="/monitoring"
             className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
           >

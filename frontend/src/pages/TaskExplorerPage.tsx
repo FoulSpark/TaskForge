@@ -447,7 +447,25 @@ export function TaskExplorerPage() {
                           {task.id}
                         </div>
                       </td>
-                      <td className="mono">{task.task_type}</td>
+                      <td className="mono">
+                        {task.task_type}
+                        {task.definition_id ? (
+                          <div style={{ marginTop: 4 }}>
+                            <span
+                              className="pill"
+                              style={{
+                                fontSize: 10,
+                                background: "#0c4a6e",
+                                color: "#38bdf8",
+                                padding: "2px 6px",
+                              }}
+                              title={`Definition: ${task.definition_id}`}
+                            >
+                              DEF
+                            </span>
+                          </div>
+                        ) : null}
+                      </td>
                       <td>
                         <StatusBadge status={task.status} />
                         {task.status === "RETRY_WAIT" ? (

@@ -1,6 +1,11 @@
 import type {
   ApiErrorBody,
   AuthPrincipal,
+  DefinitionAuditListResponse,
+  DefinitionCancelOutcome,
+  DefinitionExecuteRequest,
+  DefinitionExecutionDetailResponse,
+  DefinitionExecutionListResponse,
   HealthReadinessResponse,
   MonitoringSummaryResponse,
   OperatorSystemStatsResponse,
@@ -275,6 +280,85 @@ export class TaskForgeClient {
     return this.request<TaskItem>(`/api/v1/tasks/${encodeURIComponent(taskId)}/retry`, {
       method: "POST",
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Phase 11 Task Definition Registry & Controlled Execution
+  // -------------------------------------------------------------------------
+
+  async executeDefinition(
+    definitionId: string,
+    payload: DefinitionExecuteRequest,
+  ): Promise<TaskSubmissionOutcome> {
+    const { data, status } = await this.requestWithStatus<TaskItem>(
+      `/api/v1/definitions/${encodeURIComponent(definitionId)}/execute`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
+    return {
+      task: data,
+      status,
+      isReplay: status === 200,
+    };
+  }
+
+  listDefinitionExecutions(
+    definitionId: string,
+    params: {
+      status?: string;
+      version_number?: number;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<DefinitionExecutionListResponse> {
+    const sp = new URLSearchParams();
+    if (params.status) sp.set("status", params.status);
+    if (params.version_number !== undefined) sp.set("version_number", String(params.version_number));
+    sp.set("limit", String(params.limit ?? 50));
+    sp.set("offset", String(params.offset ?? 0));
+    return this.request<DefinitionExecutionListResponse>(
+      `/api/v1/definitions/${encodeURIComponent(definitionId)}/executions?${sp.toString()}`,
+    );
+  }
+
+  getDefinitionExecutionDetail(
+    definitionId: string,
+    taskId: string,
+  ): Promise<DefinitionExecutionDetailResponse> {
+    return this.request<DefinitionExecutionDetailResponse>(
+      `/api/v1/definitions/${encodeURIComponent(definitionId)}/executions/${encodeURIComponent(taskId)}`,
+    );
+  }
+
+  listDefinitionAuditHistory(
+    definitionId: string,
+    params: {
+      action?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<DefinitionAuditListResponse> {
+    const sp = new URLSearchParams();
+    if (params.action) sp.set("action", params.action);
+    sp.set("limit", String(params.limit ?? 50));
+    sp.set("offset", String(params.offset ?? 0));
+    return this.request<DefinitionAuditListResponse>(
+      `/api/v1/definitions/${encodeURIComponent(definitionId)}/audit?${sp.toString()}`,
+    );
+  }
+
+  cancelDefinitionExecution(
+    definitionId: string,
+    taskId: string,
+  ): Promise<DefinitionCancelOutcome> {
+    return this.request<DefinitionCancelOutcome>(
+      `/api/v1/definitions/${encodeURIComponent(definitionId)}/executions/${encodeURIComponent(taskId)}/cancel`,
+      {
+        method: "POST",
+      },
+    );
   }
 }
 

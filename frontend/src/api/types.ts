@@ -60,6 +60,8 @@ export interface TaskItem {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  definition_id?: string | null;
+  definition_version_id?: string | null;
   attempts: TaskAttemptItem[];
   result: TaskResultData | null;
   events: TaskEventItem[];
@@ -233,4 +235,99 @@ export interface ApiErrorBody {
     correlation_id?: string;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 11 Custom Task Definition Registry & Execution Types
+// ---------------------------------------------------------------------------
+
+export interface DefinitionExecuteRequest {
+  version?: number;
+  input: Record<string, unknown>;
+  task_name?: string;
+  priority?: TaskPriority;
+  idempotency_key?: string;
+  timeout_seconds?: number;
+}
+
+export interface DefinitionExecutionSummary {
+  id: string;
+  task_name: string;
+  task_type: string;
+  status: string;
+  priority: number;
+  definition_id: string;
+  definition_version_id?: string | null;
+  version_number?: number | null;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  duration_ms?: number | null;
+}
+
+export interface DefinitionExecutionListResponse {
+  items: DefinitionExecutionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface DefinitionExecutionVersionSnapshot {
+  id: string;
+  version_number: number;
+  task_type: string;
+  content_hash: string;
+}
+
+export interface DefinitionExecutionFailureDiagnosis {
+  classification: string;
+  error_message?: string | null;
+  retryable: boolean;
+  is_timeout: boolean;
+  retries_exhausted: boolean;
+}
+
+export interface DefinitionExecutionDetailResponse {
+  id: string;
+  task_name: string;
+  task_type: string;
+  status: string;
+  priority: number;
+  definition_id: string;
+  definition_version_id?: string | null;
+  version?: DefinitionExecutionVersionSnapshot | null;
+  payload: Record<string, unknown>;
+  result?: Record<string, unknown> | null;
+  failure_diagnosis?: DefinitionExecutionFailureDiagnosis | null;
+  attempts: TaskAttemptItem[];
+  timeline: {
+    created_at: string;
+    started_at?: string | null;
+    completed_at?: string | null;
+  };
+}
+
+export interface DefinitionAuditEventItem {
+  id: string;
+  tenant_id: string;
+  definition_id: string;
+  version_id?: string | null;
+  actor_id: string;
+  action: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface DefinitionAuditListResponse {
+  items: DefinitionAuditEventItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface DefinitionCancelOutcome {
+  id: string;
+  status: string;
+  message: string;
+}
+
 
