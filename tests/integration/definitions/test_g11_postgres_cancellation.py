@@ -237,3 +237,239 @@ def test_pg_retry_and_dead_letter_version_retention(pg_principal, pg_definition)
         assert t_final.definition_id == pg_definition["id"]
         assert t_final.definition_version_id == pg_definition["v1_id"]
         assert t_final.definition_version_id != v2_id
+
+
+@pytest.mark.skipif(not PG_AVAILABLE, reason="Live PostgreSQL 16 instance not reachable")
+def test_pg_cancellation_versus_failure_race(pg_principal, pg_definition):
+    """G11.5-F / PostgreSQL: Stale worker attempting failure after cancellation is fenced out with zero failure artifacts."""
+    stale_lease = f"stale-pg-fail-{uuid.uuid4().hex[:8]}"
+
+    with SessionLocal() as db:
+        task = Task(
+            id=uuid.uuid4().hex,
+            task_name="pg-cancel-fail-race",
+            task_type="webhook_send",
+            status=TaskStatus.RUNNING.value,
+            priority=3,
+            payload={"url": "https://example.com"},
+            tenant_id=pg_principal.tenant_id,
+            lease_token=stale_lease,
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            started_at=get_utc_now(),
+            created_at=get_utc_now(),
+            definition_id=pg_definition["id"],
+            definition_version_id=pg_definition["v1_id"],
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+    # 1. User cancels the task
+    with SessionLocal() as db:
+        svc = DefinitionService(db)
+        res = svc.cancel_execution(
+            principal=pg_principal,
+            definition_id=pg_definition["id"],
+            task_id=task_id,
+            reason="cancelled_before_worker_fail",
+        )
+        assert res["status"] == "CANCELLED"
+
+    # 2. Stale worker attempts to commit failure under revoked lease
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        with pytest.raises(PermissionError) as exc_info:
+            repo.complete_task_failure(
+                task_id=task_id,
+                lease_token=stale_lease,
+                error_message="Worker failed late after cancellation",
+            )
+        assert "Fencing violation" in str(exc_info.value)
+
+    # 3. Assert task remains CANCELLED and no contradictory failure state recorded
+    with SessionLocal() as db:
+        t = db.get(Task, task_id)
+        assert t.status == TaskStatus.CANCELLED.value
+        assert t.lease_token is None
+
+
+@pytest.mark.skipif(not PG_AVAILABLE, reason="Live PostgreSQL 16 instance not reachable")
+def test_pg_cancellation_versus_timeout_race(pg_principal, pg_definition):
+    """G11.5-F / PostgreSQL: Timeout failure commit under revoked lease is fenced out; state remains CANCELLED."""
+    stale_lease = f"stale-pg-timeout-{uuid.uuid4().hex[:8]}"
+
+    with SessionLocal() as db:
+        task = Task(
+            id=uuid.uuid4().hex,
+            task_name="pg-cancel-timeout-race",
+            task_type="webhook_send",
+            status=TaskStatus.RUNNING.value,
+            priority=3,
+            payload={},
+            tenant_id=pg_principal.tenant_id,
+            lease_token=stale_lease,
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+            started_at=get_utc_now(),
+            created_at=get_utc_now(),
+            definition_id=pg_definition["id"],
+            definition_version_id=pg_definition["v1_id"],
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+    # Cancellation wins
+    with SessionLocal() as db:
+        svc = DefinitionService(db)
+        svc.cancel_execution(
+            principal=pg_principal,
+            definition_id=pg_definition["id"],
+            task_id=task_id,
+            reason="cancelled_at_timeout_boundary",
+        )
+
+    # Timeout handler attempts failure commit with stale lease
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        with pytest.raises(PermissionError):
+            repo.complete_task_failure(
+                task_id=task_id,
+                lease_token=stale_lease,
+                error_message="Task timed out",
+                is_timeout=True,
+            )
+
+    # State remains unambiguously CANCELLED
+    with SessionLocal() as db:
+        t = db.get(Task, task_id)
+        assert t.status == TaskStatus.CANCELLED.value
+
+
+@pytest.mark.skipif(not PG_AVAILABLE, reason="Live PostgreSQL 16 instance not reachable")
+def test_pg_cancellation_versus_retry_scheduling(pg_principal, pg_definition):
+    """G11.5-F / PostgreSQL: A cancelled task cannot be scheduled for retry."""
+    with SessionLocal() as db:
+        task = Task(
+            id=uuid.uuid4().hex,
+            task_name="pg-cancel-no-retry",
+            task_type="webhook_send",
+            status=TaskStatus.RETRY_WAIT.value,
+            priority=2,
+            payload={},
+            tenant_id=pg_principal.tenant_id,
+            max_retries=3,
+            retry_count=1,
+            created_at=get_utc_now(),
+            definition_id=pg_definition["id"],
+            definition_version_id=pg_definition["v1_id"],
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+    # User cancels task while in RETRY_WAIT
+    with SessionLocal() as db:
+        svc = DefinitionService(db)
+        res = svc.cancel_execution(
+            principal=pg_principal,
+            definition_id=pg_definition["id"],
+            task_id=task_id,
+        )
+        assert res["status"] == "CANCELLED"
+
+    # Verify task cannot be picked up or transitioned to QUEUED
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        with pytest.raises(ValueError):
+            repo.update_status(task_id, TaskStatus.QUEUED)
+
+
+@pytest.mark.skipif(not PG_AVAILABLE, reason="Live PostgreSQL 16 instance not reachable")
+def test_pg_cancellation_versus_lease_recovery(pg_principal, pg_definition):
+    """G11.5-F / PostgreSQL: Lease recovery does not recover cancelled tasks (no lease resurrection)."""
+    with SessionLocal() as db:
+        task = Task(
+            id=uuid.uuid4().hex,
+            task_name="pg-cancel-reaper-safe",
+            task_type="webhook_send",
+            status=TaskStatus.RUNNING.value,
+            priority=2,
+            payload={},
+            tenant_id=pg_principal.tenant_id,
+            lease_token="lease-to-be-cancelled",
+            # Expired lease
+            lease_expires_at=datetime.now(UTC) - timedelta(minutes=5),
+            started_at=get_utc_now(),
+            created_at=get_utc_now(),
+            definition_id=pg_definition["id"],
+            definition_version_id=pg_definition["v1_id"],
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+    # Cancel task (sets lease_token=NULL, status=CANCELLED)
+    with SessionLocal() as db:
+        svc = DefinitionService(db)
+        svc.cancel_execution(
+            principal=pg_principal,
+            definition_id=pg_definition["id"],
+            task_id=task_id,
+        )
+
+    # Run lease reaper sweep
+    with SessionLocal() as db:
+        repo = TaskRepository(db)
+        recovered = repo.recover_expired_leases()
+        # Cancelled task must NOT be recovered
+        recovered_ids = [r.task_id for r in recovered]
+        assert task_id not in recovered_ids
+
+    # Task remains CANCELLED
+    with SessionLocal() as db:
+        t = db.get(Task, task_id)
+        assert t.status == TaskStatus.CANCELLED.value
+        assert t.lease_token is None
+
+
+@pytest.mark.skipif(not PG_AVAILABLE, reason="Live PostgreSQL 16 instance not reachable")
+def test_pg_repeated_cancellation_conflict(pg_principal, pg_definition):
+    """G11.5-F / PostgreSQL: Repeated cancellation on already cancelled task raises DefinitionConflictError (409 Conflict)."""
+    with SessionLocal() as db:
+        task = Task(
+            id=uuid.uuid4().hex,
+            task_name="pg-repeat-cancel",
+            task_type="webhook_send",
+            status=TaskStatus.QUEUED.value,
+            priority=2,
+            payload={},
+            tenant_id=pg_principal.tenant_id,
+            created_at=get_utc_now(),
+            definition_id=pg_definition["id"],
+            definition_version_id=pg_definition["v1_id"],
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+    # 1. First cancellation succeeds
+    with SessionLocal() as db:
+        svc = DefinitionService(db)
+        res = svc.cancel_execution(
+            principal=pg_principal,
+            definition_id=pg_definition["id"],
+            task_id=task_id,
+        )
+        assert res["status"] == "CANCELLED"
+
+    # 2. Second cancellation returns 409 Conflict (no duplicate events or metrics)
+    with SessionLocal() as db:
+        svc = DefinitionService(db)
+        from taskforge.definitions.service import DefinitionConflictError
+
+        with pytest.raises(DefinitionConflictError):
+            svc.cancel_execution(
+                principal=pg_principal,
+                definition_id=pg_definition["id"],
+                task_id=task_id,
+            )
