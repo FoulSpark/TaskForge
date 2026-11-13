@@ -29,3 +29,25 @@ def get_handler(name: str) -> TaskHandler:
 
 def list_registered_handlers() -> list[str]:
     return list(_HANDLERS.keys())
+
+
+class TaskRegistry:
+    """Namespace providing programmatic access to the live TaskRegistry."""
+
+    _HANDLERS = _HANDLERS
+
+    @staticmethod
+    def register_handler(name: str):
+        return register_handler(name)
+
+    @staticmethod
+    def get_handler(name: str) -> TaskHandler:
+        return get_handler(name)
+
+    @staticmethod
+    def has_handler(name: str) -> bool:
+        return name in _HANDLERS
+
+    @staticmethod
+    def list_handlers() -> list[str]:
+        return list_registered_handlers()

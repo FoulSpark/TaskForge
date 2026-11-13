@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -162,6 +162,9 @@ class TaskRepository:
         scheduled_at: datetime | None = None,
         tenant_id: str = "default",
         actor_id: str | None = None,
+        definition_id: str | None = None,
+        definition_version_id: str | None = None,
+        commit: bool = True,
     ) -> CreateTaskResult:
         # Check idempotency first (optimistic fast path within same tenant)
         if idempotency_key:
@@ -184,6 +187,8 @@ class TaskRepository:
             max_retries=max_retries,
             retry_count=0,
             scheduled_at=scheduled_at,
+            definition_id=definition_id,
+            definition_version_id=definition_version_id,
             created_at=now,
             updated_at=now,
         )
@@ -218,6 +223,8 @@ class TaskRepository:
                     "timeout_seconds": timeout_seconds,
                     "max_retries": max_retries,
                     "scheduled_at": scheduled_at.isoformat() if scheduled_at else None,
+                    "definition_id": definition_id,
+                    "definition_version_id": definition_version_id,
                 },
                 status="PENDING",
                 available_at=scheduled_at or now,
@@ -225,19 +232,23 @@ class TaskRepository:
             )
             self.db.add(outbox)
 
-            self.db.commit()
-            record_diagnostic_event("task_transaction_commit", task_id=task_id)
-            created_task = self.get_by_id(task.id)
-            if created_task:
-                record_task_submitted(created_task.task_type, created_task.priority)
+            if commit:
+                self.db.commit()
+                record_diagnostic_event("task_transaction_commit", task_id=task_id)
+                created_task = self.get_by_id(task.id)
+                if created_task:
+                    record_task_submitted(created_task.task_type, created_task.priority)
+                else:
+                    record_task_submitted(task.task_type, task.priority)
+                return CreateTaskResult(created_task, True)  # type: ignore
             else:
-                record_task_submitted(task.task_type, task.priority)
-            return CreateTaskResult(created_task, True)  # type: ignore
+                self.db.flush()
+                return CreateTaskResult(task, True)
         except IntegrityError as exc:
             self.db.rollback()
             # Inspect underlying error to ensure it is specifically the uniqueness violation on idempotency_key
             if idempotency_key and self._is_idempotency_key_violation(exc):
-                existing = self.get_by_idempotency_key(idempotency_key)
+                existing = self.get_by_idempotency_key(idempotency_key, tenant_id=tenant_id)
                 if existing:
                     return CreateTaskResult(existing, False)
             raise
@@ -584,11 +595,29 @@ class TaskRepository:
 
         try:
             now = get_utc_now()
-            task.status = TaskStatus.SUCCESS.value
-            task.completed_at = now
-            task.updated_at = now
-            task.lease_token = None
-            task.lease_expires_at = None
+
+            # R4: Strict conditional write at DB boundary for task lease fencing
+            update_stmt = (
+                update(Task)
+                .where(Task.id == task_id, Task.lease_token == lease_token)
+                .values(
+                    status=TaskStatus.SUCCESS.value,
+                    completed_at=now,
+                    updated_at=now,
+                    lease_token=None,
+                    lease_expires_at=None,
+                )
+            )
+            update_res = self.db.execute(update_stmt)
+            if update_res.rowcount == 0:
+                self.db.rollback()
+                try:
+                    record_fencing_rejection()
+                except Exception as exc:
+                    logger.debug("Failed to record fencing rejection: %s", exc)
+                raise PermissionError(
+                    "Fencing violation: conditional update affected 0 rows; lease token was invalid or expired"
+                )
 
             # 1. Persist result
             result = TaskResult(
@@ -599,11 +628,31 @@ class TaskRepository:
             )
             self.db.add(result)
 
-            # 2. Update attempt if provided
+            # 2. Update attempt if provided (conditional on attempt status)
             if attempt:
-                attempt.status = "SUCCESS"
-                attempt.completed_at = now
-                attempt.duration_ms = duration_ms
+                att_update_stmt = (
+                    update(TaskAttempt)
+                    .where(
+                        TaskAttempt.id == attempt_id,
+                        TaskAttempt.task_id == task_id,
+                        TaskAttempt.status.in_(["RUNNING", "PENDING"]),
+                    )
+                    .values(
+                        status="SUCCESS",
+                        completed_at=now,
+                        duration_ms=duration_ms,
+                    )
+                )
+                att_res = self.db.execute(att_update_stmt)
+                if att_res.rowcount == 0:
+                    self.db.rollback()
+                    try:
+                        record_fencing_rejection()
+                    except Exception as exc:
+                        logger.debug("Failed to record fencing rejection: %s", exc)
+                    raise PermissionError(
+                        "Fencing violation: attempt conditional update affected 0 rows"
+                    )
 
             # 3. Record status change event
             event = TaskEvent(
@@ -651,9 +700,11 @@ class TaskRepository:
         attempt_id: int | None = None,
         duration_ms: float | None = None,
         publish_to_outbox: bool = True,
+        allow_retry: bool = True,
+        error_type: str | None = None,
     ) -> tuple[Task, bool]:
         """Atomically record attempt failure, evaluate retries under lock,
-        transition Task to RETRY_WAIT or DEAD_LETTER, record OutboxEvent for TASK_RETRY,
+        transition Task to RETRY_WAIT or DEAD_LETTER/FAILED, record OutboxEvent for TASK_RETRY,
         release lease, and record event in one transaction under strict lease fencing.
         Returns (task, is_retryable).
         """
@@ -692,27 +743,69 @@ class TaskRepository:
 
         try:
             now = get_utc_now()
+
+            # 1. Update attempt conditionally if provided
             if attempt:
-                attempt.status = "TIMED_OUT" if is_timeout else "FAILED"
-                attempt.error_message = error_message
-                attempt.error_traceback = error_traceback
-                attempt.completed_at = now
-                attempt.duration_ms = duration_ms
+                att_update_stmt = (
+                    update(TaskAttempt)
+                    .where(
+                        TaskAttempt.id == attempt_id,
+                        TaskAttempt.task_id == task_id,
+                        TaskAttempt.status.in_(["RUNNING", "PENDING"]),
+                    )
+                    .values(
+                        status="TIMED_OUT" if is_timeout else "FAILED",
+                        error_message=error_message,
+                        error_traceback=error_traceback,
+                        completed_at=now,
+                        duration_ms=duration_ms,
+                    )
+                )
+                att_res = self.db.execute(att_update_stmt)
+                if att_res.rowcount == 0:
+                    self.db.rollback()
+                    try:
+                        record_fencing_rejection()
+                    except Exception as exc:
+                        logger.debug("Failed to record fencing rejection: %s", exc)
+                    raise PermissionError(
+                        "Fencing violation: attempt conditional update affected 0 rows"
+                    )
 
             # 2. Evaluate retry policy under lock
-            if task.retry_count < task.max_retries:
-                task.retry_count += 1
+            if allow_retry and task.retry_count < task.max_retries:
+                task_retry_count = task.retry_count + 1
                 nxt_status = TaskStatus.RETRY_WAIT
                 is_retryable = True
-                reason = f"attempt_{task.retry_count}_failed"
+                reason = f"attempt_{task_retry_count}_failed"
 
                 validate_transition(curr_status, nxt_status)
-                task.status = nxt_status.value
 
                 # Retry backoff timing: calculate eligibility time
-                backoff_delay = min(1.0 * (2 ** (task.retry_count - 1)), 60.0)
+                backoff_delay = min(1.0 * (2 ** (task_retry_count - 1)), 60.0)
                 retry_scheduled_at = now + timedelta(seconds=backoff_delay)
-                task.scheduled_at = retry_scheduled_at
+
+                # R4: Conditional write on Task lease
+                update_stmt = (
+                    update(Task)
+                    .where(Task.id == task_id, Task.lease_token == lease_token)
+                    .values(
+                        status=nxt_status.value,
+                        retry_count=task_retry_count,
+                        scheduled_at=retry_scheduled_at,
+                        updated_at=now,
+                    )
+                )
+                update_res = self.db.execute(update_stmt)
+                if update_res.rowcount == 0:
+                    self.db.rollback()
+                    try:
+                        record_fencing_rejection()
+                    except Exception as exc:
+                        logger.debug("Failed to record fencing rejection: %s", exc)
+                    raise PermissionError(
+                        "Fencing violation: conditional update affected 0 rows on failure"
+                    )
 
                 event = TaskEvent(
                     task_id=task.id,
@@ -721,7 +814,9 @@ class TaskRepository:
                     to_state=nxt_status.value,
                     metadata_json={
                         "error": error_message,
-                        "retry_count": task.retry_count,
+                        "error_type": error_type
+                        or ("TIMEOUT" if is_timeout else "HANDLER_EXECUTION_ERROR"),
+                        "retry_count": task_retry_count,
                         "reason": reason,
                         "is_timeout": is_timeout,
                         "scheduled_at": retry_scheduled_at.isoformat(),
@@ -744,8 +839,10 @@ class TaskRepository:
                             "payload": task.payload,
                             "timeout_seconds": task.timeout_seconds,
                             "max_retries": task.max_retries,
-                            "retry_count": task.retry_count,
+                            "retry_count": task_retry_count,
                             "scheduled_at": retry_scheduled_at.isoformat(),
+                            "definition_id": task.definition_id,
+                            "definition_version_id": task.definition_version_id,
                         },
                         status="PENDING",
                         available_at=retry_scheduled_at,
@@ -753,37 +850,69 @@ class TaskRepository:
                     )
                     self.db.add(retry_outbox)
             else:
-                # Multi-step state machine transition: RUNNING -> FAILED -> DEAD_LETTER
+                # Terminal failure: non-retryable error or retries exhausted (R5)
                 validate_transition(curr_status, TaskStatus.FAILED)
-                validate_transition(TaskStatus.FAILED, TaskStatus.DEAD_LETTER)
-                task.status = TaskStatus.DEAD_LETTER.value
+                nxt_status = TaskStatus.FAILED
                 is_retryable = False
-                reason = "max_retries_exceeded"
-                task.completed_at = now
+                reason = error_type or (
+                    "max_retries_exceeded"
+                    if task.retry_count >= task.max_retries
+                    else "non_retryable_error"
+                )
+
+                # R4: Conditional write on Task lease
+                update_stmt = (
+                    update(Task)
+                    .where(Task.id == task_id, Task.lease_token == lease_token)
+                    .values(
+                        status=nxt_status.value,
+                        completed_at=now,
+                        updated_at=now,
+                        lease_token=None,
+                        lease_expires_at=None,
+                    )
+                )
+                update_res = self.db.execute(update_stmt)
+                if update_res.rowcount == 0:
+                    self.db.rollback()
+                    try:
+                        record_fencing_rejection()
+                    except Exception as exc:
+                        logger.debug("Failed to record fencing rejection: %s", exc)
+                    raise PermissionError(
+                        "Fencing violation: conditional update affected 0 rows on failure"
+                    )
 
                 event_fail = TaskEvent(
                     task_id=task.id,
                     event_type="STATUS_CHANGED",
                     from_state=curr_status.value,
                     to_state=TaskStatus.FAILED.value,
-                    metadata_json={"error": error_message, "retries_exhausted": True},
+                    metadata_json={
+                        "error": error_message,
+                        "error_type": error_type
+                        or ("TIMEOUT" if is_timeout else "HANDLER_EXECUTION_ERROR"),
+                        "retryable": False,
+                        "retries_exhausted": task.retry_count >= task.max_retries,
+                        "reason": reason,
+                    },
                     created_at=now,
                 )
                 self.db.add(event_fail)
 
-                event_dlq = TaskEvent(
-                    task_id=task.id,
-                    event_type="STATUS_CHANGED",
-                    from_state=TaskStatus.FAILED.value,
-                    to_state=TaskStatus.DEAD_LETTER.value,
-                    metadata_json={"reason": reason, "final_error": error_message},
-                    created_at=now,
-                )
-                self.db.add(event_dlq)
-
-            task.updated_at = now
-            task.lease_token = None
-            task.lease_expires_at = None
+                if task.retry_count >= task.max_retries:
+                    # Transition FAILED -> DEAD_LETTER when retries are exhausted
+                    validate_transition(TaskStatus.FAILED, TaskStatus.DEAD_LETTER)
+                    task.status = TaskStatus.DEAD_LETTER.value
+                    event_dlq = TaskEvent(
+                        task_id=task.id,
+                        event_type="STATUS_CHANGED",
+                        from_state=TaskStatus.FAILED.value,
+                        to_state=TaskStatus.DEAD_LETTER.value,
+                        metadata_json={"reason": reason, "final_error": error_message},
+                        created_at=now,
+                    )
+                    self.db.add(event_dlq)
 
             record_diagnostic_event("terminal_transaction_start", task_id=task.id)
             self.db.commit()

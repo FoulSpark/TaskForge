@@ -60,4 +60,3 @@ def compute_definition_content_hash(
         allow_nan=False,
     )
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
-

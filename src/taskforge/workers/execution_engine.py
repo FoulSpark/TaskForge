@@ -13,12 +13,50 @@ from taskforge.core.state_machine import TaskStatus, is_terminal_state
 from taskforge.database.models import TaskAttempt, get_utc_now
 from taskforge.database.repositories.task_repository import TaskRepository
 from taskforge.database.session import SessionLocal
+from taskforge.definitions.hashing import compute_definition_content_hash
+from taskforge.definitions.models import TaskDefinitionVersion
+from taskforge.definitions.validation import validate_schema_instance
 from taskforge.monitoring.metrics import record_task_execution_duration
 from taskforge.monitoring.profiler import record_diagnostic_event
-from taskforge.tasks.registry import get_handler
+from taskforge.tasks.registry import TaskRegistry, get_handler
 from taskforge.workers.lease_manager import LeaseManager
 
 logger = get_logger(__name__)
+
+
+class TaskExecutionAdapterError(Exception):
+    """Base error for execution adapter failures."""
+
+    allow_retry: bool = False
+    error_type: str = "EXECUTION_ERROR"
+
+
+class SchemaValidationError(TaskExecutionAdapterError):
+    """Input JSON schema validation failed (non-retryable)."""
+
+    allow_retry = False
+    error_type = "SCHEMA_VALIDATION_ERROR"
+
+
+class OutputValidationError(TaskExecutionAdapterError):
+    """Output JSON schema validation failed (non-retryable)."""
+
+    allow_retry = False
+    error_type = "OUTPUT_VALIDATION_ERROR"
+
+
+class HandlerUnavailableError(TaskExecutionAdapterError):
+    """Handler is not registered or not callable (non-retryable)."""
+
+    allow_retry = False
+    error_type = "HANDLER_UNAVAILABLE_ERROR"
+
+
+class DefinitionIntegrityError(TaskExecutionAdapterError):
+    """Definition version content hash mismatch or corrupted (non-retryable)."""
+
+    allow_retry = False
+    error_type = "DEFINITION_INTEGRITY_ERROR"
 
 
 class ExecutionDisposition(StrEnum):
@@ -162,14 +200,65 @@ def execute_task(
             payload = dict(task.payload)
             payload["_current_attempt"] = attempt_num
 
+            output_schema = None
+            if task.definition_version_id:
+                ver = (
+                    db.execute(
+                        select(TaskDefinitionVersion).where(
+                            TaskDefinitionVersion.id == task.definition_version_id,
+                            TaskDefinitionVersion.definition_id == task.definition_id,
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if not ver:
+                    raise DefinitionIntegrityError(
+                        f"Pinned version '{task.definition_version_id}' not found for task '{task_id}'."
+                    )
+
+                # R1: Content hash integrity verification against executable content
+                expected_hash = compute_definition_content_hash(
+                    task_type=ver.task_type,
+                    execution_type=ver.execution_type,
+                    configuration_json=ver.configuration_json,
+                    input_schema_json=ver.input_schema_json,
+                    output_schema_json=ver.output_schema_json,
+                    execution_policy_json=ver.execution_policy_json,
+                )
+                if ver.content_hash != expected_hash:
+                    raise DefinitionIntegrityError(
+                        f"Content hash mismatch for version {ver.id}: expected {expected_hash}, recorded {ver.content_hash}."
+                    )
+
+                # R5 / G11.4-05: Runtime input validation prior to handler invocation
+                if ver.input_schema_json:
+                    input_data = payload.get("_input", payload)
+                    val_errors = validate_schema_instance(ver.input_schema_json, input_data)
+                    if val_errors:
+                        raise SchemaValidationError(
+                            f"Input schema validation failed: {val_errors[0]}"
+                        )
+
+                output_schema = ver.output_schema_json
+                task_type = ver.task_type
+
             # Determine authoritative timeout
             if timeout_seconds is None:
                 timeout_seconds = task.timeout_seconds
             else:
                 timeout_seconds = min(timeout_seconds, task.timeout_seconds)
 
-        # Execute handler with timeout enforcement without blocking on executor __exit__
+        # G11.4-03: Handler resolution strictly through live TaskRegistry
+        if not TaskRegistry.has_handler(task_type):
+            raise HandlerUnavailableError(
+                f"Handler for task type '{task_type}' is not registered in live TaskRegistry."
+            )
         handler = get_handler(task_type)
+        if not callable(handler):
+            raise HandlerUnavailableError(
+                f"Resolved handler for task type '{task_type}' is not callable."
+            )
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
         def timed_callable(fn: Any, arg: Any) -> Any:
@@ -195,6 +284,12 @@ def execute_task(
                 executor.shutdown(wait=False, cancel_futures=True)
             except TypeError:
                 executor.shutdown(wait=False)
+
+        # G11.4-06: Validate output schema if defined
+        if output_schema:
+            out_errors = validate_schema_instance(output_schema, result_data)
+            if out_errors:
+                raise OutputValidationError(f"Output schema validation failed: {out_errors[0]}")
 
         duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
@@ -237,11 +332,25 @@ def execute_task(
         error_msg = f"Task timed out after {timeout_seconds}s" if is_timeout else str(exc)
         tb_str = traceback.format_exc()
 
+        allow_retry = True
+        error_type = None
+        if isinstance(exc, TaskExecutionAdapterError):
+            allow_retry = exc.allow_retry
+            error_type = exc.error_type
+        elif is_timeout:
+            allow_retry = True
+            error_type = "TIMEOUT"
+        else:
+            allow_retry = True
+            error_type = "HANDLER_EXECUTION_ERROR"
+
         logger.warning(
             "task_execution_failed",
             task_id=task_id,
             attempt=attempt_num,
             error=error_msg,
+            error_type=error_type,
+            allow_retry=allow_retry,
             timeout=is_timeout,
         )
 
@@ -258,6 +367,8 @@ def execute_task(
                     attempt_id=attempt_id,
                     duration_ms=duration_ms,
                     publish_to_outbox=use_outbox,
+                    allow_retry=allow_retry,
+                    error_type=error_type,
                 )
 
             if is_retryable:

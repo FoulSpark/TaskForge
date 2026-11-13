@@ -85,7 +85,9 @@ class TaskDefinitionVersion(Base):
     configuration_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     input_schema_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     output_schema_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    execution_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    execution_policy_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     validation_status: Mapped[str] = mapped_column(
         String(24), nullable=False, default="UNVALIDATED"
@@ -140,4 +142,3 @@ class DefinitionAuditEvent(Base):
         Index("ix_def_audit_tenant_created", "tenant_id", "created_at"),
         Index("ix_def_audit_def_created", "definition_id", "created_at"),
     )
-

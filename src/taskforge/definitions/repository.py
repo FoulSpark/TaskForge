@@ -96,15 +96,9 @@ class DefinitionRepository:
 
         total = int(self.db.scalar(count_stmt) or 0)
         order_col = (
-            TaskDefinition.created_at
-            if sort_by == "created_at"
-            else TaskDefinition.updated_at
+            TaskDefinition.created_at if sort_by == "created_at" else TaskDefinition.updated_at
         )
-        stmt = (
-            stmt.order_by(desc(order_col), desc(TaskDefinition.id))
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = stmt.order_by(desc(order_col), desc(TaskDefinition.id)).offset(offset).limit(limit)
         items = list(self.db.scalars(stmt).all())
         return items, total
 
@@ -198,9 +192,7 @@ class DefinitionRepository:
         )
         return self.db.scalars(stmt).first()
 
-    def get_version_by_id(
-        self, version_id: str, tenant_id: str
-    ) -> TaskDefinitionVersion | None:
+    def get_version_by_id(self, version_id: str, tenant_id: str) -> TaskDefinitionVersion | None:
         stmt = (
             select(TaskDefinitionVersion)
             .join(
@@ -214,9 +206,7 @@ class DefinitionRepository:
         )
         return self.db.scalars(stmt).first()
 
-    def list_versions(
-        self, definition_id: str, tenant_id: str
-    ) -> list[TaskDefinitionVersion]:
+    def list_versions(self, definition_id: str, tenant_id: str) -> list[TaskDefinitionVersion]:
         stmt = (
             select(TaskDefinitionVersion)
             .join(
@@ -294,9 +284,7 @@ class DefinitionRepository:
             self.db.flush()
         return evt
 
-    def list_audit_events(
-        self, definition_id: str, tenant_id: str
-    ) -> list[DefinitionAuditEvent]:
+    def list_audit_events(self, definition_id: str, tenant_id: str) -> list[DefinitionAuditEvent]:
         stmt = (
             select(DefinitionAuditEvent)
             .where(
@@ -306,4 +294,3 @@ class DefinitionRepository:
             .order_by(DefinitionAuditEvent.created_at.asc(), DefinitionAuditEvent.id.asc())
         )
         return list(self.db.scalars(stmt).all())
-

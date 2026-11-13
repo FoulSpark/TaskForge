@@ -82,11 +82,30 @@ class TaskResponse(BaseModel):
     completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    definition_id: str | None = None
+    definition_version_id: str | None = None
     attempts: list[TaskAttemptResponse] = Field(default_factory=list)
     result: TaskResultResponse | None = None
     events: list[TaskEventResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class DefinitionExecuteRequest(BaseModel):
+    version: int | None = Field(
+        None, ge=1, description="Specific version number to execute. Defaults to active version."
+    )
+    input: dict[str, Any] = Field(
+        default_factory=dict, description="Input payload matching definition version input schema."
+    )
+    task_name: str | None = Field(None, max_length=128, description="Optional custom task name.")
+    priority: int = Field(2, ge=1, le=4, description="Task priority (1 to 4).")
+    idempotency_key: str | None = Field(
+        None, max_length=128, description="Unique idempotency key for deduplication."
+    )
+    timeout_seconds: int | None = Field(None, ge=1, le=3600, description="Task timeout in seconds.")
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class TaskListResponse(BaseModel):

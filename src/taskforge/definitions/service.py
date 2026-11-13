@@ -1,13 +1,16 @@
 """Domain service for Phase 11 Custom Task Definition Registry & Version Lifecycle."""
 
+import hashlib
+import json
 import re
 from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from taskforge.api.schemas import DefinitionExecuteRequest
 from taskforge.core.auth import AuthenticatedPrincipal
-from taskforge.database.models import get_utc_now
+from taskforge.database.models import Task, get_utc_now
 from taskforge.definitions.hashing import compute_definition_content_hash
 from taskforge.definitions.models import (
     DefinitionAuditEvent,
@@ -39,6 +42,14 @@ class DefinitionConflictError(DefinitionServiceError):
     """Raised on duplicate definition name or invalid lifecycle state transition."""
 
 
+class IdempotencyConflictError(DefinitionConflictError):
+    """Raised when an idempotency key is reused with mismatched parameters."""
+
+
+class DefinitionIntegrityError(DefinitionConflictError):
+    """Raised when content hash of a definition version fails integrity verification."""
+
+
 class DefinitionValidationError(DefinitionServiceError):
     """Raised when validation fails or activation is attempted on unvalidated/invalid version."""
 
@@ -47,9 +58,27 @@ class DefinitionPolicyError(DefinitionServiceError):
     """Raised when execution_type or payload violates security/policy constraints."""
 
 
-def _scan_for_prohibited_secrets(
-    value: Any, path: str = "", *, check_keys: bool = True
-) -> None:
+def compute_execution_request_fingerprint(
+    *,
+    definition_id: str,
+    definition_version_id: str,
+    input_payload: dict[str, Any],
+    priority: int,
+    timeout_seconds: int | None,
+) -> str:
+    """Computes a deterministic SHA-256 fingerprint for execution idempotency."""
+    fingerprint_data = {
+        "definition_id": definition_id,
+        "definition_version_id": definition_version_id,
+        "input": input_payload,
+        "priority": priority,
+        "timeout_seconds": timeout_seconds,
+    }
+    canonical_json = json.dumps(fingerprint_data, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def _scan_for_prohibited_secrets(value: Any, path: str = "", *, check_keys: bool = True) -> None:
     """Reject raw credentials or API key strings inside definition JSON, schemas, or reports."""
     if isinstance(value, str):
         if "tf_live_" in value:
@@ -111,7 +140,9 @@ class DefinitionService:
                 f"Supported in Phase 11: {sorted(SUPPORTED_EXECUTION_TYPES)}."
             )
         _scan_for_prohibited_secrets(configuration_json, "configuration_json", check_keys=True)
-        _scan_for_prohibited_secrets(execution_policy_json, "execution_policy_json", check_keys=True)
+        _scan_for_prohibited_secrets(
+            execution_policy_json, "execution_policy_json", check_keys=True
+        )
         if input_schema_json:
             _scan_for_prohibited_secrets(input_schema_json, "input_schema_json", check_keys=False)
         if output_schema_json:
@@ -276,9 +307,7 @@ class DefinitionService:
         for attempt in range(max_concurrency_retries):
             try:
                 # Row-level lock on PostgreSQL serializes version allocation per definition.
-                defn = self.repo.get_definition(
-                    definition_id, principal.tenant_id, for_update=True
-                )
+                defn = self.repo.get_definition(definition_id, principal.tenant_id, for_update=True)
                 if defn is None:
                     raise DefinitionNotFoundError(
                         f"Definition '{definition_id}' not found in tenant scope."
@@ -384,9 +413,7 @@ class DefinitionService:
         """Persist version validation status & report alongside VERSION_VALIDATED audit event."""
         _scan_for_prohibited_secrets(report, "validation_report_json", check_keys=False)
         try:
-            ver = self.repo.get_version(
-                definition_id, version_number, principal.tenant_id
-            )
+            ver = self.repo.get_version(definition_id, version_number, principal.tenant_id)
             if ver is None:
                 raise DefinitionNotFoundError(
                     f"Version {version_number} of definition '{definition_id}' not found in tenant scope."
@@ -426,16 +453,12 @@ class DefinitionService:
     ) -> TaskDefinition:
         """Atomically activate a validated version belonging to this tenant's definition."""
         try:
-            defn = self.repo.get_definition(
-                definition_id, principal.tenant_id, for_update=True
-            )
+            defn = self.repo.get_definition(definition_id, principal.tenant_id, for_update=True)
             if defn is None:
                 raise DefinitionNotFoundError(
                     f"Definition '{definition_id}' not found in tenant scope."
                 )
-            ver = self.repo.get_version(
-                definition_id, version_number, principal.tenant_id
-            )
+            ver = self.repo.get_version(definition_id, version_number, principal.tenant_id)
             if ver is None:
                 raise DefinitionNotFoundError(
                     f"Version {version_number} does not belong to definition '{definition_id}'."
@@ -480,9 +503,7 @@ class DefinitionService:
         self, *, principal: AuthenticatedPrincipal, definition_id: str
     ) -> TaskDefinition:
         try:
-            defn = self.repo.get_definition(
-                definition_id, principal.tenant_id, for_update=True
-            )
+            defn = self.repo.get_definition(definition_id, principal.tenant_id, for_update=True)
             if defn is None:
                 raise DefinitionNotFoundError(
                     f"Definition '{definition_id}' not found in tenant scope."
@@ -512,9 +533,7 @@ class DefinitionService:
         self, *, principal: AuthenticatedPrincipal, definition_id: str
     ) -> TaskDefinition:
         try:
-            defn = self.repo.get_definition(
-                definition_id, principal.tenant_id, for_update=True
-            )
+            defn = self.repo.get_definition(definition_id, principal.tenant_id, for_update=True)
             if defn is None:
                 raise DefinitionNotFoundError(
                     f"Definition '{definition_id}' not found in tenant scope."
@@ -523,13 +542,9 @@ class DefinitionService:
                 raise DefinitionConflictError(
                     "Cannot enable definition with no active version; activate a version first."
                 )
-            active_ver = self.repo.get_version_by_id(
-                defn.active_version_id, principal.tenant_id
-            )
+            active_ver = self.repo.get_version_by_id(defn.active_version_id, principal.tenant_id)
             if active_ver is None or active_ver.validation_status != "VALID":
-                raise DefinitionValidationError(
-                    "Active version is missing or no longer VALID."
-                )
+                raise DefinitionValidationError("Active version is missing or no longer VALID.")
             defn.status = "ACTIVE"
             defn.updated_at = get_utc_now()
             self.repo.record_audit_event(
@@ -557,3 +572,201 @@ class DefinitionService:
         self.get_definition(principal, definition_id)
         return self.repo.list_audit_events(definition_id, principal.tenant_id)
 
+    def execute_definition(
+        self,
+        *,
+        principal: AuthenticatedPrincipal,
+        definition_id: str,
+        request: DefinitionExecuteRequest,
+    ) -> tuple[Task, bool]:
+        """Execute a task definition version subject to R1-R3 execution guard constraints.
+
+        Returns:
+            tuple[Task, bool]: (task, created) where created=False indicates idempotent replay.
+        """
+        from taskforge.database.repositories.task_repository import TaskRepository
+        from taskforge.definitions.validation import validate_schema_instance
+        from taskforge.tasks.registry import TaskRegistry
+
+        task_repo = TaskRepository(self.db)
+        effective_timeout = request.timeout_seconds or 60
+
+        # Optimistic fast-path check on idempotency key before acquiring locks
+        if request.idempotency_key:
+            existing = task_repo.get_by_idempotency_key(
+                request.idempotency_key, tenant_id=principal.tenant_id
+            )
+            if existing:
+                if existing.definition_id != definition_id:
+                    raise IdempotencyConflictError(
+                        "Idempotency key reused for a different definition."
+                    )
+                if request.version is not None and existing.definition_version_id is not None:
+                    existing_ver = self.repo.get_version_by_id(
+                        existing.definition_version_id, principal.tenant_id
+                    )
+                    if existing_ver and existing_ver.version != request.version:
+                        raise IdempotencyConflictError(
+                            "Idempotency key reused with a different version."
+                        )
+                expected_fp = compute_execution_request_fingerprint(
+                    definition_id=existing.definition_id or definition_id,
+                    definition_version_id=existing.definition_version_id or "",
+                    input_payload=request.input,
+                    priority=request.priority,
+                    timeout_seconds=effective_timeout,
+                )
+                existing_fp = (
+                    existing.payload.get("_request_fingerprint")
+                    if isinstance(existing.payload, dict)
+                    else None
+                )
+                if existing_fp and existing_fp != expected_fp:
+                    raise IdempotencyConflictError(
+                        "Idempotency key reused with different execution parameters."
+                    )
+                return existing, False
+
+        try:
+            # R3: Row-level lock on task_definitions to serialize submission with disable/activate
+            defn = self.repo.get_definition(definition_id, principal.tenant_id, for_update=True)
+            if defn is None:
+                raise DefinitionNotFoundError(
+                    f"Definition '{definition_id}' not found in tenant scope."
+                )
+
+            # Guard G11.4-01: Status must be ACTIVE
+            if defn.status != "ACTIVE":
+                raise DefinitionConflictError(
+                    f"Definition '{definition_id}' is not ACTIVE (current status: {defn.status})."
+                )
+
+            # Resolve target version
+            if request.version is not None:
+                ver = self.repo.get_version(defn.id, request.version, principal.tenant_id)
+                if ver is None:
+                    raise DefinitionNotFoundError(
+                        f"Version {request.version} not found for definition '{defn.id}'."
+                    )
+            else:
+                if not defn.active_version_id:
+                    raise DefinitionConflictError(f"Definition '{defn.id}' has no active version.")
+                ver = self.repo.get_version_by_id(defn.active_version_id, principal.tenant_id)
+                if ver is None:
+                    raise DefinitionNotFoundError(
+                        f"Active version '{defn.active_version_id}' not found."
+                    )
+
+            # Guard: validation status must be VALID
+            if ver.validation_status != "VALID":
+                raise DefinitionValidationError(
+                    f"Definition version {ver.version} is not VALID (current status: {ver.validation_status})."
+                )
+
+            # Guard G11.4-02: execution_type must be builtin
+            if ver.execution_type != "builtin":
+                raise DefinitionPolicyError(
+                    f"Execution type '{ver.execution_type}' is not supported. Only 'builtin' is permitted."
+                )
+
+            # Guard G11.4-03: Live TaskRegistry check
+            if not TaskRegistry.has_handler(ver.task_type):
+                raise DefinitionValidationError(
+                    f"Handler for task type '{ver.task_type}' is not registered in live TaskRegistry."
+                )
+
+            # Guard R1: Content hash integrity verification
+            expected_hash = compute_definition_content_hash(
+                task_type=ver.task_type,
+                execution_type=ver.execution_type,
+                configuration_json=ver.configuration_json,
+                input_schema_json=ver.input_schema_json,
+                output_schema_json=ver.output_schema_json,
+                execution_policy_json=ver.execution_policy_json,
+            )
+            if ver.content_hash != expected_hash:
+                raise DefinitionIntegrityError(
+                    f"Content hash mismatch for version {ver.id}: expected {expected_hash}, recorded {ver.content_hash}."
+                )
+
+            # Guard G11.4-05: Pre-validate input payload against version input schema
+            if ver.input_schema_json:
+                val_errors = validate_schema_instance(ver.input_schema_json, request.input)
+                if val_errors:
+                    raise DefinitionValidationError(f"Input validation failed: {val_errors[0]}")
+
+            # R2: Compute deterministic request fingerprint
+            fingerprint = compute_execution_request_fingerprint(
+                definition_id=defn.id,
+                definition_version_id=ver.id,
+                input_payload=request.input,
+                priority=request.priority,
+                timeout_seconds=effective_timeout,
+            )
+
+            # Prepare effective task payload
+            effective_payload = {
+                **ver.configuration_json,
+                **request.input,
+                "_input": request.input,
+                "_request_fingerprint": fingerprint,
+            }
+
+            # Create Task under the open definition lock transaction (commit=False)
+            max_retries = (
+                ver.execution_policy_json.get("max_retries", 3) if ver.execution_policy_json else 3
+            )
+            create_res = task_repo.create_task(
+                task_name=request.task_name or f"{defn.name}:v{ver.version}",
+                task_type=ver.task_type,
+                payload=effective_payload,
+                priority=request.priority,
+                idempotency_key=request.idempotency_key,
+                timeout_seconds=effective_timeout,
+                max_retries=max_retries,
+                tenant_id=principal.tenant_id,
+                actor_id=principal.key_id,
+                definition_id=defn.id,
+                definition_version_id=ver.id,
+                commit=False,
+            )
+
+            if not create_res.created:
+                # Idempotency collision during submission
+                existing_fp = (
+                    create_res.task.payload.get("_request_fingerprint")
+                    if isinstance(create_res.task.payload, dict)
+                    else None
+                )
+                if existing_fp and existing_fp != fingerprint:
+                    self.db.rollback()
+                    raise IdempotencyConflictError(
+                        "Idempotency key reused with different execution parameters."
+                    )
+                self.db.rollback()
+                return create_res.task, False
+
+            # G11.4-12: Record audit event in same transaction
+            self.repo.record_audit_event(
+                tenant_id=principal.tenant_id,
+                definition_id=defn.id,
+                version_id=ver.id,
+                actor_id=principal.key_id,
+                action="DEFINITION_EXECUTED",
+                metadata_json={
+                    "task_id": create_res.task.id,
+                    "version": ver.version,
+                    "fingerprint": fingerprint,
+                },
+                commit=False,
+            )
+
+            # Atomic commit of definition lock, task, outbox, and audit event
+            self.db.commit()
+            return create_res.task, True
+        except DefinitionServiceError:
+            self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
