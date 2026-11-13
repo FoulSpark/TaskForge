@@ -101,9 +101,13 @@ def redact_sensitive_data(value: Any) -> Any:
         return [redact_sensitive_data(item) for item in value]
     if isinstance(value, str):
         if "tf_live_" in value:
-            return "[REDACTED]"
-        if value.lower().startswith("bearer "):
-            return "Bearer [REDACTED]"
+            # Mask any TaskForge live secret key found anywhere in a string
+            value = re.sub(r"tf_live_[A-Za-z0-9_-]+", "[REDACTED]", value)
+            if value == "[REDACTED]":
+                return "[REDACTED]"
+        if "bearer " in value.lower():
+            value = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/-]+=*", "Bearer [REDACTED]", value)
+        return value
     return value
 
 
@@ -605,6 +609,48 @@ class DefinitionService:
     ) -> list[DefinitionAuditEvent]:
         self.get_definition(principal, definition_id)
         return self.repo.list_audit_events(definition_id, principal.tenant_id)
+
+    def list_audit_events_paginated(
+        self,
+        *,
+        principal: AuthenticatedPrincipal,
+        definition_id: str,
+        action: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """List audit events with tenant boundaries, optional action filter, deterministic pagination, and recursive redaction."""
+        # 1. Assert definition exists within caller's tenant
+        self.get_definition(principal, definition_id)
+
+        # 2. Query paginated audit events from repository
+        events, total = self.repo.list_audit_events_paginated(
+            definition_id=definition_id,
+            tenant_id=principal.tenant_id,
+            action=action,
+            limit=limit,
+            offset=offset,
+        )
+
+        # 3. Format and recursively scrub metadata_json without mutating persistent models
+        items = []
+        for evt in events:
+            raw_meta = dict(evt.metadata_json) if isinstance(evt.metadata_json, dict) else {}
+            scrubbed_meta = redact_sensitive_data(raw_meta)
+            items.append(
+                {
+                    "id": evt.id,
+                    "tenant_id": evt.tenant_id,
+                    "definition_id": evt.definition_id,
+                    "version_id": evt.version_id,
+                    "actor_id": evt.actor_id,
+                    "action": evt.action,
+                    "metadata": scrubbed_meta,
+                    "created_at": evt.created_at,
+                }
+            )
+
+        return items, total
 
     def execute_definition(
         self,

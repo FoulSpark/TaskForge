@@ -173,6 +173,26 @@ class DefinitionExecutionDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DefinitionAuditEventResponse(BaseModel):
+    id: str
+    tenant_id: str
+    definition_id: str
+    version_id: str | None = None
+    actor_id: str
+    action: str
+    metadata: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DefinitionAuditListResponse(BaseModel):
+    items: list[DefinitionAuditEventResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class TaskListResponse(BaseModel):
     items: list[TaskResponse]
     total: int

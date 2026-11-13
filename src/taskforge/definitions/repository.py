@@ -284,7 +284,11 @@ class DefinitionRepository:
             self.db.flush()
         return evt
 
-    def list_audit_events(self, definition_id: str, tenant_id: str) -> list[DefinitionAuditEvent]:
+    def list_audit_events(
+        self,
+        definition_id: str,
+        tenant_id: str,
+    ) -> list[DefinitionAuditEvent]:
         stmt = (
             select(DefinitionAuditEvent)
             .where(
@@ -294,3 +298,34 @@ class DefinitionRepository:
             .order_by(DefinitionAuditEvent.created_at.asc(), DefinitionAuditEvent.id.asc())
         )
         return list(self.db.scalars(stmt).all())
+
+    def list_audit_events_paginated(
+        self,
+        definition_id: str,
+        tenant_id: str,
+        *,
+        action: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[DefinitionAuditEvent], int]:
+        """List audit events for a definition with tenant boundaries, optional filtering, and deterministic pagination."""
+        from sqlalchemy import func
+
+        conditions = [
+            DefinitionAuditEvent.definition_id == definition_id,
+            DefinitionAuditEvent.tenant_id == tenant_id,
+        ]
+        if action:
+            conditions.append(DefinitionAuditEvent.action == action)
+
+        total_stmt = select(func.count(DefinitionAuditEvent.id)).where(*conditions)
+        total = self.db.scalar(total_stmt) or 0
+
+        stmt = (
+            select(DefinitionAuditEvent)
+            .where(*conditions)
+            .order_by(DefinitionAuditEvent.created_at.desc(), DefinitionAuditEvent.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).all()), total

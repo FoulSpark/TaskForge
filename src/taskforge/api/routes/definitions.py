@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from taskforge.api.dependencies import require_scope
 from taskforge.api.schemas import (
+    DefinitionAuditListResponse,
     DefinitionExecuteRequest,
     DefinitionExecutionDetailResponse,
     DefinitionExecutionListResponse,
@@ -132,6 +133,42 @@ def get_definition_execution_detail(
             definition_id=definition_id,
             task_id=task_id,
         )
+    except DefinitionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/{definition_id}/audit",
+    response_model=DefinitionAuditListResponse,
+    summary="Get definition audit history",
+    description="Retrieves a paginated, tenant-scoped audit event stream with sensitive-data redaction.",
+)
+def get_definition_audit_history(
+    definition_id: str,
+    action: str | None = Query(None, description="Filter by audit action"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    db: Session = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(require_scope("tasks:read")),
+):
+    service = DefinitionService(db)
+    try:
+        items, total = service.list_audit_events_paginated(
+            principal=principal,
+            definition_id=definition_id,
+            action=action,
+            limit=limit,
+            offset=offset,
+        )
+        return {
+            "items": items,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
     except DefinitionNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
