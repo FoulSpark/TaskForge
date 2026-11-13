@@ -174,3 +174,33 @@ def get_definition_audit_history(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+
+@router.post(
+    "/{definition_id}/executions/{task_id}/cancel",
+    summary="Cancel definition execution",
+    description="Cancels an active execution under lease fencing, revoking active leases and recording audit attribution.",
+)
+def cancel_definition_execution(
+    definition_id: str,
+    task_id: str,
+    db: Session = Depends(get_db),
+    principal: AuthenticatedPrincipal = Depends(require_scope("tasks:write")),
+):
+    service = DefinitionService(db)
+    try:
+        return service.cancel_execution(
+            principal=principal,
+            definition_id=definition_id,
+            task_id=task_id,
+        )
+    except DefinitionNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except DefinitionConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc

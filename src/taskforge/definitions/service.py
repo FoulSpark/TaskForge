@@ -1015,3 +1015,63 @@ class DefinitionService:
                 "completed_at": task.completed_at,
             },
         }
+
+    def cancel_execution(
+        self,
+        *,
+        principal: AuthenticatedPrincipal,
+        definition_id: str,
+        task_id: str,
+        reason: str = "user_cancelled",
+    ) -> dict[str, Any]:
+        """Cancel an active execution under fenced transaction boundary, revoking active leases and recording audit trail."""
+        from taskforge.database.repositories.task_repository import TaskRepository
+
+        # 1. Assert definition existence within tenant
+        defn = self.repo.get_definition(definition_id, principal.tenant_id)
+        if defn is None:
+            raise DefinitionNotFoundError(
+                f"Definition '{definition_id}' not found in tenant scope."
+            )
+
+        task_repo = TaskRepository(self.db)
+        task = task_repo.get_by_id(task_id)
+        if not task or task.tenant_id != principal.tenant_id or task.definition_id != definition_id:
+            raise DefinitionNotFoundError(
+                f"Execution '{task_id}' not found under definition '{definition_id}'."
+            )
+
+        # 2. Check if task can be cancelled
+        from taskforge.core.state_machine import can_cancel_task
+
+        if not can_cancel_task(task.status):
+            raise DefinitionConflictError(
+                f"Execution '{task_id}' in terminal status '{task.status}' cannot be cancelled."
+            )
+
+        # 3. Perform fenced cancellation via repository
+        try:
+            cancelled_task = task_repo.cancel_task(task_id, reason=reason)
+        except ValueError as val_err:
+            raise DefinitionConflictError(str(val_err)) from val_err
+
+        # 4. Record audit event in definition audit stream
+        self.repo.record_audit_event(
+            tenant_id=principal.tenant_id,
+            definition_id=definition_id,
+            version_id=cancelled_task.definition_version_id,
+            actor_id=principal.key_id,
+            action="EXECUTION_CANCELLED",
+            metadata_json={
+                "task_id": cancelled_task.id,
+                "reason": reason,
+                "previous_status": task.status,
+            },
+            commit=True,
+        )
+
+        return {
+            "id": cancelled_task.id,
+            "status": cancelled_task.status,
+            "message": "Execution cancelled successfully; worker leases revoked.",
+        }

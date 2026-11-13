@@ -454,14 +454,80 @@ class TaskRepository:
         return task
 
     def cancel_task(self, task_id: str, reason: str = "user_cancelled") -> Task:
-        task = self.get_by_id(task_id)
+        """Atomically cancel a task, revoking active leases and cancelling running attempts under row lock."""
+        from sqlalchemy import update as sa_update
+
+        stmt = select(Task).where(Task.id == task_id).with_for_update()
+        task = self.db.scalars(stmt).first()
         if not task:
             raise ValueError(f"Task with id {task_id} not found")
 
-        if not can_cancel_task(task.status):
-            raise ValueError(f"Task in status {task.status} cannot be cancelled")
+        curr_status = TaskStatus(task.status)
+        if not can_cancel_task(curr_status):
+            raise ValueError(f"Task in status '{task.status}' cannot be cancelled")
 
-        return self.update_status(task_id, TaskStatus.CANCELLED, {"reason": reason})
+        now = get_utc_now()
+        was_terminal = curr_status in {
+            TaskStatus.SUCCESS,
+            TaskStatus.DEAD_LETTER,
+            TaskStatus.CANCELLED,
+            TaskStatus.FAILED,
+        }
+
+        # 1. Update task row: status='CANCELLED', revoke lease fencing tokens, set completed_at
+        task.status = TaskStatus.CANCELLED.value
+        task.updated_at = now
+        task.completed_at = now
+        task.lease_token = None
+        task.lease_expires_at = None
+
+        # 2. Cancel any active RUNNING attempts for this task
+        self.db.execute(
+            sa_update(TaskAttempt)
+            .where(
+                TaskAttempt.task_id == task_id,
+                TaskAttempt.status.in_(["RUNNING", "PENDING"]),
+            )
+            .values(
+                status="CANCELLED",
+                completed_at=now,
+                error_message=f"Execution cancelled: {reason}",
+            )
+        )
+
+        # 3. Record STATUS_CHANGED event
+        event = TaskEvent(
+            task_id=task.id,
+            event_type="STATUS_CHANGED",
+            from_state=curr_status.value,
+            to_state=TaskStatus.CANCELLED.value,
+            metadata_json={"reason": reason},
+            created_at=now,
+        )
+        self.db.add(event)
+        self.db.commit()
+        self.db.refresh(task)
+
+        # 4. Record cancellation metric if newly terminal
+        if not was_terminal:
+            try:
+                record_task_completed(task.task_type, "CANCELLED")
+                if task.definition_id is not None:
+                    from taskforge.monitoring.metrics import record_definition_execution
+
+                    record_definition_execution(task.task_type, "CANCELLED")
+            except Exception as exc:
+                logger.debug("Telemetry isolation: failed to record cancellation metrics: %s", exc)
+
+        # Invalidate read cache
+        try:
+            from taskforge.core.cache import get_cache
+
+            get_cache().invalidate(task_id)
+        except Exception:
+            pass
+
+        return task
 
     def record_attempt(
         self,
