@@ -108,6 +108,71 @@ class DefinitionExecuteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DefinitionExecutionSummary(BaseModel):
+    id: str
+    task_name: str
+    task_type: str
+    status: str
+    priority: int
+    definition_id: str
+    definition_version_id: str | None = None
+    version_number: int | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    duration_ms: float | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DefinitionExecutionListResponse(BaseModel):
+    items: list[DefinitionExecutionSummary]
+    total: int
+    limit: int
+    offset: int
+
+
+class DefinitionExecutionVersionSnapshot(BaseModel):
+    id: str
+    version_number: int
+    task_type: str
+    content_hash: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DefinitionExecutionFailureDiagnosis(BaseModel):
+    classification: str
+    error_message: str | None = None
+    retryable: bool = False
+    is_timeout: bool = False
+    retries_exhausted: bool = False
+
+
+class DefinitionExecutionTimeline(BaseModel):
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class DefinitionExecutionDetailResponse(BaseModel):
+    id: str
+    task_name: str
+    task_type: str
+    status: str
+    priority: int
+    definition_id: str
+    definition_version_id: str | None = None
+    version: DefinitionExecutionVersionSnapshot | None = None
+    payload: dict[str, Any]
+    result: dict[str, Any] | None = None
+    failure_diagnosis: DefinitionExecutionFailureDiagnosis | None = None
+    attempts: list[TaskAttemptResponse] = Field(default_factory=list)
+    timeline: DefinitionExecutionTimeline
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TaskListResponse(BaseModel):
     items: list[TaskResponse]
     total: int

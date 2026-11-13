@@ -25,7 +25,7 @@ from taskforge.definitions.validation import (
 
 SUPPORTED_EXECUTION_TYPES: frozenset[str] = frozenset({"builtin"})
 SENSITIVE_CONFIG_KEY_RE = re.compile(
-    r"(api_key|secret|password|private_key|access_token|bearer_token|authorization)",
+    r"(api_key|apikey|secret|password|private_key|access_token|bearer_token|authorization|auth_token|token)",
     re.IGNORECASE,
 )
 
@@ -78,6 +78,34 @@ def compute_execution_request_fingerprint(
     return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
 
+def redact_sensitive_data(value: Any) -> Any:
+    """Recursively scrub secrets, credentials, tokens, and authorization headers from dicts/lists.
+
+    Handles mixed-case keys, nested dictionaries, and nested lists.
+    Replaces sensitive values with '[REDACTED]'.
+    """
+    if isinstance(value, dict):
+        redacted = {}
+        for k, v in value.items():
+            key_str = str(k)
+            # Never expose lease tokens or sensitive key patterns
+            if key_str.lower() == "lease_token":
+                continue
+            if SENSITIVE_CONFIG_KEY_RE.search(key_str):
+                redacted[k] = "[REDACTED]"
+            else:
+                redacted[k] = redact_sensitive_data(v)
+        return redacted
+    if isinstance(value, list):
+        return [redact_sensitive_data(item) for item in value]
+    if isinstance(value, str):
+        if "tf_live_" in value:
+            return "[REDACTED]"
+        if value.lower().startswith("bearer "):
+            return "Bearer [REDACTED]"
+    return value
+
+
 def _scan_for_prohibited_secrets(value: Any, path: str = "", *, check_keys: bool = True) -> None:
     """Reject raw credentials or API key strings inside definition JSON, schemas, or reports."""
     if isinstance(value, str):
@@ -94,6 +122,11 @@ def _scan_for_prohibited_secrets(value: Any, path: str = "", *, check_keys: bool
         for key, item in value.items():
             key_str = str(key)
             next_path = f"{path}.{key_str}" if path else key_str
+            # Check value for live API key first
+            if isinstance(item, str) and "tf_live_" in item:
+                raise DefinitionPolicyError(
+                    f"Prohibited TaskForge API key secret detected at '{next_path}'."
+                )
             if check_keys and SENSITIVE_CONFIG_KEY_RE.search(key_str) and item not in (None, ""):
                 raise DefinitionPolicyError(
                     f"Prohibited credential-like configuration field '{next_path}'."
@@ -770,3 +803,164 @@ class DefinitionService:
         except Exception:
             self.db.rollback()
             raise
+
+    def list_executions(
+        self,
+        *,
+        principal: AuthenticatedPrincipal,
+        definition_id: str,
+        status: str | None = None,
+        version_number: int | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """List tasks executed under a definition with deterministic pagination and tenant boundaries."""
+        from taskforge.database.repositories.task_repository import TaskRepository
+
+        # Assert definition existence within caller's tenant
+        defn = self.repo.get_definition(definition_id, principal.tenant_id)
+        if defn is None:
+            raise DefinitionNotFoundError(
+                f"Definition '{definition_id}' not found in tenant scope."
+            )
+
+        task_repo = TaskRepository(self.db)
+        rows, total = task_repo.list_definition_tasks(
+            definition_id=definition_id,
+            tenant_id=principal.tenant_id,
+            status=status,
+            version_number=version_number,
+            limit=limit,
+            offset=offset,
+        )
+
+        items = []
+        for task, ver_num in rows:
+            duration_ms = None
+            if task.started_at and task.completed_at:
+                duration_ms = round((task.completed_at - task.started_at).total_seconds() * 1000, 2)
+            items.append(
+                {
+                    "id": task.id,
+                    "task_name": task.task_name,
+                    "task_type": task.task_type,
+                    "status": task.status,
+                    "priority": task.priority,
+                    "definition_id": task.definition_id,
+                    "definition_version_id": task.definition_version_id,
+                    "version_number": ver_num,
+                    "created_at": task.created_at,
+                    "started_at": task.started_at,
+                    "completed_at": task.completed_at,
+                    "duration_ms": duration_ms,
+                }
+            )
+        return items, total
+
+    def get_execution_detail(
+        self,
+        *,
+        principal: AuthenticatedPrincipal,
+        definition_id: str,
+        task_id: str,
+    ) -> dict[str, Any]:
+        """Deep execution inspection with immutable version snapshot and failure diagnosis."""
+        from taskforge.database.repositories.task_repository import TaskRepository
+
+        defn = self.repo.get_definition(definition_id, principal.tenant_id)
+        if defn is None:
+            raise DefinitionNotFoundError(
+                f"Definition '{definition_id}' not found in tenant scope."
+            )
+
+        task_repo = TaskRepository(self.db)
+        task = task_repo.get_by_id(task_id)
+        if not task or task.definition_id != definition_id or task.tenant_id != principal.tenant_id:
+            raise DefinitionNotFoundError(
+                f"Execution task '{task_id}' not found for definition '{definition_id}' in tenant scope."
+            )
+
+        # Version snapshot lookup
+        ver_snapshot = None
+        if task.definition_version_id:
+            ver = self.repo.get_version_by_id(task.definition_version_id, principal.tenant_id)
+            if ver:
+                ver_snapshot = {
+                    "id": ver.id,
+                    "version_number": ver.version,
+                    "task_type": ver.task_type,
+                    "content_hash": ver.content_hash,
+                }
+
+        # Failure diagnosis classification
+        failure_diag = None
+        if task.status in ("FAILED", "DEAD_LETTER"):
+            # Check latest status changed event
+            events = sorted(task.events, key=lambda e: e.created_at)
+            fail_event = next(
+                (
+                    e
+                    for e in reversed(events)
+                    if e.event_type == "STATUS_CHANGED" and e.metadata_json
+                ),
+                None,
+            )
+            meta = fail_event.metadata_json if fail_event else {}
+            classification = meta.get("error_type") or "EXECUTION_ERROR"
+            err_msg = meta.get("error") or (
+                task.attempts[-1].error_message if task.attempts else None
+            )
+            retryable = bool(meta.get("retryable", False))
+            is_timeout = bool(meta.get("is_timeout", False))
+            retries_exhausted = bool(
+                meta.get("retries_exhausted", task.retry_count >= task.max_retries)
+            )
+
+            failure_diag = {
+                "classification": classification,
+                "error_message": err_msg,
+                "retryable": retryable,
+                "is_timeout": is_timeout,
+                "retries_exhausted": retries_exhausted,
+            }
+
+        # Recursive secret scrubbing on payloads and return values
+        scrubbed_payload = redact_sensitive_data(dict(task.payload) if task.payload else {})
+        scrubbed_result = None
+        if task.result and task.result.return_value:
+            scrubbed_result = redact_sensitive_data(task.result.return_value)
+
+        # Sort attempts deterministically by attempt_number ASC
+        attempts_data = [
+            {
+                "id": att.id,
+                "attempt_number": att.attempt_number,
+                "worker_id": att.worker_id,
+                "status": att.status,
+                "error_message": att.error_message,
+                "started_at": att.started_at,
+                "completed_at": att.completed_at,
+                "duration_ms": att.duration_ms,
+            }
+            for att in sorted(task.attempts, key=lambda a: a.attempt_number)
+        ]
+
+        return {
+            "id": task.id,
+            "task_name": task.task_name,
+            "task_type": task.task_type,
+            "status": task.status,
+            "priority": task.priority,
+            "definition_id": task.definition_id,
+            "definition_version_id": task.definition_version_id,
+            "version": ver_snapshot,
+            "payload": scrubbed_payload,
+            "result": scrubbed_result,
+            "failure_diagnosis": failure_diag,
+            "attempts": attempts_data,
+            "timeline": {
+                "created_at": task.created_at,
+                "started_at": task.started_at,
+                "completed_at": task.completed_at,
+            },
+        }

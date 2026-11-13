@@ -296,6 +296,63 @@ class TaskRepository:
         tasks = list(self.db.scalars(stmt).all())
         return tasks, total
 
+    def list_definition_tasks(
+        self,
+        *,
+        definition_id: str,
+        tenant_id: str,
+        status: str | None = None,
+        version_number: int | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[tuple[Task, int | None]], int]:
+        """Query tasks for a specific task definition within caller's tenant with deterministic ordering."""
+        from taskforge.definitions.models import TaskDefinitionVersion
+
+        base_stmt = (
+            select(Task, TaskDefinitionVersion.version.label("version_number"))
+            .outerjoin(
+                TaskDefinitionVersion,
+                Task.definition_version_id == TaskDefinitionVersion.id,
+            )
+            .where(
+                Task.definition_id == definition_id,
+                Task.tenant_id == tenant_id,
+            )
+        )
+        count_stmt = select(func.count(Task.id)).where(
+            Task.definition_id == definition_id,
+            Task.tenant_id == tenant_id,
+        )
+
+        if status:
+            base_stmt = base_stmt.where(Task.status == status)
+            count_stmt = count_stmt.where(Task.status == status)
+
+        if version_number is not None:
+            base_stmt = base_stmt.where(TaskDefinitionVersion.version == version_number)
+            count_stmt = count_stmt.join(
+                TaskDefinitionVersion,
+                Task.definition_version_id == TaskDefinitionVersion.id,
+            ).where(TaskDefinitionVersion.version == version_number)
+
+        total = self.db.scalar(count_stmt) or 0
+
+        # Deterministic pagination ordering: created_at DESC, id DESC
+        ordered_stmt = (
+            base_stmt.order_by(desc(Task.created_at), desc(Task.id))
+            .offset(offset)
+            .limit(limit)
+            .options(
+                selectinload(Task.attempts),
+                selectinload(Task.result),
+            )
+        )
+        rows = list(self.db.execute(ordered_stmt).all())
+        # Map each row (Task, version_number)
+        items = [(row[0], row[1]) for row in rows]
+        return items, total
+
     def update_status(
         self,
         task_id: str,
