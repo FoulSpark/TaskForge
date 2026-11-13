@@ -22,6 +22,7 @@ from taskforge.definitions.validation import (
     DefinitionValidationResult,
     validate_definition_version,
 )
+from taskforge.monitoring.metrics import record_definition_execution
 
 SUPPORTED_EXECUTION_TYPES: frozenset[str] = frozenset({"builtin"})
 SENSITIVE_CONFIG_KEY_RE = re.compile(
@@ -796,6 +797,10 @@ class DefinitionService:
 
             # Atomic commit of definition lock, task, outbox, and audit event
             self.db.commit()
+
+            # G11.5-C: Record submission metric strictly after DB commit
+            record_definition_execution(ver.task_type, "SUBMITTED")
+
             return create_res.task, True
         except DefinitionServiceError:
             self.db.rollback()

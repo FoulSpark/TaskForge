@@ -16,7 +16,13 @@ from taskforge.database.session import SessionLocal
 from taskforge.definitions.hashing import compute_definition_content_hash
 from taskforge.definitions.models import TaskDefinitionVersion
 from taskforge.definitions.validation import validate_schema_instance
-from taskforge.monitoring.metrics import record_task_execution_duration
+from taskforge.monitoring.metrics import (
+    record_definition_execution,
+    record_definition_execution_duration,
+    record_definition_handler_unavailable,
+    record_definition_validation_failure,
+    record_task_execution_duration,
+)
 from taskforge.monitoring.profiler import record_diagnostic_event
 from taskforge.tasks.registry import TaskRegistry, get_handler
 from taskforge.workers.lease_manager import LeaseManager
@@ -140,6 +146,8 @@ def execute_task(
     start_utc = get_utc_now()
     attempt_num = 1
     attempt_id: int | None = None
+    is_definition_task = False
+    definition_task_type: str | None = None
 
     try:
         with SessionLocal() as db:
@@ -201,6 +209,9 @@ def execute_task(
             payload["_current_attempt"] = attempt_num
 
             output_schema = None
+            if task.definition_id is not None:
+                is_definition_task = True
+                definition_task_type = task.task_type
             if task.definition_version_id:
                 ver = (
                     db.execute(
@@ -242,6 +253,7 @@ def execute_task(
 
                 output_schema = ver.output_schema_json
                 task_type = ver.task_type
+                definition_task_type = ver.task_type
 
             # Determine authoritative timeout
             if timeout_seconds is None:
@@ -315,6 +327,15 @@ def execute_task(
             attempt=attempt_num,
             duration_ms=duration_ms,
         )
+
+        # G11.5-C: Definition metrics strictly after DB commit (success path)
+        if is_definition_task:
+            try:
+                record_definition_execution(definition_task_type, "SUCCESS")
+                record_definition_execution_duration(definition_task_type, duration_ms / 1000.0)
+            except Exception as metric_err:
+                logger.debug("Metrics isolation: failed to record success metrics: %s", metric_err)
+
         return ExecutionDisposition.COMPLETED
 
     except Exception as exc:
@@ -344,6 +365,15 @@ def execute_task(
             allow_retry = True
             error_type = "HANDLER_EXECUTION_ERROR"
 
+        # G11.5-C: Definition-specific validation and handler metrics (before DB write)
+        if is_definition_task:
+            if isinstance(exc, SchemaValidationError):
+                record_definition_validation_failure("input", "SCHEMA_VALIDATION_ERROR")
+            elif isinstance(exc, OutputValidationError):
+                record_definition_validation_failure("output", "OUTPUT_VALIDATION_ERROR")
+            elif isinstance(exc, HandlerUnavailableError):
+                record_definition_handler_unavailable(definition_task_type)
+
         logger.warning(
             "task_execution_failed",
             task_id=task_id,
@@ -372,10 +402,19 @@ def execute_task(
                 )
 
             if is_retryable:
+                # G11.5-C: Retry scheduled — don't record terminal execution counter
+                # (counter increments only on terminal transitions)
+                if is_definition_task:
+                    record_definition_execution_duration(definition_task_type, duration_ms / 1000.0)
                 if use_outbox:
                     return ExecutionDisposition.RETRY_DURABLY_SCHEDULED
                 return ExecutionDisposition.RETRY_PENDING_PUBLICATION
             else:
+                # G11.5-C: Terminal failure — record definition execution counter after DB commit
+                if is_definition_task:
+                    failure_status = "TIMEOUT" if is_timeout else "FAILED"
+                    record_definition_execution(definition_task_type, failure_status)
+                    record_definition_execution_duration(definition_task_type, duration_ms / 1000.0)
                 return ExecutionDisposition.TERMINAL_FAILURE_RECORDED
 
         except PermissionError as perm_err:

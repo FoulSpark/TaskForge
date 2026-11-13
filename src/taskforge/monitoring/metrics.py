@@ -64,6 +64,16 @@ __all__ = [
     "record_db_pool_overflow_connections",
     "record_lease_renewal",
     "record_fencing_rejection",
+    "DEFINITION_EXECUTIONS_TOTAL",
+    "DEFINITION_VALIDATION_FAILURES_TOTAL",
+    "DEFINITION_HANDLER_UNAVAILABLE_TOTAL",
+    "DEFINITION_EXECUTION_DURATION_SECONDS",
+    "normalize_definition_phase",
+    "normalize_definition_error_type",
+    "record_definition_execution",
+    "record_definition_validation_failure",
+    "record_definition_handler_unavailable",
+    "record_definition_execution_duration",
 ]
 
 # ---------------------------------------------------------------------------
@@ -93,6 +103,32 @@ STATUS_CODE_CLASS_WHITELIST = {"2xx", "4xx", "5xx"}
 POOL_STATE_WHITELIST = {"checked_out", "idle", "overflow"}
 POOL_NAME_WHITELIST = {"primary", "dedicated_telemetry"}
 LEASE_RENEWAL_STATUS_WHITELIST = {"success", "failed"}
+DEFINITION_PHASE_WHITELIST = {"input", "output"}
+DEFINITION_ERROR_TYPE_WHITELIST = {
+    "SCHEMA_VALIDATION_ERROR",
+    "OUTPUT_VALIDATION_ERROR",
+}
+DEFINITION_EXECUTION_STATUS_WHITELIST = {
+    "SUBMITTED",
+    "SUCCESS",
+    "FAILED",
+    "CANCELLED",
+    "DEAD_LETTER",
+    "TIMEOUT",
+    "HANDLER_UNAVAILABLE",
+}
+
+
+def normalize_definition_phase(val: Any) -> str:
+    """Normalize definition validation phase to 'input' or 'output'."""
+    s = str(val).strip().lower() if val is not None else ""
+    return s if s in DEFINITION_PHASE_WHITELIST else "input"
+
+
+def normalize_definition_error_type(val: Any) -> str:
+    """Normalize definition validation error type to bounded whitelist."""
+    s = str(val).strip().upper() if val is not None else ""
+    return s if s in DEFINITION_ERROR_TYPE_WHITELIST else "SCHEMA_VALIDATION_ERROR"
 
 
 def normalize_pool_name(val: Any) -> str:
@@ -105,7 +141,6 @@ def normalize_lease_renewal_status(val: Any) -> str:
     """Normalize lease renewal status to finite whitelist ('success' or 'failed')."""
     s = str(val).strip().lower() if val is not None else ""
     return s if s in LEASE_RENEWAL_STATUS_WHITELIST else "failed"
-
 
 
 def normalize_priority(val: Any) -> str:
@@ -353,6 +388,39 @@ FENCING_REJECTIONS_TOTAL = Counter(
     "Total stale worker commits rejected by authoritative fencing token guard",
 )
 
+# ---------------------------------------------------------------------------
+# G11.5-C: Definition Execution Metrics (Bounded Cardinality)
+# ---------------------------------------------------------------------------
+
+# 23. Definition execution counter (labels: task_type × status)
+DEFINITION_EXECUTIONS_TOTAL = Counter(
+    "taskforge_definition_executions_total",
+    "Total count of custom task definition executions submitted or processed",
+    ["task_type", "status"],
+)
+
+# 24. Definition validation failure counter (labels: phase × error_type)
+DEFINITION_VALIDATION_FAILURES_TOTAL = Counter(
+    "taskforge_definition_validation_failures_total",
+    "Total validation errors on custom definition boundaries",
+    ["phase", "error_type"],
+)
+
+# 25. Definition handler unavailable counter (labels: task_type)
+DEFINITION_HANDLER_UNAVAILABLE_TOTAL = Counter(
+    "taskforge_definition_handler_unavailable_total",
+    "Total executions failing due to uncallable or missing live registry handlers",
+    ["task_type"],
+)
+
+# 26. Definition execution duration histogram (labels: task_type)
+DEFINITION_EXECUTION_DURATION_SECONDS = Histogram(
+    "taskforge_definition_execution_duration_seconds",
+    "Execution duration of custom definition tasks in seconds",
+    ["task_type"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
+)
+
 # Initialize primary series for pool metrics
 DB_POOL_ACTIVE_CONNECTIONS.labels(pool_name="primary").set(0.0)
 DB_POOL_OVERFLOW_CONNECTIONS.labels(pool_name="primary").set(0.0)
@@ -362,8 +430,6 @@ DB_POOL_CHECKOUT_TIMEOUTS_TOTAL.labels(pool_name="primary")
 LEASE_RENEWALS_TOTAL.labels(status="success")
 LEASE_RENEWALS_TOTAL.labels(status="failed")
 FENCING_REJECTIONS_TOTAL.inc(0.0)
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -521,6 +587,62 @@ def record_fencing_rejection() -> None:
         logger.debug("Telemetry isolation: failed to record fencing rejection: %s", exc)
 
 
+# ---------------------------------------------------------------------------
+# G11.5-C: Definition Execution Recorder Functions (Failure-Isolated)
+# ---------------------------------------------------------------------------
+
+
+def record_definition_execution(task_type: Any, status: Any) -> None:
+    """Record definition execution counter strictly after authoritative lifecycle transition.
+
+    Only called for tasks with a non-null definition_id.
+    """
+    try:
+        norm_type = normalize_task_type(task_type)
+        s = str(status).strip().upper() if status is not None else ""
+        norm_status = s if s in DEFINITION_EXECUTION_STATUS_WHITELIST else "FAILED"
+        DEFINITION_EXECUTIONS_TOTAL.labels(task_type=norm_type, status=norm_status).inc()
+    except Exception as exc:
+        logger.debug("Telemetry isolation: failed to record definition execution: %s", exc)
+
+
+def record_definition_validation_failure(phase: Any, error_type: Any) -> None:
+    """Record definition validation failure counter at schema boundary."""
+    try:
+        norm_phase = normalize_definition_phase(phase)
+        norm_error = normalize_definition_error_type(error_type)
+        DEFINITION_VALIDATION_FAILURES_TOTAL.labels(phase=norm_phase, error_type=norm_error).inc()
+    except Exception as exc:
+        logger.debug(
+            "Telemetry isolation: failed to record definition validation failure: %s",
+            exc,
+        )
+
+
+def record_definition_handler_unavailable(task_type: Any) -> None:
+    """Record handler unavailable counter for definition tasks."""
+    try:
+        norm_type = normalize_task_type(task_type)
+        DEFINITION_HANDLER_UNAVAILABLE_TOTAL.labels(task_type=norm_type).inc()
+    except Exception as exc:
+        logger.debug(
+            "Telemetry isolation: failed to record definition handler unavailable: %s",
+            exc,
+        )
+
+
+def record_definition_execution_duration(task_type: Any, duration_seconds: float) -> None:
+    """Record definition execution duration histogram strictly on terminal attempt completion."""
+    try:
+        norm_type = normalize_task_type(task_type)
+        val = max(0.0, float(duration_seconds))
+        DEFINITION_EXECUTION_DURATION_SECONDS.labels(task_type=norm_type).observe(val)
+    except Exception as exc:
+        logger.debug(
+            "Telemetry isolation: failed to record definition execution duration: %s",
+            exc,
+        )
+
 
 def get_metrics_content() -> bytes:
     """Generate Prometheus scrape format output with single-flight cached gauge updates."""
@@ -542,9 +664,12 @@ def get_metrics_content() -> bytes:
         }
         lines = raw_output.decode("utf-8").splitlines()
         filtered_lines = [
-            line for line in lines
+            line
+            for line in lines
             if not any(
-                line.startswith(m) or line.startswith(f"# HELP {m}") or line.startswith(f"# TYPE {m}")
+                line.startswith(m)
+                or line.startswith(f"# HELP {m}")
+                or line.startswith(f"# TYPE {m}")
                 for m in omitted_metrics
             )
         ]
