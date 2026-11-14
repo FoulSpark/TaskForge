@@ -20,9 +20,14 @@ import uvicorn
 from taskforge.main import app  # noqa: E402
 
 if __name__ == "__main__":
-    # Render and other cloud platforms provide the port in the $PORT environment variable
-    port = int(os.environ.get("PORT", os.environ.get("API_PORT", 8000)))
-    host = os.environ.get("API_HOST", "0.0.0.0")
+    from taskforge.core.config import get_settings
+
+    settings = get_settings()
+
+    # Port precedence: $PORT (Render/Heroku/Fly.io) -> settings.api_port (from .env/default)
+    port = int(os.environ.get("PORT", settings.api_port))
+    # Host precedence: $API_HOST -> settings.api_host (fallback to 0.0.0.0 for public accessibility)
+    host = os.environ.get("API_HOST", settings.api_host if settings.app_env != "production" else "0.0.0.0")
 
     uvicorn.run(
         "main:app",
