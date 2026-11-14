@@ -114,7 +114,7 @@ def build_engine(
 def init_db(engine_override=None) -> None:
     """Create all tables in the database."""
     target_engine = engine_override or engine
-    from taskforge.database.models import OutboxEvent, Task, TaskAttempt, TaskEvent, TaskResult  # noqa: F401
+    import taskforge.database.models  # noqa: F401
 
     Base.metadata.create_all(bind=target_engine)
     try:
