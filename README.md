@@ -198,6 +198,17 @@ docker compose up -d
 - **Health & Observability:** `/health/live`, `/health/ready`, `/metrics`, `/api/v1/stats`
 - **Prometheus & Grafana (Docker Compose):** `http://localhost:9090` · `http://localhost:3000` (`admin` / `admin`)
 
+#### Testing API Key
+For authenticating against protected API endpoints, Swagger UI, or the Mission Control Web Console:
+
+```text
+tf_live_05f9a45e09350722b679a22d_-CMzAYnCPQLYfsrrvZibCOcUD-aBuYbV
+```
+
+- **HTTP Bearer Auth:** Pass in the request header as `Authorization: Bearer tf_live_05f9a45e09350722b679a22d_-CMzAYnCPQLYfsrrvZibCOcUD-aBuYbV`
+- **Scopes included:** `tasks:read`, `tasks:write`, `admin:operator`, `definitions:read`, `definitions:write` (Tenant: `default`)
+- **Swagger UI:** Click the green **Authorize** button on `http://127.0.0.1:8000/docs` and enter the key above.
+
 For local development directly via `.venv`:
 
 ```powershell
